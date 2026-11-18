@@ -1,0 +1,16 @@
+[
+  {"term": "UPB", "definition": "Unpaid principal balance: what the borrower still owes.", "why": "Pricing, pool sizes and weighted averages all use current UPB."},
+  {"term": "WAC", "definition": "Weighted-average coupon: note rates averaged by current UPB.", "why": "Sets which agency coupons a pool can fit."},
+  {"term": "WALA", "definition": "Weighted-average loan age, in months.", "why": "Seasoning changes prepayment and credit behavior."},
+  {"term": "FICO", "definition": "Borrower credit score, from 300 to 850.", "why": "The main credit signal; low-FICO loans price differently."},
+  {"term": "DTI", "definition": "Debt-to-income: monthly debt payments divided by gross monthly income, in percent.", "why": "Measures ability to pay; high DTI raises default risk."},
+  {"term": "LTV", "definition": "Loan-to-value at origination: loan amount divided by the lower of appraised value and price.", "why": "The equity cushion; higher LTV means a bigger loss if the loan defaults."},
+  {"term": "CLTV", "definition": "Combined LTV: the first lien plus drawn subordinate liens, divided by value.", "why": "Shows total leverage on the property."},
+  {"term": "HCLTV", "definition": "High combined LTV: CLTV using the full HELOC line, drawn or not.", "why": "Worst-case leverage if the borrower draws the whole line."},
+  {"term": "MTM LTV", "definition": "Mark-to-market LTV: current UPB divided by today's estimated value.", "why": "Above 100, the borrower owes more than the home is worth."},
+  {"term": "MBA delinquency", "definition": "Days-past-due status by the Mortgage Bankers Association method: Current, 30, 60, 90, 120+, foreclosure, bankruptcy, REO.", "why": "The industry-standard way to measure credit performance."},
+  {"term": "REO", "definition": "Real estate owned: the lender owns the property after foreclosure.", "why": "The loan is now a property to sell, usually at a loss."},
+  {"term": "LLB", "definition": "Low loan balance: spec-pool tiers by maximum original balance, from $85K to $275K.", "why": "Small loans tend to prepay more slowly, so investors pay more for them."},
+  {"term": "TBA", "definition": "To-be-announced: forward trading of agency MBS by program, term, coupon and settlement month.", "why": "The benchmark price for agency loans and the main hedge for a pipeline."},
+  {"term": "Spec pool", "definition": "A pool of loans that share a story, such as low balance, high LTV or New York, and trade above TBA.", "why": "The pay-up over TBA is extra execution value."}
+]
