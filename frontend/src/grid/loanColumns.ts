@@ -80,13 +80,17 @@ function kindSettings(col: ColumnInfo): Partial<ColDef<LoanRow>> {
 
 /**
  * Turn the API's column list into AG Grid column definitions.
- * BUSINESS: one grid column per tape field, ready to sort and filter.
+ * BUSINESS: one grid column per tape field, ready to sort and filter. Fields the
+ *   trader has not chosen to see are hidden, not removed, so "Columns" can bring
+ *   them back without asking the server again.
  * TECH: input is the /api/loans/columns array in tape order; output keeps that order.
+ *   `hidden` holds the names to hide (default: none); loan_id is never hidden.
  *   headerTooltip comes from the glossary through content/loan-columns.json "terms";
  *   columns with no term get no tooltip. dq_status gets the "dq-delinquent" class
  *   (red text, styles.css) through cellClassRules, which AG Grid re-checks per cell.
+ *   loan_id gets "cell-mono" (a monospace font), so IDs line up character by character.
  */
-export function buildColumnDefs(columns: ColumnInfo[]): ColDef<LoanRow>[] {
+export function buildColumnDefs(columns: ColumnInfo[], hidden: ReadonlySet<string> = new Set()): ColDef<LoanRow>[] {
   return columns.map((col) => {
     const term = columnTerms[col.name];
     const def: ColDef<LoanRow> = {
@@ -95,11 +99,13 @@ export function buildColumnDefs(columns: ColumnInfo[]): ColDef<LoanRow>[] {
       headerName: col.label,
       headerTooltip: term ? termTooltip(term) : undefined,
       sortable: true,
+      hide: col.name !== PINNED_COLUMN && hidden.has(col.name),
       ...kindSettings(col),
     };
     if (col.name === PINNED_COLUMN) {
       def.pinned = "left";
       def.lockPinned = true;
+      def.cellClass = "cell-mono";
     }
     if (col.name === DQ_COLUMN) {
       def.cellClassRules = {

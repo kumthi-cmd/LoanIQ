@@ -425,3 +425,18 @@ def test_one_page_is_fast_on_50k_loans(big_client: TestClient, params: dict[str,
     assert resp.status_code == 200
     assert resp.json()["total"] > 0
     assert elapsed_ms < PERF["page_budget_ms"], f"page took {elapsed_ms:.0f} ms"
+
+
+@pytest.mark.parametrize("url", ["/api/loans/breakdowns", "/api/loans/questions", "/api/tape"])
+def test_panels_are_fast_on_50k_loans(big_client: TestClient, url: str) -> None:
+    """BUSINESS: the Loan Tape screen's three panels, chip counts and title line must
+      appear with the grid, not after it: each under panels_budget_ms (api.toml,
+      illustrative) on a 50,000-loan tape.
+    TECH: same warm-up-then-time pattern as the page test above.
+    """
+    assert big_client.get(url).status_code == 200  # warm-up
+    start = time.perf_counter()
+    resp = big_client.get(url)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    assert resp.status_code == 200
+    assert elapsed_ms < PERF["panels_budget_ms"], f"{url} took {elapsed_ms:.0f} ms"

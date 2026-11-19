@@ -21,6 +21,11 @@
  *     is then in the page for keyboard users, screen readers and Playwright.
  *   - A failed request (say a filter the server refuses) shows an alert above the
  *     grid with the server's message; the next successful request clears it.
+ *   - The desk question (chip) is part of the datasource. When it changes, useMemo
+ *     builds a new datasource, AG Grid sees a new `datasource` prop, drops its blocks
+ *     and asks again from row 0, keeping the trader's sort and column filters.
+ *   - Hidden columns (the "Columns" picker) only change each column's `hide` flag;
+ *     the rows already loaded stay, because every row already holds every field.
  */
 import type { ColDef } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
@@ -44,28 +49,39 @@ const DEFAULT_COL_DEF: ColDef<LoanRow> = { minWidth: 90, width: 130, resizable: 
 interface LoanGridProps {
   /** The tape's columns from /api/loans/columns. */
   columns: ColumnInfo[];
-  /** BUSINESS: called with the number of loans matching the current filter. */
+  /** BUSINESS: called with the number of loans matching the current filter and chip. */
   onRowCount: (count: number) => void;
+  /** The desk question (chip) that is on, or null. */
+  question?: string | null;
+  /** Column names the trader has hidden with the Columns picker. */
+  hiddenColumns?: ReadonlySet<string>;
 }
+
+// TECH: one shared empty set, so the default prop is the same object every redraw
+//   and does not rebuild the column definitions.
+const NO_HIDDEN: ReadonlySet<string> = new Set();
 
 /**
  * The tape grid.
  * BUSINESS: the desk's main working view of a tape.
  * TECH: getRowId uses loan_id so AG Grid can track rows across blocks.
  */
-export function LoanGrid({ columns, onRowCount }: LoanGridProps) {
+export function LoanGrid({ columns, onRowCount, question = null, hiddenColumns = NO_HIDDEN }: LoanGridProps) {
   const [error, setError] = useState<string | null>(null);
-  const columnDefs = useMemo(() => buildColumnDefs(columns), [columns]);
+  const columnDefs = useMemo(() => buildColumnDefs(columns, hiddenColumns), [columns, hiddenColumns]);
   const datasource = useMemo(
     () =>
-      createLoanDatasource({
-        onTotal: (total) => {
-          setError(null);
-          onRowCount(total);
+      createLoanDatasource(
+        {
+          onTotal: (total) => {
+            setError(null);
+            onRowCount(total);
+          },
+          onError: (err) => setError(err.message),
         },
-        onError: (err) => setError(err.message),
-      }),
-    [onRowCount],
+        question,
+      ),
+    [onRowCount, question],
   );
 
   return (

@@ -1,0 +1,16 @@
+{
+  "_about": "Short visitor-facing captions for the Loan Tape screen, and the glossary terms its Explain panel offers (the first is shown open). The longer Business and Technical explanation is in loan-tape.md; every term's definition is in content/glossary.json.",
+  "eyebrow": "Step 1 · The desk’s first look",
+  "tapeLine": "Seller tape · {fields} fields · {sellers} fictional sellers",
+  "captions": {
+    "programMix": "Current UPB, $M",
+    "noteRate": "Current UPB by note-rate bucket",
+    "noteRateNote": "WAC alone hides this shape: two clusters of coupons can average to a rate no loan has.",
+    "delinquency": "Loans",
+    "panelsScope": "Panels and chip counts cover the whole tape. The grid follows the chip and your column filters.",
+    "gridShowing": "{matching} of {total} loans",
+    "gridPaging": "server-paged, {blockSize} loans per block as you scroll",
+    "gridServer": "Sort and filter run in DuckDB, never in the browser"
+  },
+  "terms": ["WAC", "UPB", "FICO", "LTV", "MBA delinquency", "Spec story", "Desk question"]
+}

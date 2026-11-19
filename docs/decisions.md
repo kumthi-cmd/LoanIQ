@@ -1,6 +1,67 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-19: The Loan Tape screen follows the "1 · Loan Tape" design board
+Decision: the screen matches the LoanIQ design canvas: a dark desk layout, a header
+with the synthetic-data badge and a disabled "Ask the tape" box, a sidebar grouped
+Tape / Price / Trade / Showcase where every screen not built yet is visible, disabled
+and tagged "Planned" (this replaces the greyed "Step N" tag), three summary panels,
+desk-question chips, and the explanation open beside the grid with Business and
+Technical tabs. The six KPI tiles stay, as one slim row above the panels. Export CSV
+is shown disabled and tagged Planned. The design's sample numbers are not used:
+every number comes from the API.
+Why: the board is the agreed look; the KPI tiles keep WAC, WA FICO and WA LTV on
+screen, which the explanation talks about. A correct CSV export of a server-paged
+grid needs its own streaming endpoint, so it waits.
+
+## 2026-11-19: Desk questions are validated SQL rules in config, sent as ids
+Decision: the chips' rules live in `backend/app/config/desk_questions.toml` and are
+checked at start-up by the same sqlglot allowlist as the spec stories
+(`spec_stories.validate_where`). The browser sends `?question=<id>`; the server
+looks the id up and ANDs the rule with the grid's filter. An unknown id is a 400. A
+bad rule stops the API from starting. Chip labels live in
+`content/desk-questions.json`; a test checks both files list the same ids in order.
+One chip is on at a time.
+Why: "status is one of five values" and "flag is true" cannot be expressed with the
+grid's Community filters, and the browser must never send SQL. One question at a time
+keeps the chip count and the header count telling the same story.
+Alternative considered: new set and boolean filter types in `loan_query.py`. More
+general, but the chips would then depend on the grid's filter UI, which cannot show
+them.
+
+## 2026-11-19: Summary panels cover the whole tape, from one GROUP BY each
+Decision: `/api/loans/breakdowns` returns current UPB by program, by note-rate bucket
+and loans by MBA status, and `/api/loans/questions` the chip counts, all over the
+whole tape, like the KPI tiles. Buckets are 0.5 points wide from 2.0% to 9.0%+, with
+the first bucket open below and the last open above, and every bucket present (0
+when empty); statuses follow `dq_status_order`. Both are settings in `api.toml`
+[breakdowns], labelled illustrative. `/api/tape` gives the field and seller counts.
+Why: the panels describe the tape the seller sent; filtering them with the grid would
+change the meaning of each number as the trader types. Open ends mean no loan's
+balance is ever left off the chart.
+
+## 2026-11-19: The grid opens on 12 default columns; a Columns picker shows the rest
+Decision: the grid shows loan ID, seller, program, product, state, note rate,
+current UPB, FICO, LTV, DTI, DQ status and occupancy (`DEFAULT_VISIBLE_COLUMNS` in
+`frontend/src/grid/gridConfig.ts`). The "Columns" button lists every tape field as a
+checkbox. Loan ID is always shown.
+Why: the fields a trader reads first, as on the design board. AG Grid's column tool
+panel is an Enterprise feature, so the picker is a small component of our own.
+
+## 2026-11-19: Fonts are self-hosted with @fontsource
+Decision: Inter and JetBrains Mono come from the `@fontsource/inter` and
+`@fontsource/jetbrains-mono` npm packages (5.3.0), imported in `main.tsx`.
+Why: no request to an outside font service, and the same look offline and in tests.
+Alternative considered: a Google Fonts link in `index.html`. Simpler, but a
+third-party request on every visit.
+
+## 2026-11-19: No tape as-of date or seed in the header, for now
+Decision: the header does not show "Tape as of ... · seed ...". The tape file does
+not record them, and the generator was left unchanged.
+Why: showing the config defaults would be a guess, wrong for any tape built with
+other settings. Adding them means writing them into the Parquet file's metadata in
+the generator, a later decision.
+
 ## 2026-11-18: The SPA is Vite, React, TypeScript, React Router and AG Grid Community
 Decision: the front end in `frontend/` uses Vite, React 19, TypeScript, React Router
 (a layout route with a sidebar; screens swap inside it with no reload) and AG Grid

@@ -17,6 +17,12 @@ change. Claude Code wrote the code and the tests under those standards.
 3. Claude Code builds and tests, and I review every change.
 4. The tests gate the start of the app. I commit, and GitHub runs the tests again.
 
+Screens are designed before they are built. I lay each screen out on a Claude Design
+canvas, one board per screen, with sample numbers. Claude Code reads the board,
+compares it with what the repo already has, and proposes what to reuse, change and
+add. The build then matches the board's layout, colors and fonts, but every number
+on screen comes from the API, never from the design's samples.
+
 One script, `test.ps1`, runs every layer: back-end tests with coverage, front-end
 type checks and component tests, the production build, and browser tests that click
 through the built app the way a visitor would. `start.ps1` runs it first and starts

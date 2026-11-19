@@ -47,5 +47,7 @@
   {"term": "Pay history", "definition": "A 12-character string showing each month's payment status, oldest first.", "why": "Buyers look for clean recent history; a single past 30-day late can make a loan ineligible."},
   {"term": "Loan modification", "definition": "A permanent change to a loan's terms, such as rate or term, to help a struggling borrower.", "why": "Modified loans are riskier and have their own pricing and pool rules."},
   {"term": "Forbearance", "definition": "A temporary pause or reduction of payments agreed with the servicer.", "why": "Loans in or just out of forbearance usually cannot be pooled until they reperform."},
+  {"term": "Seriously delinquent", "definition": "A loan 90 or more days past due or in foreclosure, by the MBA method. LoanIQ's \"90+ / FC / REO / BK\" desk question also counts bankrupt and REO loans.", "why": "These loans cannot go into an agency pool and are priced as distressed assets, far below TBA."},
+  {"term": "Desk question", "definition": "A one-click question a trader asks of every new tape, such as LTV over 125 or New York. Each shows how many loans answer it and filters the grid to them. LoanIQ's questions and their rules are in backend/app/config/desk_questions.toml.", "why": "It finds the loans that change the price or cannot be pooled, before anyone quotes a bid."},
   {"term": "Seed", "definition": "The starting number for the random generator; the same seed rebuilds the same synthetic tape.", "why": "Every demo and test sees the same loans."}
 ]

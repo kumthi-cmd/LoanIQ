@@ -20,3 +20,28 @@ max_limit = 500
 #   this. tests/test_api.py checks it.
 page_budget_ms = 300
 timing_tape_loans = 50000
+# TECH: the Loan Tape screen's panels (/api/loans/breakdowns) and desk-question
+#   counts (/api/loans/questions) on the same 50,000-loan tape must each come back
+#   faster than this. Illustrative, like the page budget.
+panels_budget_ms = 300
+
+[breakdowns]
+# BUSINESS: the "Note rate distribution" panel groups loans into note-rate buckets
+#   and shows the current UPB in each. A desk reads coupons in half points, so the
+#   buckets are 0.5 percentage points wide: 2.0-2.5%, 2.5-3.0%, ... ILLUSTRATIVE
+#   display choices, not industry rules.
+# TECH: all three in percent. A bucket includes its lower edge and excludes its
+#   upper edge (6.000 is in 6.0-6.5). Loans below first_bucket_low fall into the
+#   first bucket, and loans at or above last_bucket_low into the last ("9.0%+"),
+#   so every loan lands in exactly one bucket. (last - first) must be a whole
+#   number of widths; main.py checks it at start-up.
+note_rate_bucket_width = 0.5
+note_rate_first_bucket_low = 2.0
+note_rate_last_bucket_low = 9.0
+
+# BUSINESS: the "MBA delinquency" panel lists the statuses in this order, from
+#   least to most severe as a desk reads them (MBA method, docs/public-sources.md).
+#   A status in this list with no loans still shows, with 0. Current is the first
+#   entry and is shown as the headline line, not as a bar.
+# TECH: a status on the tape that is missing here is still counted, after these.
+dq_status_order = ["Current", "30", "60", "90", "120+", "FC", "REO", "BK"]

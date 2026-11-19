@@ -1,15 +1,16 @@
 /**
- * api/client.ts: the three loan API calls the Loan Tape screen makes.
+ * api/client.ts: the loan API calls the Loan Tape screen makes.
  *
  * Where it sits: Loan Tape screen -> [client] -> /api/... -> FastAPI (backend/app/main.py)
  *
- * BUSINESS: column headers, the headline numbers and one page of loans at a time.
+ * BUSINESS: column headers, the headline numbers, the three summary panels, the
+ *   desk-question counts, the tape line, and one page of loans at a time.
  * TECH: plain fetch() with relative URLs, so the same code works through Vite's dev
  *   proxy and against the built app served by FastAPI. A non-2xx answer throws an
  *   ApiError carrying the server's message (for example a 400 for a bad filter),
  *   so callers never treat an error body as data.
  */
-import type { ColumnInfo, LoansPage, Summary } from "./types";
+import type { Breakdowns, ColumnInfo, LoansPage, QuestionCount, Summary, TapeInfo } from "./types";
 
 /**
  * An API call that did not succeed.
@@ -50,6 +51,17 @@ export const fetchColumns = (signal?: AbortSignal) =>
 /** BUSINESS: the whole tape's headline numbers. TECH: GET /api/loans/summary. */
 export const fetchSummary = (signal?: AbortSignal) =>
   getJson<Summary>("/api/loans/summary", signal);
+
+/** BUSINESS: program mix, note-rate buckets and MBA delinquency. TECH: GET /api/loans/breakdowns. */
+export const fetchBreakdowns = (signal?: AbortSignal) =>
+  getJson<Breakdowns>("/api/loans/breakdowns", signal);
+
+/** BUSINESS: how many loans answer each desk question. TECH: GET /api/loans/questions. */
+export const fetchQuestionCounts = (signal?: AbortSignal) =>
+  getJson<QuestionCount[]>("/api/loans/questions", signal);
+
+/** BUSINESS: "41 fields · 6 fictional sellers". TECH: GET /api/tape. */
+export const fetchTapeInfo = (signal?: AbortSignal) => getJson<TapeInfo>("/api/tape", signal);
 
 /**
  * BUSINESS: one block of loans for the grid.

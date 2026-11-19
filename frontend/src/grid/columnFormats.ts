@@ -78,6 +78,29 @@ export function formatBoolean(value: unknown): string {
   return "";
 }
 
+// TECH: one decimal, with commas; built once like the formatters above.
+const ONE_DECIMAL = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/**
+ * Dollars shown in millions, for the summary panels.
+ * BUSINESS: a desk quotes pool sizes in millions: 212,804,314.92 -> "212.8" (under a
+ *   "$M" caption). TECH: blank for a non-number, like formatNumber.
+ */
+export function formatMillions(dollars: unknown): string {
+  if (typeof dollars !== "number" || !Number.isFinite(dollars)) return "";
+  return ONE_DECIMAL.format(dollars / 1_000_000);
+}
+
+/**
+ * A part as a percent of a whole, one decimal: (1848, 2000) -> "92.4%".
+ * BUSINESS: "92.4% of loans are Current". TECH: "—" when the whole is 0 (an empty
+ *   tape has no share, and 0% would be a false statement).
+ */
+export function formatShare(part: number, whole: number): string {
+  if (!whole) return "—";
+  return `${ONE_DECIMAL.format((part / whole) * 100)}%`;
+}
+
 /** TECH: the number format for a column, falling back to a whole-number count. */
 export function numberFormatFor(column: string): NumberFormat {
   return COLUMN_FORMATS[column] ?? "count";

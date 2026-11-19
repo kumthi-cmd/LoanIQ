@@ -1,6 +1,39 @@
 {
   "components": {
     "schemas": {
+      "Breakdowns": {
+        "description": "GET /api/loans/breakdowns: the three summary panels, whole tape.\n\nTECH: programs largest balance first; note_rates in rate order, every bucket\n  present (0 when empty); dq_status in the config order, then any status the\n  config does not list.",
+        "properties": {
+          "dq_status": {
+            "items": {
+              "$ref": "#/components/schemas/StatusCount"
+            },
+            "title": "Dq Status",
+            "type": "array"
+          },
+          "note_rates": {
+            "items": {
+              "$ref": "#/components/schemas/RateBucket"
+            },
+            "title": "Note Rates",
+            "type": "array"
+          },
+          "programs": {
+            "items": {
+              "$ref": "#/components/schemas/ProgramSlice"
+            },
+            "title": "Programs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "programs",
+          "note_rates",
+          "dq_status"
+        ],
+        "title": "Breakdowns",
+        "type": "object"
+      },
       "ColumnInfo": {
         "description": "One tape column. TECH: type is the DuckDB type; kind is what the grid filters on.",
         "properties": {
@@ -85,6 +118,121 @@
         "title": "LoansPage",
         "type": "object"
       },
+      "ProgramSlice": {
+        "description": "One bar of the Program mix panel.\n\nBUSINESS: \"Conventional: 812 loans, $212.8M current UPB\".\nTECH: current_upb in dollars (sum over the program's loans).",
+        "properties": {
+          "current_upb": {
+            "title": "Current Upb",
+            "type": "number"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          },
+          "program": {
+            "title": "Program",
+            "type": "string"
+          }
+        },
+        "required": [
+          "program",
+          "loans",
+          "current_upb"
+        ],
+        "title": "ProgramSlice",
+        "type": "object"
+      },
+      "QuestionCount": {
+        "description": "One desk-question chip: how many loans answer it.\n\nBUSINESS: \"LTV over 125: 20 loans\". TECH: id matches config/desk_questions.toml\n  and content/desk-questions.json (the label); current_upb in dollars.",
+        "properties": {
+          "current_upb": {
+            "title": "Current Upb",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "loans",
+          "current_upb"
+        ],
+        "title": "QuestionCount",
+        "type": "object"
+      },
+      "RateBucket": {
+        "description": "One bar of the Note rate distribution panel.\n\nBUSINESS: \"6.0-6.5%: 312 loans, $114.9M\". The first bucket also holds any lower\n  rate and the last any higher one, so no loan is left out.\nTECH: low and high in percent; low is included, high excluded. low is null on the\n  first bucket (open below) and high is null on the last (open above).",
+        "properties": {
+          "current_upb": {
+            "title": "Current Upb",
+            "type": "number"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          }
+        },
+        "required": [
+          "low",
+          "high",
+          "loans",
+          "current_upb"
+        ],
+        "title": "RateBucket",
+        "type": "object"
+      },
+      "StatusCount": {
+        "description": "One line of the MBA delinquency panel.\n\nBUSINESS: \"60 days past due: 21 loans\". TECH: current_upb in dollars.",
+        "properties": {
+          "current_upb": {
+            "title": "Current Upb",
+            "type": "number"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "loans",
+          "current_upb"
+        ],
+        "title": "StatusCount",
+        "type": "object"
+      },
       "Summary": {
         "description": "GET /api/loans/summary: the pool's headline numbers.\n\nBUSINESS: weighted by current UPB, because a $900,000 loan matters more to the\n  pool's value than a $90,000 one. Null when the tape is empty.\nTECH: total_current_upb in dollars; wac and wa_ltv in percent; wa_fico in points.",
         "properties": {
@@ -143,6 +291,30 @@
           "delinquent_loans"
         ],
         "title": "Summary",
+        "type": "object"
+      },
+      "TapeInfo": {
+        "description": "GET /api/tape: the line under the screen title.\n\nBUSINESS: \"Seller tape \u00b7 41 fields \u00b7 6 fictional sellers\".\nTECH: fields is the number of tape columns; sellers counts distinct seller names.",
+        "properties": {
+          "fields": {
+            "title": "Fields",
+            "type": "integer"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          },
+          "sellers": {
+            "title": "Sellers",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "loans",
+          "fields",
+          "sellers"
+        ],
+        "title": "TapeInfo",
         "type": "object"
       },
       "ValidationError": {
@@ -279,6 +451,24 @@
               "description": "AG Grid filter model as JSON",
               "title": "Filter"
             }
+          },
+          {
+            "description": "Desk question id, for example ltv_over_125",
+            "in": "query",
+            "name": "question",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Desk question id, for example ltv_over_125",
+              "title": "Question"
+            }
           }
         ],
         "responses": {
@@ -306,6 +496,25 @@
         "summary": "Loans"
       }
     },
+    "/api/loans/breakdowns": {
+      "get": {
+        "description": "BUSINESS: the three summary panels (program mix, note-rate buckets, MBA\ndelinquency), whole tape. TECH: settings from api.toml [breakdowns].",
+        "operationId": "breakdowns_api_loans_breakdowns_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Breakdowns"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Breakdowns"
+      }
+    },
     "/api/loans/columns": {
       "get": {
         "description": "BUSINESS: the grid's column headers. TECH: tape order; label falls back to name.",
@@ -329,6 +538,29 @@
         "summary": "Columns"
       }
     },
+    "/api/loans/questions": {
+      "get": {
+        "description": "BUSINESS: each desk-question chip's loan count, whole tape.\nTECH: config order; the same rules /api/loans?question= applies.",
+        "operationId": "questions_api_loans_questions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QuestionCount"
+                  },
+                  "title": "Response Questions Api Loans Questions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Questions"
+      }
+    },
     "/api/loans/summary": {
       "get": {
         "description": "BUSINESS: the tape's headline numbers, weighted by current UPB.",
@@ -346,6 +578,25 @@
           }
         },
         "summary": "Summary"
+      }
+    },
+    "/api/tape": {
+      "get": {
+        "description": "BUSINESS: \"41 fields \u00b7 6 fictional sellers\" under the screen title.",
+        "operationId": "tape_api_tape_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TapeInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tape"
       }
     }
   }

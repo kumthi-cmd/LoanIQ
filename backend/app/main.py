@@ -9,7 +9,9 @@ BUSINESS:
     balance, filtered to the stories that matter (high LTV, low balance, delinquent).
     This API feeds that grid one page at a time, plus a headline summary: loan count,
     total balance, WAC, WA FICO, WA LTV and the delinquent count, the numbers a
-    trader quotes first when describing a pool.
+    trader quotes first when describing a pool. It also feeds the screen's three
+    panels (program mix, note-rate buckets, MBA delinquency) and the desk-question
+    chips ("LTV over 125", "New York", ...), which filter the grid with one click.
 
 TECH:
     Run from backend/:  .venv\\Scripts\\python.exe -m uvicorn app.main:app --port 8000
@@ -24,14 +26,19 @@ TECH:
       own cursor, so concurrent requests do not share query state.
     - Sorting and filtering SQL is built by app/loan_query.py: column names are
       checked against the real list, values always go in as parameters.
+    - Desk questions (config/desk_questions.toml) are validated SQL rules loaded at
+      start-up by app/desk_questions.py. The browser sends only a question id
+      (?question=ltv_over_125), never SQL; an unknown id is a 400.
+    - The panel queries live in app/tape_panels.py.
     - create_app(data_dir) lets tests point the API at their own tape folder;
       `app` at the bottom is the real one uvicorn serves.
     - The same server also serves the built single-page app (frontend/dist, from
       `npm run build`) at "/", so the whole of LoanIQ runs on one port in production
       and in the Playwright tests. In dev mode Vite serves the SPA instead and
       proxies /api here. See serve_spa() and docs/decisions.md.
-    Limits (page sizes) live in app/config/api.toml; column labels in
-    content/loan-columns.json.
+    Limits (page sizes) and panel settings (note-rate buckets, status order) live in
+    app/config/api.toml; column labels in content/loan-columns.json; chip labels in
+    content/desk-questions.json.
 """
 
 from __future__ import annotations
@@ -40,7 +47,7 @@ import json
 import tomllib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -50,7 +57,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app import loan_tape_gen as gen
+from app.desk_questions import DESK_QUESTIONS_PATH, DeskQuestion, load_desk_questions
 from app.loan_query import ColumnTypes, QueryError, column_kind, parse_filter, parse_sort, select_list
+from app.tape_panels import (Breakdowns, QuestionCount, TapeInfo, bucket_spec, fetch_breakdowns,
+                             fetch_question_counts, fetch_tape_info)
 
 API_CONFIG_PATH = gen.BACKEND_DIR / "app" / "config" / "api.toml"
 LABELS_PATH = gen.REPO_ROOT / "content" / "loan-columns.json"
@@ -81,6 +91,12 @@ def load_labels(path: Path = LABELS_PATH) -> dict[str, str]:
 API_CONFIG = load_api_config()
 DEFAULT_LIMIT: int = API_CONFIG["paging"]["default_limit"]
 MAX_LIMIT: int = API_CONFIG["paging"]["max_limit"]
+# BUSINESS: the note-rate buckets and the delinquency status order of the panels
+#   (illustrative display settings, api.toml [breakdowns]).
+# TECH: bucket_spec checks the settings when this module loads, so a bad config
+#   fails at start-up, not on the first request.
+RATE_BUCKETS = bucket_spec(API_CONFIG["breakdowns"])
+DQ_STATUS_ORDER: list[str] = API_CONFIG["breakdowns"]["dq_status_order"]
 
 
 # =============================================================================
@@ -95,12 +111,14 @@ class LoansQuery(BaseModel):
     BUSINESS: which page of the tape, in what order, with which filters.
     TECH: offset and limit in loans (rows). limit above max_limit (api.toml) is
       capped, not refused. sort is "col:asc|desc[,col:dir...]"; filter is AG Grid's
-      filter model as a JSON string.
+      filter model as a JSON string. question is a desk-question id from
+      config/desk_questions.toml; it is ANDed with the filter.
     """
     offset: int = Field(0, ge=0, description="Rows to skip")
     limit: int = Field(DEFAULT_LIMIT, ge=1, description=f"Rows to return (capped at {MAX_LIMIT})")
     sort: str | None = Field(None, description="For example current_upb:desc,fico:asc")
     filter: str | None = Field(None, description="AG Grid filter model as JSON")
+    question: str | None = Field(None, description="Desk question id, for example ltv_over_125")
 
 
 class Health(BaseModel):
@@ -146,12 +164,16 @@ class Summary(BaseModel):
 class LoanStore:
     """The loaded tape and its column list.
 
-    BUSINESS: the single copy of the tape every request reads.
+    BUSINESS: the single copy of the tape every request reads, and the desk
+      questions that can be asked of it.
     TECH: con is the in-memory DuckDB connection; columns maps name -> DuckDB type,
       in tape order, and is the allow-list for sort and filter column names.
+      questions maps id -> validated rule, in config order (empty in tests that
+      build a store by hand).
     """
     con: duckdb.DuckDBPyConnection
     columns: ColumnTypes
+    questions: dict[str, DeskQuestion] = field(default_factory=dict)
 
 
 def ensure_tape(data_dir: Path) -> Path:
@@ -167,17 +189,24 @@ def ensure_tape(data_dir: Path) -> Path:
     return path
 
 
-def open_store(data_dir: Path) -> LoanStore:
-    """Load the Parquet tape into an in-memory DuckDB table `loans`.
+def open_store(data_dir: Path, questions_path: Path = DESK_QUESTIONS_PATH) -> LoanStore:
+    """Load the Parquet tape into an in-memory DuckDB table `loans`, plus the desk questions.
 
     TECH: ":memory:" means nothing is written to disk. read_parquet(?) takes the
-      path as a parameter. DESCRIBE gives the real column names and types.
+      path as a parameter. DESCRIBE gives the real column names and types, which
+      the desk-question rules are then checked against. A bad rule raises here, so
+      the API does not start (the connection is closed first).
     """
     path = ensure_tape(data_dir)
     con = duckdb.connect(":memory:")
     con.execute("CREATE TABLE loans AS SELECT * FROM read_parquet(?)", [str(path)])
     columns = {row[0]: row[1] for row in con.execute("DESCRIBE loans").fetchall()}
-    return LoanStore(con=con, columns=columns)
+    try:
+        questions = load_desk_questions(list(columns), questions_path)
+    except ValueError:
+        con.close()
+        raise
+    return LoanStore(con=con, columns=columns, questions=questions)
 
 
 def get_store(request: Request) -> LoanStore:
@@ -196,18 +225,38 @@ Store = Annotated[LoanStore, Depends(get_store)]
 # Queries
 # =============================================================================
 
+def question_where(store: LoanStore, question_id: str | None) -> str:
+    """The validated SQL rule for a desk question id, or "" for no question.
+
+    BUSINESS: "LTV over 125" clicked on screen arrives as ?question=ltv_over_125.
+    TECH: the id is only a dictionary key: the SQL comes from the config file,
+      never from the request. An unknown id raises QueryError (HTTP 400).
+    """
+    if not question_id:
+        return ""
+    if question_id not in store.questions:
+        raise QueryError(f"Unknown desk question: {question_id!r}")
+    return store.questions[question_id].where
+
+
 def fetch_page(store: LoanStore, q: LoansQuery) -> LoansPage:
     """Run one grid page: filtered count plus the sorted, sliced rows.
 
-    BUSINESS: the grid shows "rows 101-200 of 1,234 matching loans".
+    BUSINESS: the grid shows "rows 101-200 of 1,234 matching loans". A desk question
+      and the grid's column filters must all hold at once ("New York" AND "FICO
+      under 700").
     TECH: two queries with the same WHERE and parameters: COUNT(*) for the total,
-      then SELECT ... ORDER BY ... LIMIT ? OFFSET ?. Money is cast to DOUBLE in
-      the SELECT (loan_query.select_list) so it reaches JSON as numbers.
-      Raises QueryError for a bad sort or filter.
+      then SELECT ... ORDER BY ... LIMIT ? OFFSET ?. The WHERE is the grid filter
+      and the question rule, each in brackets and joined with AND, so an OR inside
+      one can never leak into the other. The question rule has no `?` placeholders,
+      so the parameter list is the filter's alone. Money is cast to DOUBLE in the
+      SELECT (loan_query.select_list) so it reaches JSON as numbers.
+      Raises QueryError for a bad sort, filter or question id.
     """
     where, params = parse_filter(q.filter, store.columns)
     order = parse_sort(q.sort, store.columns)
-    where_sql = f"WHERE {where}" if where else ""
+    parts = [f"({w})" for w in (where, question_where(store, q.question)) if w]
+    where_sql = f"WHERE {' AND '.join(parts)}" if parts else ""
     limit = min(q.limit, MAX_LIMIT)
     cur = store.con.cursor()  # TECH: a per-request cursor over the same database
     try:
@@ -287,16 +336,18 @@ def spa_file(spa_dir: Path, path: str) -> Path | None:
     return index
 
 
-def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR) -> FastAPI:
+def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
+               questions_path: Path = DESK_QUESTIONS_PATH) -> FastAPI:
     """Build the FastAPI app that serves the tape in data_dir and the SPA in spa_dir.
 
     TECH: the lifespan loads the store before the first request and closes DuckDB
       at shutdown. Tests call create_app(tmp_folder) inside `with TestClient(app)`,
-      which runs the lifespan. spa_dir is the Vite build; tests pass their own.
+      which runs the lifespan. spa_dir is the Vite build; tests pass their own, and
+      questions_path lets a test load a deliberately broken desk-question config.
     """
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.store = open_store(data_dir)
+        app.state.store = open_store(data_dir, questions_path)
         app.state.labels = load_labels()
         yield
         app.state.store.con.close()
@@ -338,6 +389,23 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR) ->
     def summary(store: Store) -> Summary:
         """BUSINESS: the tape's headline numbers, weighted by current UPB."""
         return fetch_summary(store)
+
+    @app.get("/api/loans/breakdowns", response_model=Breakdowns)
+    def breakdowns(store: Store) -> Breakdowns:
+        """BUSINESS: the three summary panels (program mix, note-rate buckets, MBA
+        delinquency), whole tape. TECH: settings from api.toml [breakdowns]."""
+        return fetch_breakdowns(store.con, RATE_BUCKETS, DQ_STATUS_ORDER)
+
+    @app.get("/api/loans/questions", response_model=list[QuestionCount])
+    def questions(store: Store) -> list[QuestionCount]:
+        """BUSINESS: each desk-question chip's loan count, whole tape.
+        TECH: config order; the same rules /api/loans?question= applies."""
+        return fetch_question_counts(store.con, list(store.questions.values()))
+
+    @app.get("/api/tape", response_model=TapeInfo)
+    def tape(store: Store) -> TapeInfo:
+        """BUSINESS: "41 fields · 6 fictional sellers" under the screen title."""
+        return fetch_tape_info(store.con, len(store.columns))
 
     # TECH: registered last, so every /api route above wins first. "{path:path}" is a
     #   FastAPI path parameter that matches the rest of the URL, slashes included.

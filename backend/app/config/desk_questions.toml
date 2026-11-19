@@ -1,0 +1,62 @@
+# =============================================================================
+# desk_questions.toml: the one-click "desk questions" on the Loan Tape screen.
+#
+# BUSINESS: the questions a trader asks first of every new seller tape, before any
+#   talk of price: which loans are above 125 LTV, which are in New York or Puerto
+#   Rico (spec stories), which are seriously delinquent or worse, which were
+#   modified or are in forbearance. Each one is a chip on the screen showing how
+#   many loans answer it; clicking the chip filters the grid to those loans.
+#   ALL RULES AND THRESHOLDS ARE ILLUSTRATIVE. Sources: docs/public-sources.md
+#   (HARP / High LTV Refinance for LTV above 125, MBA delinquency method for the
+#   status buckets, the New York and Puerto Rico story sources).
+#
+# TECH: one [[question]] table per chip, shown in this order.
+#   id     a short key: lower case letters, digits and _, starting with a letter.
+#          The grid sends it as /api/loans?question=<id>. The chip's on-screen label
+#          lives in content/desk-questions.json under the same id
+#          (.claude/rules/showcase.md: visitor-facing words live in content/).
+#   where  a SQL true/false test over loan tape columns. It is treated as code, not
+#          trusted text: app/desk_questions.py checks it with the same sqlglot
+#          allowlist as spec_stories.toml (tape columns, comparisons, AND / OR /
+#          NOT, IN, BETWEEN, parentheses, literals) when the API starts. A bad rule
+#          stops the API from starting, with an error naming the question.
+#   Unlike the spec stories, these rules apply to every product: a desk question
+#   is "what is in the tape", not "what can go into a spec pool".
+# =============================================================================
+
+[[question]]
+# BUSINESS: original LTV above 125 only comes from FHFA high-LTV refinances
+#   (HARP, High LTV Refinance Option). These loans pool separately and price
+#   differently, so the desk finds them first.
+id = "ltv_over_125"
+where = "ltv > 125"
+
+[[question]]
+# BUSINESS: New York loans prepay more slowly (a state spec story), so they may be
+#   worth a pay-up over TBA.
+id = "new_york"
+where = "state = 'NY'"
+
+[[question]]
+# BUSINESS: Puerto Rico has its own, slower prepayment profile (the "PR Geo" story).
+id = "puerto_rico"
+where = "state = 'PR'"
+
+[[question]]
+# BUSINESS: 90 days or more past due, in foreclosure, bankrupt or already REO
+#   (MBA status buckets). These loans cannot go into an agency pool and are priced
+#   as distressed assets, not to TBA.
+id = "seriously_delinquent"
+where = "dq_status IN ('90', '120+', 'FC', 'REO', 'BK')"
+
+[[question]]
+# BUSINESS: modified loans had their terms changed after a hardship; they carry
+#   more credit risk and have their own pool rules.
+id = "modified"
+where = "mod_flag = TRUE"
+
+[[question]]
+# BUSINESS: loans in or recently out of forbearance usually cannot be pooled until
+#   they reperform.
+id = "forbearance"
+where = "forbearance_flag = TRUE"

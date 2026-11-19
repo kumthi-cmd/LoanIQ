@@ -6,7 +6,7 @@
  *   "NaN" or "null" ever on screen.
  */
 import { describe, expect, it } from "vitest";
-import { formatBoolean, formatDate, formatNumber, numberFormatFor } from "./columnFormats";
+import { formatBoolean, formatDate, formatMillions, formatNumber, formatShare, numberFormatFor } from "./columnFormats";
 
 describe("formatNumber", () => {
   it("shows money with commas and no cents", () => {
@@ -73,5 +73,20 @@ describe("numberFormatFor", () => {
     for (const c of ["ltv", "cltv", "hcltv", "mtm_ltv", "dti"]) expect(numberFormatFor(c)).toBe("ratio");
     expect(numberFormatFor("fico")).toBe("count");
     expect(numberFormatFor("loan_age")).toBe("count");
+  });
+});
+
+describe("panel formats", () => {
+  it("shows dollars in millions with one decimal", () => {
+    // BUSINESS: pool sizes are quoted in millions under a "$M" caption.
+    expect(formatMillions(212_804_314.92)).toBe("212.8");
+    expect(formatMillions(1_234_567_890)).toBe("1,234.6");
+    expect(formatMillions(0)).toBe("0.0");
+    expect(formatMillions(null)).toBe("");
+  });
+
+  it("shows a share of the whole, or a dash when there is no whole", () => {
+    expect(formatShare(1848, 2000)).toBe("92.4%");
+    expect(formatShare(0, 0)).toBe("—");
   });
 });

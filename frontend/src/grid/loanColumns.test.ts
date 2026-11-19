@@ -91,3 +91,19 @@ describe("isDelinquent", () => {
     expect(isDelinquent("")).toBe(false);
   });
 });
+
+describe("buildColumnDefs with hidden columns", () => {
+  it("hides the named columns but never the loan ID", () => {
+    // BUSINESS: the loan ID always stays so every row can be identified.
+    const hidden = buildColumnDefs(COLUMNS, new Set(["ltv", "loan_id"]));
+    const hide = (n: string) => hidden.find((d) => d.field === n)!.hide;
+    expect(hide("ltv")).toBe(true);
+    expect(hide("loan_id")).toBe(false);
+    expect(hide("note_rate")).toBe(false);
+  });
+
+  it("shows every column by default, and loan IDs in a monospace font", () => {
+    expect(defs.every((d) => d.hide === false)).toBe(true);
+    expect(byName("loan_id").cellClass).toBe("cell-mono");
+  });
+});

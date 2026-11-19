@@ -50,3 +50,20 @@ describe("buildLoansQuery", () => {
     expect(JSON.parse(new URLSearchParams(text).get("filter")!)).toEqual(filterModel);
   });
 });
+
+describe("buildLoansQuery with a desk question", () => {
+  const req = { startRow: 0, endRow: 100, sortModel: [], filterModel: null };
+
+  it("sends the chip's question id alongside paging", () => {
+    // BUSINESS: "LTV over 125" clicked -> the server applies its rule to the whole tape.
+    const q = buildLoansQuery(req, "ltv_over_125");
+    expect(q.get("question")).toBe("ltv_over_125");
+    expect(q.get("offset")).toBe("0");
+  });
+
+  it("sends no question when no chip is on", () => {
+    expect(buildLoansQuery(req).has("question")).toBe(false);
+    expect(buildLoansQuery(req, null).has("question")).toBe(false);
+    expect(buildLoansQuery(req, "").has("question")).toBe(false);
+  });
+});

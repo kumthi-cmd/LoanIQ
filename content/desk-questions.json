@@ -1,0 +1,11 @@
+{
+  "_about": "On-screen labels for the Loan Tape screen's desk-question chips, and the glossary term behind each chip's tooltip. Labels and term names only: each question's rule lives in backend/app/config/desk_questions.toml (same ids, same order) and each term's definition in content/glossary.json.",
+  "questions": [
+    {"id": "ltv_over_125", "label": "LTV over 125", "term": "HARP"},
+    {"id": "new_york", "label": "New York", "term": "Spec story"},
+    {"id": "puerto_rico", "label": "Puerto Rico", "term": "Spec story"},
+    {"id": "seriously_delinquent", "label": "90+ / FC / REO / BK", "term": "Seriously delinquent"},
+    {"id": "modified", "label": "Modified", "term": "Loan modification"},
+    {"id": "forbearance", "label": "Forbearance", "term": "Forbearance"}
+  ]
+}

@@ -13,7 +13,10 @@
  *     sort   = "col:dir,col:dir"                         (AG Grid's sort order)
  *     filter = the filter model as JSON, unchanged       (backend/app/loan_query.py
  *                                                         reads AG Grid's format)
- *   Empty sort or filter is left out, so the server uses its default order.
+ *     question = a desk-question id ("ltv_over_125")     (the chip that is on; the
+ *                                                         server ANDs its rule with
+ *                                                         the filter)
+ *   Empty sort, filter or question is left out, so the server uses its defaults.
  *   The SPA never builds SQL; the server checks every column name and parameterizes
  *   every value.
  */
@@ -29,11 +32,12 @@ export interface GridRequest {
 
 /**
  * Build the /api/loans query string for one block of rows.
- * BUSINESS: rows 100-199 sorted by current UPB descending ->
- *   offset=100&limit=100&sort=current_upb:desc
+ * BUSINESS: rows 100-199 sorted by current UPB descending, New York only ->
+ *   offset=100&limit=100&sort=current_upb:desc&question=new_york
  * TECH: URLSearchParams escapes the JSON, so quotes and braces travel safely.
+ *   question is optional; null or "" sends none.
  */
-export function buildLoansQuery(req: GridRequest): URLSearchParams {
+export function buildLoansQuery(req: GridRequest, question: string | null = null): URLSearchParams {
   const params = new URLSearchParams({
     offset: String(req.startRow),
     limit: String(req.endRow - req.startRow),
@@ -43,6 +47,7 @@ export function buildLoansQuery(req: GridRequest): URLSearchParams {
   if (req.filterModel && Object.keys(req.filterModel).length > 0) {
     params.set("filter", JSON.stringify(req.filterModel));
   }
+  if (question) params.set("question", question);
   return params;
 }
 

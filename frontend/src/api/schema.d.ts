@@ -47,6 +47,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/loans/breakdowns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Breakdowns
+         * @description BUSINESS: the three summary panels (program mix, note-rate buckets, MBA
+         *     delinquency), whole tape. TECH: settings from api.toml [breakdowns].
+         */
+        get: operations["breakdowns_api_loans_breakdowns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loans/columns": {
         parameters: {
             query?: never;
@@ -59,6 +80,27 @@ export interface paths {
          * @description BUSINESS: the grid's column headers. TECH: tape order; label falls back to name.
          */
         get: operations["columns_api_loans_columns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loans/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Questions
+         * @description BUSINESS: each desk-question chip's loan count, whole tape.
+         *     TECH: config order; the same rules /api/loans?question= applies.
+         */
+        get: operations["questions_api_loans_questions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -87,10 +129,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tape": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tape
+         * @description BUSINESS: "41 fields · 6 fictional sellers" under the screen title.
+         */
+        get: operations["tape_api_tape_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Breakdowns
+         * @description GET /api/loans/breakdowns: the three summary panels, whole tape.
+         *
+         *     TECH: programs largest balance first; note_rates in rate order, every bucket
+         *       present (0 when empty); dq_status in the config order, then any status the
+         *       config does not list.
+         */
+        Breakdowns: {
+            /** Dq Status */
+            dq_status: components["schemas"]["StatusCount"][];
+            /** Note Rates */
+            note_rates: components["schemas"]["RateBucket"][];
+            /** Programs */
+            programs: components["schemas"]["ProgramSlice"][];
+        };
         /**
          * ColumnInfo
          * @description One tape column. TECH: type is the DuckDB type; kind is what the grid filters on.
@@ -133,6 +211,69 @@ export interface components {
             total: number;
         };
         /**
+         * ProgramSlice
+         * @description One bar of the Program mix panel.
+         *
+         *     BUSINESS: "Conventional: 812 loans, $212.8M current UPB".
+         *     TECH: current_upb in dollars (sum over the program's loans).
+         */
+        ProgramSlice: {
+            /** Current Upb */
+            current_upb: number;
+            /** Loans */
+            loans: number;
+            /** Program */
+            program: string;
+        };
+        /**
+         * QuestionCount
+         * @description One desk-question chip: how many loans answer it.
+         *
+         *     BUSINESS: "LTV over 125: 20 loans". TECH: id matches config/desk_questions.toml
+         *       and content/desk-questions.json (the label); current_upb in dollars.
+         */
+        QuestionCount: {
+            /** Current Upb */
+            current_upb: number;
+            /** Id */
+            id: string;
+            /** Loans */
+            loans: number;
+        };
+        /**
+         * RateBucket
+         * @description One bar of the Note rate distribution panel.
+         *
+         *     BUSINESS: "6.0-6.5%: 312 loans, $114.9M". The first bucket also holds any lower
+         *       rate and the last any higher one, so no loan is left out.
+         *     TECH: low and high in percent; low is included, high excluded. low is null on the
+         *       first bucket (open below) and high is null on the last (open above).
+         */
+        RateBucket: {
+            /** Current Upb */
+            current_upb: number;
+            /** High */
+            high: number | null;
+            /** Loans */
+            loans: number;
+            /** Low */
+            low: number | null;
+        };
+        /**
+         * StatusCount
+         * @description One line of the MBA delinquency panel.
+         *
+         *     BUSINESS: "60 days past due: 21 loans". TECH: current_upb in dollars.
+         */
+        StatusCount: {
+            /** Current Upb */
+            current_upb: number;
+            /** Loans */
+            loans: number;
+            /** Status */
+            status: string;
+        };
+        /**
          * Summary
          * @description GET /api/loans/summary: the pool's headline numbers.
          *
@@ -153,6 +294,21 @@ export interface components {
             wa_ltv: number | null;
             /** Wac */
             wac: number | null;
+        };
+        /**
+         * TapeInfo
+         * @description GET /api/tape: the line under the screen title.
+         *
+         *     BUSINESS: "Seller tape · 41 fields · 6 fictional sellers".
+         *     TECH: fields is the number of tape columns; sellers counts distinct seller names.
+         */
+        TapeInfo: {
+            /** Fields */
+            fields: number;
+            /** Loans */
+            loans: number;
+            /** Sellers */
+            sellers: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -207,6 +363,8 @@ export interface operations {
                 sort?: string | null;
                 /** @description AG Grid filter model as JSON */
                 filter?: string | null;
+                /** @description Desk question id, for example ltv_over_125 */
+                question?: string | null;
             };
             header?: never;
             path?: never;
@@ -234,6 +392,26 @@ export interface operations {
             };
         };
     };
+    breakdowns_api_loans_breakdowns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Breakdowns"];
+                };
+            };
+        };
+    };
     columns_api_loans_columns_get: {
         parameters: {
             query?: never;
@@ -254,6 +432,26 @@ export interface operations {
             };
         };
     };
+    questions_api_loans_questions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionCount"][];
+                };
+            };
+        };
+    };
     summary_api_loans_summary_get: {
         parameters: {
             query?: never;
@@ -270,6 +468,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Summary"];
+                };
+            };
+        };
+    };
+    tape_api_tape_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TapeInfo"];
                 };
             };
         };

@@ -1,6 +1,41 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 1d, the Loan Tape screen to the design board (2026-11-19)
+- Built: the Loan Tape screen redone to the "1 · Loan Tape" board of the LoanIQ
+  design canvas. A header with the logo, "Mortgage capital markets desk", the
+  synthetic-data badge and a disabled "Ask the tape" box; a sidebar grouped Tape /
+  Price / Trade / Showcase with every unbuilt screen disabled and tagged Planned;
+  three summary panels (program mix in $M, note rate distribution in half-point
+  buckets, MBA delinquency); six desk-question chips (LTV over 125, New York, Puerto
+  Rico, 90+ / FC / REO / BK, Modified, Forbearance) that filter the grid in one click;
+  a grid opening on 12 columns with a Columns picker for the rest; and the "Explain
+  this screen" panel beside the grid with Business and Technical tabs, a glossary
+  card and term chips. Back end: `/api/loans/breakdowns`, `/api/loans/questions`,
+  `/api/tape`, and `?question=` on `/api/loans`, with the rules in
+  `desk_questions.toml`.
+- Desk problem it solves: in one screen a trader sees who can buy the tape, which
+  coupons it fits, how much of it is late, and the loans that change the price or
+  cannot be pooled, each one click from the grid.
+- My key decisions: keep the six KPI tiles as a slim row; Export CSV disabled and
+  Planned until there is a streaming export; fonts self-hosted with @fontsource; no
+  change to the tape generator, so no as-of date or seed in the header yet.
+- What Claude Code did: read the design canvas and compared it with the repo; proposed
+  the plan and four open decisions; wrote the panel and desk-question API, the config,
+  the screen's components, the content files and the tests; regenerated the OpenAPI
+  spec and types; ran every layer. Along the way: the first screenshot showed the KPI
+  tiles clipping the UPB value and the sidebar wrapping; both were fixed in CSS. Three
+  new panel tests first compared bar widths as text ("100.0%"), but the browser
+  writes "100%"; they now compare numbers. Existing tests changed where the
+  requirement changed (badge text, "Planned" instead of "Step N", the explanation open
+  by default with tabs), each checking the new behavior as strictly as before.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 184 tests
+  (40 new, for the panels, bucket edges, desk-question loading and safety, the
+  question filter and timing on 50,000 loans), coverage 98.8%. Front end: 82 Vitest
+  tests (38 new). End to end: 13 Playwright tests (5 new) against the built app.
+- My take:
+
 ## Step 1c, the single-page app and the loan grid (2026-11-18)
 - Built: the LoanIQ single-page app in `frontend/` (Vite, React, TypeScript, React
   Router, AG Grid Community). A header with the synthetic-data badge and the row

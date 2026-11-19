@@ -13,6 +13,8 @@
  *   successCallback(rows, total). total tells the grid where the tape ends, so the
  *   scrollbar is the right size from the first block. On an error we call
  *   failCallback() (the block stays unloaded) and report it to the screen.
+ *   A desk question (chip) is fixed per datasource: LoanGrid makes a new datasource
+ *   when the chip changes, and AG Grid then reloads from the first block.
  */
 import type { IDatasource, IGetRowsParams } from "ag-grid-community";
 import { fetchLoans } from "../api/client";
@@ -28,14 +30,15 @@ export interface DatasourceEvents {
 
 /**
  * Create the datasource the Loan Tape grid reads from.
- * BUSINESS: every scroll, sort and filter goes to the server.
+ * BUSINESS: every scroll, sort and filter goes to the server, with the desk question
+ *   (chip) that is on, if any.
  * TECH: every block reports the total, which is the same for all blocks of one
  *   sort and filter, so the header count updates as soon as the first block arrives.
  */
-export function createLoanDatasource(events: DatasourceEvents): IDatasource {
+export function createLoanDatasource(events: DatasourceEvents, question: string | null = null): IDatasource {
   return {
     getRows(params: IGetRowsParams) {
-      fetchLoans(buildLoansQuery(params))
+      fetchLoans(buildLoansQuery(params, question))
         .then((page) => {
           params.successCallback(page.rows, page.total);
           events.onTotal(page.total);

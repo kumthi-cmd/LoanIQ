@@ -76,7 +76,7 @@ class Story:
     cap: float | None = None
 
 
-def validate_where(text: str, columns: Sequence[str], story: str) -> str:
+def validate_where(text: str, columns: Sequence[str], story: str, kind: str = "Story") -> str:
     """Check one `where` expression and return its normalized SQL.
 
     BUSINESS: only plain tests on loan fields are allowed, e.g. "state = 'NY'",
@@ -85,24 +85,27 @@ def validate_where(text: str, columns: Sequence[str], story: str) -> str:
       only the first statement, or carry comments into its output). Then requires
       exactly one parsed statement, a yes/no root, allowlisted nodes only, and
       unqualified columns that exist on the tape. Raises UnsafeWhereError.
+      `kind` names the rule type in error messages ("Story", or "Desk question" when
+      app/desk_questions.py reuses this check), so the message points at the right file.
     """
     if ";" in text or "--" in text or "/*" in text:
-        raise UnsafeWhereError(f"Story {story}: semicolons and comments are not allowed: {text!r}")
+        raise UnsafeWhereError(f"{kind} {story}: semicolons and comments are not allowed: {text!r}")
     try:
         parsed = sqlglot.parse(text, read="duckdb")
     except sqlglot.errors.ParseError as err:
-        raise UnsafeWhereError(f"Story {story}: not valid SQL: {text!r} ({err})") from err
+        raise UnsafeWhereError(f"{kind} {story}: not valid SQL: {text!r} ({err})") from err
     if len(parsed) != 1 or parsed[0] is None:
-        raise UnsafeWhereError(f"Story {story}: must be exactly one expression: {text!r}")
+        raise UnsafeWhereError(f"{kind} {story}: must be exactly one expression: {text!r}")
     tree = parsed[0]
     if not isinstance(tree, PREDICATE_ROOTS):
-        raise UnsafeWhereError(f"Story {story}: must be a true/false test: {text!r}")
+        raise UnsafeWhereError(f"{kind} {story}: must be a true/false test: {text!r}")
     for node in tree.walk():
-        check_node(node, columns, story, text)
+        check_node(node, columns, story, text, kind)
     return tree.sql(dialect="duckdb")
 
 
-def check_node(node: exp.Expression, columns: Sequence[str], story: str, text: str) -> None:
+def check_node(node: exp.Expression, columns: Sequence[str], story: str, text: str,
+               kind: str = "Story") -> None:
     """Reject one syntax-tree node unless it is allowlisted.
 
     TECH: columns must be bare names (no `table.` prefix) from the tape schema.
@@ -111,12 +114,12 @@ def check_node(node: exp.Expression, columns: Sequence[str], story: str, text: s
     """
     if not isinstance(node, ALLOWED_NODES):
         raise UnsafeWhereError(
-            f"Story {story}: {type(node).__name__} is not allowed in a rule: {text!r}")
+            f"{kind} {story}: {type(node).__name__} is not allowed in a rule: {text!r}")
     if isinstance(node, exp.Column):
         if node.table:
-            raise UnsafeWhereError(f"Story {story}: use bare column names, not {node.sql()!r}")
+            raise UnsafeWhereError(f"{kind} {story}: use bare column names, not {node.sql()!r}")
         if node.name not in columns:
-            raise UnsafeWhereError(f"Story {story}: unknown column {node.name!r}: {text!r}")
+            raise UnsafeWhereError(f"{kind} {story}: unknown column {node.name!r}: {text!r}")
 
 
 def cap_label(cap: float) -> str:
