@@ -1,6 +1,38 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 1c, the single-page app and the loan grid (2026-11-18)
+- Built: the LoanIQ single-page app in `frontend/` (Vite, React, TypeScript, React
+  Router, AG Grid Community). A header with the synthetic-data badge and the row
+  count for the current filter; a sidebar showing the whole workflow, with later
+  screens marked by their step; the Loan Tape screen with six KPI tiles (Loans,
+  Current UPB, WAC, WA FICO, WA LTV, Delinquent loans) and a dark, dense grid that
+  pages the tape 100 loans at a time, sorting and filtering on the server. An
+  "Explain this screen" panel and glossary tooltips on tiles and column headers.
+  FastAPI now also serves the built app, and `test.ps1` and `start.ps1` run and gate
+  every test layer.
+- Desk problem it solves: a trader opens a tape and sees its headline numbers at once,
+  then scrolls, sorts and filters every loan (largest balances, New York only,
+  delinquent in red) without the browser ever holding the whole tape.
+- My key decisions: the Infinite Row Model with server-side sort and filter; Playwright,
+  `test.ps1` and `start.ps1` in this step, so it ends with every test layer running;
+  header tooltips from the glossary through a column-to-term map in `content/`.
+- What Claude Code did: proposed the plan and the two open decisions; wrote the SPA,
+  the OpenAPI export and generated types, SPA serving in FastAPI, the screen
+  explanation, the test scripts, the tests and the decision records; ran every layer.
+  Along the way: the first Playwright run showed that unknown URLs hit React Router's
+  default error page (now a "Screen not found" screen) and that AG Grid left
+  off-screen columns out of the page (column virtualization now off, as a tape has
+  ~41 columns). A Step 1b test caught that `httpx2` was missing from the virtual
+  environment; `pip install -r requirements.txt` fixed it, and the test is unchanged.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 144 tests
+  (12 new, for SPA serving, path safety and the OpenAPI export), coverage 98.5%.
+  Front end: 44 Vitest tests (formats, query building, columns, datasource, content,
+  tiles, explain panel, app shell). End to end: 8 Playwright tests in Chromium against
+  the built app.
+- My take:
+
 ## Step 1b, loan API (2026-11-18)
 - Built: a FastAPI loan API (`backend/app/main.py`) over an in-memory DuckDB copy of
   the tape: `/api/health`, `/api/loans/columns`, `/api/loans` (paged, sorted and

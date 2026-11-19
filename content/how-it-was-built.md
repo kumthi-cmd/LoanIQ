@@ -17,5 +17,10 @@ change. Claude Code wrote the code and the tests under those standards.
 3. Claude Code builds and tests, and I review every change.
 4. The tests gate the start of the app. I commit, and GitHub runs the tests again.
 
+One script, `test.ps1`, runs every layer: back-end tests with coverage, front-end
+type checks and component tests, the production build, and browser tests that click
+through the built app the way a visitor would. `start.ps1` runs it first and starts
+LoanIQ only if everything passes.
+
 ## By the numbers
 Tests, coverage and commits, filled in from content/build-facts.json.

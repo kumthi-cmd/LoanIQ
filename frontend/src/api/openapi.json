@@ -1,0 +1,352 @@
+{
+  "components": {
+    "schemas": {
+      "ColumnInfo": {
+        "description": "One tape column. TECH: type is the DuckDB type; kind is what the grid filters on.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "kind",
+          "label"
+        ],
+        "title": "ColumnInfo",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Health": {
+        "description": "GET /api/health. BUSINESS: is the tape loaded, and how many loans are in it.",
+        "properties": {
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "loans"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "LoansPage": {
+        "description": "GET /api/loans. TECH: total counts every loan matching the filter, not just this page.",
+        "properties": {
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total"
+        ],
+        "title": "LoansPage",
+        "type": "object"
+      },
+      "Summary": {
+        "description": "GET /api/loans/summary: the pool's headline numbers.\n\nBUSINESS: weighted by current UPB, because a $900,000 loan matters more to the\n  pool's value than a $90,000 one. Null when the tape is empty.\nTECH: total_current_upb in dollars; wac and wa_ltv in percent; wa_fico in points.",
+        "properties": {
+          "delinquent_loans": {
+            "title": "Delinquent Loans",
+            "type": "integer"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "total_current_upb": {
+            "title": "Total Current Upb",
+            "type": "number"
+          },
+          "wa_fico": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wa Fico"
+          },
+          "wa_ltv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wa Ltv"
+          },
+          "wac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wac"
+          }
+        },
+        "required": [
+          "loan_count",
+          "total_current_upb",
+          "wac",
+          "wa_fico",
+          "wa_ltv",
+          "delinquent_loans"
+        ],
+        "title": "Summary",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Synthetic loan tape: paged, sorted and filtered in DuckDB. All data is synthetic; all numbers illustrative.",
+    "title": "LoanIQ loan API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/health": {
+      "get": {
+        "description": "BUSINESS: is the tape loaded. TECH: loan count from COUNT(*).",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/api/loans": {
+      "get": {
+        "description": "BUSINESS: one page of the tape. TECH: bad sort or filter -> HTTP 400.\n\nAnnotated[LoansQuery, Query()] tells FastAPI to read the model's fields\nfrom the URL's query string.",
+        "operationId": "loans_api_loans_get",
+        "parameters": [
+          {
+            "description": "Rows to skip",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Rows to skip",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows to return (capped at 500)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Rows to return (capped at 500)",
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "For example current_upb:desc,fico:asc",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "For example current_upb:desc,fico:asc",
+              "title": "Sort"
+            }
+          },
+          {
+            "description": "AG Grid filter model as JSON",
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AG Grid filter model as JSON",
+              "title": "Filter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoansPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Loans"
+      }
+    },
+    "/api/loans/columns": {
+      "get": {
+        "description": "BUSINESS: the grid's column headers. TECH: tape order; label falls back to name.",
+        "operationId": "columns_api_loans_columns_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ColumnInfo"
+                  },
+                  "title": "Response Columns Api Loans Columns Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Columns"
+      }
+    },
+    "/api/loans/summary": {
+      "get": {
+        "description": "BUSINESS: the tape's headline numbers, weighted by current UPB.",
+        "operationId": "summary_api_loans_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Summary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Summary"
+      }
+    }
+  }
+}

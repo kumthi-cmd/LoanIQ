@@ -1,0 +1,97 @@
+/*
+ * styles.css: the LoanIQ page styles (the grid's own look is in grid/gridTheme.ts).
+ *
+ * BUSINESS: a dark, dense trading-desk screen. Color carries meaning only: red is
+ *   delinquency (.claude/rules/frontend.md: color only for meaning).
+ * TECH: colors are CSS custom properties ("tokens") on :root, so every rule uses
+ *   the same few values and the grid theme can match them. font-variant-numeric:
+ *   tabular-nums gives every digit the same width, so numbers line up in columns.
+ *   The layout is CSS grid: header on top, sidebar on the left, screen filling the
+ *   rest; the loan grid stretches to the bottom of the window.
+ */
+:root {
+  --bg: #0b111b;
+  --panel: #0f1724;
+  --panel-2: #152033;
+  --border: #22304a;
+  --text: #d7dee9;
+  --muted: #8a97ab;
+  --accent: #4c9aff;
+  --danger: #ff6b6b;
+  --warn-bg: #3a2c0f;
+  --warn-text: #f5c86a;
+  color-scheme: dark;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); }
+
+/* TECH: hidden on screen, still read by screen readers (glossary descriptions). */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ---- Frame: header, sidebar, main ---- */
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.app-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.app-title { font-size: 18px; margin: 0; letter-spacing: 0.02em; }
+.badge {
+  padding: 2px 8px; border-radius: 10px; font-size: 11px;
+  background: var(--warn-bg); color: var(--warn-text); border: 1px solid #6b5220;
+}
+.row-count { margin-left: auto; color: var(--muted); }
+.app-body { display: grid; grid-template-columns: 190px 1fr; min-height: 0; }
+.sidebar { background: var(--panel); border-right: 1px solid var(--border); padding: 8px 0; overflow-y: auto; }
+.sidebar ul { list-style: none; margin: 0; padding: 0; }
+.nav-link {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 16px; color: var(--text); text-decoration: none;
+}
+.nav-link[aria-current="page"] { background: var(--panel-2); border-left: 3px solid var(--accent); padding-left: 13px; }
+.nav-link:hover:not(.nav-placeholder) { background: var(--panel-2); }
+.nav-placeholder { color: var(--muted); cursor: default; }
+.nav-step { font-size: 10px; color: var(--muted); }
+.app-main { min-width: 0; min-height: 0; overflow: hidden; }
+
+/* ---- Screen ---- */
+.screen { display: flex; flex-direction: column; gap: 10px; height: 100%; padding: 12px 16px; }
+.screen-head { display: flex; align-items: flex-start; gap: 16px; }
+.screen-head h2 { margin: 0; font-size: 15px; }
+.explain { flex: 1; }
+.explain-toggle {
+  background: transparent; color: var(--accent); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 10px; font: inherit; cursor: pointer;
+}
+.explain-panel {
+  margin-top: 8px; padding: 4px 16px; max-height: 40vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px; line-height: 1.5;
+}
+.explain-panel h2 { font-size: 14px; }
+
+.glossary-term { border-bottom: 1px dotted var(--muted); cursor: help; }
+
+/* ---- KPI tiles ---- */
+.kpi-tiles { display: grid; grid-template-columns: repeat(6, minmax(110px, 1fr)); gap: 8px; }
+.kpi-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+.kpi-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.kpi-value { font-size: 18px; margin-top: 2px; text-align: right; }
+.kpi-caption { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+
+/* ---- Grid ---- */
+.grid-wrap { flex: 1; display: flex; flex-direction: column; min-height: 300px; }
+.grid-host { flex: 1; }
+.grid-error {
+  padding: 6px 10px; margin-bottom: 6px; border: 1px solid var(--danger);
+  color: var(--danger); border-radius: 4px; background: #2a1215;
+}
+/* BUSINESS: any dq_status other than Current. */
+.dq-delinquent { color: var(--danger); font-weight: 600; }
+.ag-cell { font-variant-numeric: tabular-nums; }

@@ -26,6 +26,10 @@ TECH:
       checked against the real list, values always go in as parameters.
     - create_app(data_dir) lets tests point the API at their own tape folder;
       `app` at the bottom is the real one uvicorn serves.
+    - The same server also serves the built single-page app (frontend/dist, from
+      `npm run build`) at "/", so the whole of LoanIQ runs on one port in production
+      and in the Playwright tests. In dev mode Vite serves the SPA instead and
+      proxies /api here. See serve_spa() and docs/decisions.md.
     Limits (page sizes) live in app/config/api.toml; column labels in
     content/loan-columns.json.
 """
@@ -42,6 +46,7 @@ from typing import Annotated, Any
 
 import duckdb
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app import loan_tape_gen as gen
@@ -50,6 +55,8 @@ from app.loan_query import ColumnTypes, QueryError, column_kind, parse_filter, p
 API_CONFIG_PATH = gen.BACKEND_DIR / "app" / "config" / "api.toml"
 LABELS_PATH = gen.REPO_ROOT / "content" / "loan-columns.json"
 TAPE_FILE = "loan_tape.parquet"  # TECH: the name loan_tape_gen.write_tape uses
+# TECH: where `npm run build` (Vite) writes the single-page app.
+SPA_DIR = gen.REPO_ROOT / "frontend" / "dist"
 
 # BUSINESS: the MBA status of a loan that has made every payment. Every other status
 #   (30, 60, 90, 120+, FC, BK, REO) counts as delinquent in the summary; see
@@ -260,12 +267,32 @@ def optional_float(value: Any) -> float | None:
 # The app and its routes
 # =============================================================================
 
-def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR) -> FastAPI:
-    """Build the FastAPI app that serves the tape in data_dir.
+def spa_file(spa_dir: Path, path: str) -> Path | None:
+    """Pick the file of the built SPA that answers a browser URL.
+
+    BUSINESS: a trader can bookmark or reload any screen (say /slotting later) and
+      land on it, instead of getting "not found".
+    TECH: a real file inside spa_dir (index.html, assets/app-1a2b.js, favicon) is
+      returned as is. Any other path gets index.html, and React Router in the browser
+      then picks the screen from the URL. Paths that escape spa_dir ("../") are
+      refused by the resolve() + is_relative_to check, so the server can never hand
+      out files outside the build folder. None when there is no build yet.
+    """
+    index = spa_dir / "index.html"
+    if not index.is_file():
+        return None
+    candidate = (spa_dir / path).resolve()
+    if path and candidate.is_relative_to(spa_dir.resolve()) and candidate.is_file():
+        return candidate
+    return index
+
+
+def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR) -> FastAPI:
+    """Build the FastAPI app that serves the tape in data_dir and the SPA in spa_dir.
 
     TECH: the lifespan loads the store before the first request and closes DuckDB
       at shutdown. Tests call create_app(tmp_folder) inside `with TestClient(app)`,
-      which runs the lifespan.
+      which runs the lifespan. spa_dir is the Vite build; tests pass their own.
     """
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -311,6 +338,21 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR) -> FastAPI:
     def summary(store: Store) -> Summary:
         """BUSINESS: the tape's headline numbers, weighted by current UPB."""
         return fetch_summary(store)
+
+    # TECH: registered last, so every /api route above wins first. "{path:path}" is a
+    #   FastAPI path parameter that matches the rest of the URL, slashes included.
+    #   include_in_schema=False keeps it off the /docs page and the OpenAPI spec.
+    @app.get("/{path:path}", include_in_schema=False)
+    def serve_spa(path: str) -> FileResponse:
+        """BUSINESS: the LoanIQ screens. TECH: unknown /api/... stays a JSON 404;
+        no build yet -> 404 with a hint to run `npm run build`."""
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Unknown API route")
+        file = spa_file(spa_dir, path)
+        if file is None:
+            raise HTTPException(status_code=404,
+                                detail="The SPA is not built. Run `npm run build` in frontend/.")
+        return FileResponse(file)
 
     return app
 

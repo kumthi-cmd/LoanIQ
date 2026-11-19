@@ -1,0 +1,45 @@
+/**
+ * playwright.config.ts: end-to-end test settings for LoanIQ.
+ *
+ * Where it sits: test.ps1 builds the SPA (frontend/dist) -> [Playwright] starts
+ * FastAPI, which serves the SPA and the API at http://localhost:8000 -> a real
+ * Chromium browser clicks through the screens.
+ *
+ * BUSINESS: tests what a visitor really does: open the Loan Tape, sort, filter,
+ *   read a number, open the explanation.
+ * TECH:
+ *   - webServer: Playwright starts uvicorn itself and waits for /api/health.
+ *     reuseExistingServer is false so a test never depends on a server you started
+ *     (.claude/rules/e2e.md); if port 8000 is busy, the run stops with an error.
+ *   - The server reads the default seeded tape (data/loan_tape.parquet, generated
+ *     on first start), so the loans are the same on every run. Tests still read
+ *     expected numbers from the API rather than hard-coding them.
+ *   - One worker: all tests share one server and its in-memory tape.
+ *   - The SPA must be built first (npm run build in frontend/); test.ps1 does that.
+ */
+import { defineConfig, devices } from "@playwright/test";
+
+const isWindows = process.platform === "win32";
+const python = isWindows ? ".venv\\Scripts\\python.exe" : ".venv/bin/python";
+
+export default defineConfig({
+  testDir: "./tests",
+  outputDir: "./test-results",
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  timeout: 30_000,
+  reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
+  use: {
+    baseURL: "http://localhost:8000",
+    trace: "retain-on-failure",
+  },
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 900 } } }],
+  webServer: {
+    command: `${python} -m uvicorn app.main:app --port 8000`,
+    cwd: "../backend",
+    url: "http://localhost:8000/api/health",
+    reuseExistingServer: false,
+    timeout: 120_000,
+  },
+});

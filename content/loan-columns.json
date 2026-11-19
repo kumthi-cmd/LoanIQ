@@ -1,5 +1,5 @@
 {
-  "_about": "Readable labels for the loan tape columns, shown as grid headers. Labels only: each field's meaning lives in docs/domain/loan-tape-schema.md and each term in content/glossary.json. Served by GET /api/loans/columns.",
+  "_about": "Readable labels for the loan tape columns, shown as grid headers, and the glossary term behind each column's header tooltip. Labels and term names only: each field's meaning lives in docs/domain/loan-tape-schema.md and each term's definition in content/glossary.json. Labels are served by GET /api/loans/columns; terms are read by the SPA.",
   "labels": {
     "loan_id": "Loan ID",
     "seller": "Seller",
@@ -42,5 +42,33 @@
     "initial_cap": "Initial Cap (pts)",
     "periodic_cap": "Periodic Cap (pts)",
     "lifetime_cap": "Lifetime Cap (pts)"
+  },
+  "terms": {
+    "seller": "Seller",
+    "servicer": "Servicer",
+    "channel": "Origination channel",
+    "loan_age": "Loan age",
+    "note_rate": "Note rate",
+    "orig_upb": "UPB",
+    "current_upb": "UPB",
+    "pi_payment": "P&I payment",
+    "fico": "FICO",
+    "dti": "DTI",
+    "first_time_buyer": "First-time buyer",
+    "occupancy": "Occupancy",
+    "ltv": "LTV",
+    "cltv": "CLTV",
+    "hcltv": "HCLTV",
+    "mtm_ltv": "MTM LTV",
+    "dq_status": "MBA delinquency",
+    "days_past_due": "Days past due",
+    "pay_history_12m": "Pay history",
+    "mod_flag": "Loan modification",
+    "forbearance_flag": "Forbearance",
+    "arm_index": "SOFR",
+    "margin": "Margin",
+    "initial_cap": "Rate caps",
+    "periodic_cap": "Rate caps",
+    "lifetime_cap": "Rate caps"
   }
 }

@@ -1,6 +1,58 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-18: The SPA is Vite, React, TypeScript, React Router and AG Grid Community
+Decision: the front end in `frontend/` uses Vite, React 19, TypeScript, React Router
+(a layout route with a sidebar; screens swap inside it with no reload) and AG Grid
+Community 36 with `AllCommunityModule` registered once in `main.tsx`. The left sidebar
+lists every workflow screen from `frontend/src/nav.ts`; screens not built yet are
+greyed out with their roadmap step. Unknown URLs show a "Screen not found" screen.
+Why: the stack named in `.claude/rules/frontend.md`; one list for the sidebar shows
+the whole workflow from the first screen.
+
+## 2026-11-18: The loan grid uses AG Grid's Infinite Row Model with server-side sort and filter
+Decision: the grid asks `/api/loans` for blocks of 100 loans as the user scrolls and
+keeps at most 20 blocks (settings in `frontend/src/grid/gridConfig.ts`). Sorting and
+filtering are always sent to the server; the grid offers only the filters the API
+accepts (text contains/equals; number equals/greater than/less than/between). Date
+and yes/no columns are sortable but not filterable until the API supports them.
+Floating filter boxes sit under each header. Columns are not virtualized, so every
+header and filter box is in the page.
+Why: the browser never holds the whole tape, and every answer covers the whole tape.
+Offering a filter the server refuses would only produce errors. A tape has a fixed
+~41 columns, so drawing them all is cheap and helps keyboard users, screen readers
+and Playwright.
+Alternative considered: the Client-Side Row Model (load every loan into the
+browser). Simpler, but it does not scale to large tapes.
+
+## 2026-11-18: Front-end API types are generated from the OpenAPI spec
+Decision: `python -m app.export_openapi` writes `frontend/src/api/openapi.json`, and
+`npm run gen:api` (openapi-typescript) turns it into `schema.d.ts`. Both are committed.
+A back-end test fails if the committed spec differs from the live API.
+Why: no hand-written copies of API types (`.claude/rules/frontend.md`); a renamed
+field breaks the build instead of showing a blank tile.
+
+## 2026-11-18: FastAPI serves the built SPA; one port in production and in tests
+Decision: `backend/app/main.py` serves `frontend/dist` at `/`. Real files are served
+as is; any other non-API path returns `index.html` so screen URLs can be reloaded;
+unknown `/api/...` paths stay JSON 404s. In dev mode Vite serves the SPA on port 5173
+and proxies `/api` to port 8000.
+Why: Playwright tests the built app at http://localhost:8000 (`.claude/rules/testing.md`)
+with no second server and no CORS setup.
+
+## 2026-11-18: Column header tooltips map columns to glossary terms in content/
+Decision: `content/loan-columns.json` gains a `terms` map (column -> glossary term).
+The SPA shows that term's definition and "why it matters" as the header tooltip.
+KPI tile labels use the same glossary tooltips.
+Why: one definition per term, in `content/glossary.json`; the map holds only names.
+
+## 2026-11-18: test.ps1 runs every layer; start.ps1 starts only after it passes
+Decision: `test.ps1` runs pytest with coverage (80% minimum), the TypeScript type
+check, Vitest, the production build and Playwright, stopping at the first failure.
+Pass or fail is decided by exit codes only. `start.ps1` runs it before starting uvicorn.
+Why: the testing rule. Exit codes, because Windows PowerShell 5.1 treats tools'
+stderr warnings as errors.
+
 ## 2026-11-18: Loan API sorts, filters and pages in DuckDB SQL
 Decision: `backend/app/main.py` loads the tape into an in-memory DuckDB table `loans`
 at start-up (generating the default tape if `data/loan_tape.parquet` is missing).
