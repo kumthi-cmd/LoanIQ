@@ -1,6 +1,33 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 1b, loan API (2026-11-18)
+- Built: a FastAPI loan API (`backend/app/main.py`) over an in-memory DuckDB copy of
+  the tape: `/api/health`, `/api/loans/columns`, `/api/loans` (paged, sorted and
+  filtered on the server) and `/api/loans/summary` (count, total current UPB, WAC,
+  WA FICO, WA LTV, delinquent loans). A safe SQL builder for AG Grid filters
+  (`backend/app/loan_query.py`), limits in `api.toml`, column labels in
+  `content/loan-columns.json`.
+- Desk problem it solves: a trader can slice a seller tape of any size ("LTV over
+  125", "largest balance first", "New York only") and get the headline numbers they
+  quote for a pool, without the browser holding every loan.
+- My key decisions: server-side paging, sorting and filtering in DuckDB; a hard cap
+  of 500 rows per page; money as JSON numbers; delinquent means any status other
+  than Current; column labels as content, not code; a 300 ms budget for one page of
+  a 50,000-loan tape.
+- What Claude Code did: proposed the plan and the open questions (summary filter,
+  where labels live, the delinquency definition); wrote the API, the SQL builder,
+  the config, the labels, 59 API tests and the decision records; ran the tests and
+  timed a page.
+- What I changed after review: set the glossary's LTV formula to (loan amount /
+  appraised property value) x 100, matching the schema and the generator; switched
+  the TestClient's HTTP package from the deprecated httpx to httpx2.
+- Tests and coverage: 132 back-end tests pass (60 new API tests, including SQL
+  injection attempts, unknown columns and a 50,000-loan timing test; a deep sorted
+  page takes about 150 ms against the 300 ms budget); coverage 98%, with
+  `main.py` and `loan_query.py` at 100%.
+- My take:
+
 ## Step 1a, synthetic loan tape generator (2026-11-18)
 - Built: `python -m app.loan_tape_gen`, which writes a seeded synthetic loan tape
   (2,000 loans by default, 41 fields) to data/loan_tape.parquet and .csv. Also its
@@ -41,4 +68,4 @@ One entry per step, newest first. Copy the template for each new step.
 - What Claude Code did:
 - What I changed after review:
 - Tests and coverage:
-- My take:
+- My take:A trader slicing a seller’s tape shouldn’t have to wait on the screen, and the browser shouldn’t hold every loan. So the server does the paging, sorting, filtering and pool math in DuckDB, and no page can be bigger than 500 rows. The definitions matter as much as the speed: delinquent means any status other than Current, so the summary count is the conservative number a desk would quote, and I corrected the glossary’s LTV formula to match the tape. Claude Code wrote the API and 60 tests quickly, including SQL injection attempts. My part was setting the limits and the 300 ms budget (a deep page of a 50,000-loan tape comes back in about 150 ms) and checking that each number means what a desk expects.

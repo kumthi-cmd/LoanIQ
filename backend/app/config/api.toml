@@ -1,0 +1,22 @@
+# =============================================================================
+# api.toml: limits for the LoanIQ loan API (backend/app/main.py).
+#
+# BUSINESS: the grid shows the tape one page at a time. These numbers decide how
+#   big a page can be and how fast it must arrive so the desk never waits on the
+#   screen. ALL NUMBERS ARE ILLUSTRATIVE engineering choices, not industry rules.
+# TECH: TOML, read with Python's built-in tomllib. Times in milliseconds,
+#   sizes in loans (rows).
+# =============================================================================
+
+[paging]
+# TECH: rows returned when the caller does not send ?limit=
+default_limit = 100
+# TECH: the most rows one request can return. Bigger requests are capped here,
+#   so one call can never pull the whole tape into the browser.
+max_limit = 500
+
+[performance]
+# TECH: one page of /api/loans from a 50,000-loan tape must come back faster than
+#   this. tests/test_api.py checks it.
+page_budget_ms = 300
+timing_tape_loans = 50000

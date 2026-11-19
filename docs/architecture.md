@@ -6,7 +6,7 @@ loan tape -> slotting -> best execution -> position monitor and optimizer
 | Part | Step | What it does |
 | --- | --- | --- |
 | Loan tape | 1 | Synthetic tape from `backend/app/loan_tape_gen.py` (config in `backend/app/config/loan_tape_gen.toml`), written to `data/loan_tape.parquet` and `.csv`, loaded into DuckDB in memory. Fields: `docs/domain/loan-tape-schema.md` |
-| Loan API | 1 | FastAPI: paged, sorted and filtered loans |
+| Loan API | 1 | FastAPI in `backend/app/main.py` (Step 1b): health, columns, paged loans and a UPB-weighted summary. SQL for sorting and AG Grid filters built safely in `backend/app/loan_query.py`; limits in `backend/app/config/api.toml`; column labels in `content/loan-columns.json` |
 | SPA | 1 | React screens; explanations rendered from content/ |
 | Parser | 2 | Maps and cleans seller tapes |
 | Ask the Tape | 4 | Claude agent with read-only tools |

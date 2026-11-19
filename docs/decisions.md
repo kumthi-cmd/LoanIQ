@@ -1,6 +1,42 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-18: Loan API sorts, filters and pages in DuckDB SQL
+Decision: `backend/app/main.py` loads the tape into an in-memory DuckDB table `loans`
+at start-up (generating the default tape if `data/loan_tape.parquet` is missing).
+`backend/app/loan_query.py` turns the grid's sort string and AG Grid filter model into
+SQL. Column names are checked against `DESCRIBE loans` and quoted; every value is a `?`
+parameter. Supported filters: text contains/equals (case-insensitive, as in AG Grid),
+number equals/greaterThan/lessThan/inRange (inclusive), and AG Grid's AND/OR
+two-condition form. Anything else is HTTP 400. `loan_id` is always the last sort key.
+Page size limits and the timing budget live in `backend/app/config/api.toml`.
+Why: the browser never holds the whole tape, so the server must answer every slice
+correctly; refusing unknown filters is safer than guessing. The tie-break keeps pages
+stable when many loans share a sort value (FICO, state).
+Alternative considered: load the whole tape into the browser and let the grid sort
+it. Simple at 2,000 loans, but not at a 50,000-loan seller tape.
+
+## 2026-11-18: Money returned as JSON numbers
+Decision: DECIMAL(14,2) columns are cast to DOUBLE in the grid query, so the JSON has
+numbers, not strings. Summary totals are summed in DECIMAL in DuckDB, then sent as a
+number.
+Why: the grid needs numbers to sort and format. A double holds any 2-decimal amount
+under $1 trillion closely enough to round-trip to the same cents; a test checks every
+money field against the stored Decimal.
+
+## 2026-11-18: Delinquent means any MBA status other than Current
+Decision: the API summary counts a loan as delinquent when `dq_status <> 'Current'`,
+so 30, 60, 90, 120+, FC, BK and REO all count. This matches the generator's printout.
+Why: one definition across the app. A "30+ days only" count would hide the loans in
+foreclosure, bankruptcy or REO, which are the most serious.
+
+## 2026-11-18: Column labels live in content/
+Decision: readable column headers are in `content/loan-columns.json` (labels only) and
+served by `GET /api/loans/columns`. Field meanings stay in
+`docs/domain/loan-tape-schema.md` and terms in `content/glossary.json`.
+Why: headers are visitor-facing words, and those live in content/. A test keeps the
+label list equal to the tape's column list.
+
 ## 2026-11-18: Spec stories are validated SQL rules in config
 Decision: each spec-pool story is a `[[story]]` in `backend/app/config/spec_stories.toml`
 with a name, a product list and `where`, a SQL true/false test over tape columns. A story

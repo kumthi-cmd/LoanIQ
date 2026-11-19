@@ -9,4 +9,5 @@ fastapi==0.165.0     # TECH: the loan API (Step 1 API)
 uvicorn==0.54.0      # TECH: the web server that runs FastAPI
 pytest==9.2.0        # TECH: back-end test runner
 pytest-cov==7.1.0    # TECH: coverage report; the rule is 80% or more
-httpx==0.28.1        # TECH: needed by FastAPI's TestClient for API tests
+httpx2==2.16.2       # TECH: HTTP client behind FastAPI's TestClient for API tests
+                     #   (Starlette 1.10 deprecates the older httpx package for this)

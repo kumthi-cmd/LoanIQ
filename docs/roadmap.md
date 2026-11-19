@@ -1,5 +1,5 @@
 # Roadmap
-Current step: 1. Done: 1a synthetic loan tape generator. Next: loan API, fast grid, About page.
+Current step: 1. Done: 1a synthetic loan tape generator, 1b loan API. Next: fast grid, About page.
 
 | Step | Status |
 | --- | --- |

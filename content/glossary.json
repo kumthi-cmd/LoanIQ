@@ -1,10 +1,11 @@
 [
   {"term": "UPB", "definition": "Unpaid principal balance: what the borrower still owes.", "why": "Pricing, pool sizes and weighted averages all use current UPB."},
   {"term": "WAC", "definition": "Weighted-average coupon: note rates averaged by current UPB.", "why": "Sets which agency coupons a pool can fit."},
+  {"term": "Weighted average (WA)", "definition": "An average where each loan counts in proportion to its current UPB: sum(value x UPB) / sum(UPB). WA FICO and WA LTV are the pool's FICO and LTV weighted this way.", "why": "A $900,000 loan moves a pool's value ten times more than a $90,000 one, so desks and investors quote pools by weighted, not simple, averages."},
   {"term": "WALA", "definition": "Weighted-average loan age, in months.", "why": "Seasoning changes prepayment and credit behavior."},
   {"term": "FICO", "definition": "Borrower credit score, from 300 to 850.", "why": "The main credit signal; low-FICO loans price differently."},
   {"term": "DTI", "definition": "Debt-to-income: monthly debt payments divided by gross monthly income, in percent.", "why": "Measures ability to pay; high DTI raises default risk."},
-  {"term": "LTV", "definition": "Loan-to-value at origination: loan amount divided by the lower of appraised value and price.", "why": "The equity cushion; higher LTV means a bigger loss if the loan defaults."},
+  {"term": "LTV", "definition": "Loan-to-value at origination, in percent: LTV = (loan amount / appraised property value) x 100.", "why": "The equity cushion; higher LTV means a bigger loss if the loan defaults."},
   {"term": "CLTV", "definition": "Combined LTV: the first lien plus drawn subordinate liens, divided by value.", "why": "Shows total leverage on the property."},
   {"term": "HCLTV", "definition": "High combined LTV: CLTV using the full HELOC line, drawn or not.", "why": "Worst-case leverage if the borrower draws the whole line."},
   {"term": "MTM LTV", "definition": "Mark-to-market LTV: current UPB divided by today's estimated value.", "why": "Above 100, the borrower owes more than the home is worth."},
