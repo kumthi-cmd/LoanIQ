@@ -1,0 +1,54 @@
+# =============================================================================
+# spec_stories.toml: the specified-pool "stories" LoanIQ knows about.
+#
+# BUSINESS: a spec story is a loan feature that makes a pool of loans prepay
+#   more slowly than generic TBA collateral, so investors pay more for it (the
+#   "pay-up"). Low loan balance, New York and Puerto Rico are classic stories.
+#   This file says which loans have each story. Step 5 slotting will use it to
+#   tag loans; for now the tape generator uses it to guarantee loans in each
+#   story (minimum counts live in loan_tape_gen.toml under [coverage.stories]).
+#   ALL STORIES AND TIERS ARE ILLUSTRATIVE. Sources: docs/public-sources.md.
+#
+# TECH: one [[story]] table per story (TOML array of tables).
+#   name      story name; tiered stories get the cap appended (LLB_85K)
+#   products  products the story applies to
+#   where     a SQL boolean expression over loan tape columns (see
+#             docs/domain/loan-tape-schema.md for the column list)
+#   tiers     optional list of caps; `where` must then contain {cap}, and one
+#             story is made per cap. A new tier is one new number here.
+#   Every `where` is treated as code, not trusted text: app/spec_stories.py
+#   parses it with sqlglot when the config loads and allows only tape columns,
+#   comparisons (= <> < <= > >=), AND / OR / NOT, IN, BETWEEN, parentheses and
+#   literals. Anything else (subqueries, functions, semicolons, comments,
+#   unknown columns) is rejected with an error naming the story.
+# =============================================================================
+
+[[story]]
+# BUSINESS: low loan balance. Small loans prepay slowly because refinancing
+#   saves a small borrower fewer dollars. A tier's cap is the largest original
+#   balance allowed in that pool, so a $80K loan fits every tier; slotting picks
+#   the best one. $200K and $225K are illustrative steps between published tiers.
+name = "LLB"
+products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
+where = "orig_upb <= {cap}"
+tiers = [85000, 110000, 125000, 150000, 175000, 200000, 225000, 250000, 275000]
+
+[[story]]
+# BUSINESS: New York is a state spec story; such loans are less likely to pay
+#   off early, so investors pay up for them.
+name = "NY"
+products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
+where = "state = 'NY'"
+
+[[story]]
+# BUSINESS: Puerto Rico loans have their own, slower prepayment profile.
+name = "PR"
+products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
+where = "state = 'PR'"
+
+[[story]]
+# BUSINESS: lower-FICO borrowers have fewer refinancing options, so they prepay
+#   more slowly. FICO below 700 follows Markit's "Low FICO" story; illustrative.
+name = "LOW_FICO"
+products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
+where = "fico < 700"

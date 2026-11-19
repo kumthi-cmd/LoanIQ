@@ -1,0 +1,360 @@
+# =============================================================================
+# loan_tape_gen.toml: every number the synthetic loan tape generator uses.
+#
+# BUSINESS: LoanIQ's tape is synthetic, but it should look like a real seller's
+#   tape so the desk workflow (slotting, best execution, pooling) has realistic
+#   material to work on. This file is where "realistic" is defined: program mix,
+#   credit distributions, rates by year, delinquency drivers, and the minimum
+#   counts of special loans every demo needs.
+#   ALL NUMBERS ARE ILLUSTRATIVE. They follow the shape of public data (sources
+#   noted per section and recorded in docs/public-sources.md), not any lender.
+# TECH: TOML, read by backend/app/loan_tape_gen.py with Python's built-in
+#   tomllib (no extra package). Keys with hyphens or spaces are quoted.
+#   Percentages are in percent (80 = 80%), money in dollars, terms in months.
+#   Weight tables do not need to sum to 1; the code normalizes them.
+# =============================================================================
+
+[run]
+# TECH: defaults for the command line: python -m app.loan_tape_gen
+n_default = 2000
+seed_default = 42
+# BUSINESS: the tape's cut-off date. Loan age, delinquency and "reset in the next
+#   6 months" are all measured from here. Tapes are cut at a month boundary, so
+#   the code requires the 1st of a month.
+as_of_default = "2026-11-01"
+# TECH: the coverage minimums below lock about 340 distinct loans, so smaller
+#   tapes cannot meet them. The code refuses n below this.
+min_n = 1000
+
+# -----------------------------------------------------------------------------
+# Vintage mix. Source: shape of MBA/agency origination volumes (refi boom in
+# 2020-2021, slowdown after rates rose in 2022). Illustrative.
+# -----------------------------------------------------------------------------
+[vintage]
+first_year = 2015
+year_weights = { "2015" = 5, "2016" = 6, "2017" = 5, "2018" = 5, "2019" = 7, "2020" = 14, "2021" = 16, "2022" = 9, "2023" = 7, "2024" = 9, "2025" = 10, "2026" = 7 }
+
+# -----------------------------------------------------------------------------
+# Loan limits. Source: FHFA conforming loan limit announcements (fhfa.gov),
+# one-unit baseline. Illustrative simplification: no county-level limits
+# (see docs/decisions.md).
+# -----------------------------------------------------------------------------
+[limits]
+baseline_by_year = { "2015" = 417000, "2016" = 417000, "2017" = 424100, "2018" = 453100, "2019" = 484350, "2020" = 510400, "2021" = 548250, "2022" = 647200, "2023" = 726200, "2024" = 766550, "2025" = 806500, "2026" = 832750 }
+# BUSINESS: the high-cost-area ceiling is 150% of the baseline. High-Balance
+#   loans sit between the baseline and this ceiling.
+high_cost_multiple = 1.5
+# BUSINESS: Jumbo loans are above the 2026 baseline in every vintage.
+jumbo_floor = 832750
+
+# -----------------------------------------------------------------------------
+# Programs. FICO, DTI, LTV and balance differ by program.
+# Sources: HUD Handbook 4000.1 (FHA 96.5% LTV, 80% cash-out), VA Lenders
+# Handbook (100% LTV), USDA HB-1-3555 (100% LTV, no cash-out, 30-year fixed),
+# Fannie Mae Eligibility Matrix (conventional LTV caps, 50% DTI). Illustrative.
+#
+# Field guide:
+#   weight          share of the tape
+#   fico / dti      normal(mean, sd) clipped to [min, max]
+#   ltv_buckets     [low, high, weight]: pick a bucket, then uniform inside it
+#   balance.kind    conforming   lognormal, capped at the year's baseline
+#                   high_balance uniform between baseline and the ceiling
+#                   jumbo        lognormal, floored at jumbo_floor
+#                   free         lognormal between min and max
+#   max_ltv         caps by purpose and occupancy (applied after sampling)
+#   rate_adj        note-rate add-on in percent
+# -----------------------------------------------------------------------------
+[programs.Conventional]
+weight = 50
+fico = { mean = 748, sd = 45, min = 620, max = 850 }
+dti = { mean = 35, sd = 8, min = 10, max = 50 }
+ltv_buckets = [[30, 60, 20], [60, 80, 40], [80, 90, 15], [90, 95, 13], [95, 97, 12]]
+balance = { kind = "conforming", median = 300000, sigma = 0.45, min = 40000 }
+products = { "30Y Fixed" = 70, "15Y Fixed" = 12, "20Y Fixed" = 5, "5/6 ARM" = 4, "7/6 ARM" = 6, "10/6 ARM" = 3 }
+occupancy = { "Primary" = 85, "Second Home" = 4, "Investor" = 11 }
+purpose = { "Purchase" = 55, "Rate/Term Refi" = 28, "Cash-Out Refi" = 17 }
+max_ltv = { "Cash-Out Refi" = 80, "Investor" = 85, "Second Home" = 90 }
+first_time_buyer_rate = 0.45
+rate_adj = 0.0
+
+[programs."High-Balance"]
+weight = 6
+fico = { mean = 760, sd = 38, min = 660, max = 850 }
+dti = { mean = 36, sd = 7, min = 10, max = 45 }
+ltv_buckets = [[40, 70, 35], [70, 80, 40], [80, 90, 15], [90, 95, 10]]
+balance = { kind = "high_balance" }
+products = { "30Y Fixed" = 75, "15Y Fixed" = 8, "5/6 ARM" = 5, "7/6 ARM" = 8, "10/6 ARM" = 4 }
+occupancy = { "Primary" = 90, "Second Home" = 5, "Investor" = 5 }
+purpose = { "Purchase" = 55, "Rate/Term Refi" = 30, "Cash-Out Refi" = 15 }
+max_ltv = { "Cash-Out Refi" = 80, "Investor" = 75, "Second Home" = 90 }
+first_time_buyer_rate = 0.25
+rate_adj = 0.125
+
+[programs.FHA]
+weight = 15
+fico = { mean = 675, sd = 42, min = 580, max = 850 }
+dti = { mean = 42, sd = 8, min = 15, max = 57 }
+ltv_buckets = [[70, 90, 10], [90, 96.5, 20], [96.5, 96.5, 70]]
+balance = { kind = "conforming", median = 260000, sigma = 0.40, min = 50000 }
+products = { "30Y Fixed" = 92, "15Y Fixed" = 8 }
+occupancy = { "Primary" = 100 }
+purpose = { "Purchase" = 75, "Rate/Term Refi" = 18, "Cash-Out Refi" = 7 }
+max_ltv = { "Cash-Out Refi" = 80 }
+first_time_buyer_rate = 0.80
+rate_adj = -0.125
+
+[programs.VA]
+weight = 10
+fico = { mean = 712, sd = 50, min = 580, max = 850 }
+dti = { mean = 40, sd = 9, min = 15, max = 60 }
+ltv_buckets = [[60, 90, 15], [90, 100, 25], [100, 100, 60]]
+balance = { kind = "conforming", median = 330000, sigma = 0.45, min = 50000 }
+products = { "30Y Fixed" = 90, "15Y Fixed" = 10 }
+occupancy = { "Primary" = 100 }
+purpose = { "Purchase" = 65, "Rate/Term Refi" = 25, "Cash-Out Refi" = 10 }
+max_ltv = { "Cash-Out Refi" = 100 }
+first_time_buyer_rate = 0.50
+rate_adj = -0.25
+
+[programs.USDA]
+weight = 3
+fico = { mean = 695, sd = 38, min = 640, max = 850 }
+dti = { mean = 36, sd = 6, min = 15, max = 45 }
+ltv_buckets = [[95, 100, 20], [100, 100, 80]]
+balance = { kind = "conforming", median = 200000, sigma = 0.30, min = 50000 }
+products = { "30Y Fixed" = 100 }
+occupancy = { "Primary" = 100 }
+purpose = { "Purchase" = 90, "Rate/Term Refi" = 10 }
+max_ltv = {}
+first_time_buyer_rate = 0.75
+rate_adj = -0.125
+
+[programs.Jumbo]
+weight = 8
+fico = { mean = 770, sd = 28, min = 700, max = 850 }
+dti = { mean = 33, sd = 7, min = 10, max = 43 }
+ltv_buckets = [[40, 70, 40], [70, 80, 50], [80, 90, 10]]
+balance = { kind = "jumbo", median = 1150000, sigma = 0.35, max = 3000000 }
+products = { "30Y Fixed" = 60, "15Y Fixed" = 8, "5/6 ARM" = 6, "7/6 ARM" = 14, "10/6 ARM" = 12 }
+occupancy = { "Primary" = 88, "Second Home" = 9, "Investor" = 3 }
+purpose = { "Purchase" = 60, "Rate/Term Refi" = 28, "Cash-Out Refi" = 12 }
+max_ltv = { "Cash-Out Refi" = 70, "Investor" = 70, "Second Home" = 80 }
+first_time_buyer_rate = 0.15
+rate_adj = 0.25
+
+[programs."Non-QM"]
+weight = 8
+fico = { mean = 705, sd = 52, min = 600, max = 850 }
+dti = { mean = 41, sd = 10, min = 10, max = 55 }
+ltv_buckets = [[40, 70, 45], [70, 80, 40], [80, 90, 15]]
+balance = { kind = "free", median = 420000, sigma = 0.60, min = 75000, max = 3000000 }
+products = { "30Y Fixed" = 55, "5/6 ARM" = 8, "7/6 ARM" = 12, "30Y Fixed IO" = 25 }
+occupancy = { "Primary" = 60, "Second Home" = 8, "Investor" = 32 }
+purpose = { "Purchase" = 50, "Rate/Term Refi" = 15, "Cash-Out Refi" = 35 }
+max_ltv = { "Cash-Out Refi" = 75, "Investor" = 80 }
+first_time_buyer_rate = 0.10
+rate_adj = 1.50
+
+# -----------------------------------------------------------------------------
+# Products. Terms in months. ARM caps are initial / periodic / lifetime in
+# percentage points. Source: Fannie Mae SOFR ARM plan descriptions (5/6 ARM
+# 2/1/5 caps; 7/6 and 10/6 ARMs 5/1/5 caps). Illustrative.
+# -----------------------------------------------------------------------------
+[products."30Y Fixed"]
+term = 360
+[products."15Y Fixed"]
+term = 180
+[products."20Y Fixed"]
+term = 240
+[products."30Y Fixed IO"]
+term = 360
+# BUSINESS: interest-only for the first 10 years, then amortizes over 20.
+io_months = 120
+[products."5/6 ARM"]
+term = 360
+fixed_months = 60
+caps = [2.0, 1.0, 5.0]
+[products."7/6 ARM"]
+term = 360
+fixed_months = 84
+caps = [5.0, 1.0, 5.0]
+[products."10/6 ARM"]
+term = 360
+fixed_months = 120
+caps = [5.0, 1.0, 5.0]
+
+[arm]
+# BUSINESS: agency SOFR ARMs began in 2021, after LIBOR was retired, so every
+#   ARM on the tape is a 2021+ vintage indexed to SOFR.
+index = "30-day Average SOFR"
+first_year = 2021
+# BUSINESS: margin added to the index at each reset, in percent.
+margin_by_program = { "Conventional" = 2.75, "High-Balance" = 2.75, "Jumbo" = 2.50, "Non-QM" = 4.00 }
+
+# -----------------------------------------------------------------------------
+# Note rates. Each loan starts from the base rate for its ORIGINATION MONTH, so
+# rates move within a year as the market did (2022: about 3% in January to about
+# 6.4% in December). Approximate and illustrative.
+#   2015-2025: FHFA National Mortgage Database (NMDB) aggregate statistics,
+#     new mortgage statistics, monthly, national, "Conventional Conforming
+#     Market", AVE_INTRATE (average contract rate at origination), VALUE1
+#     (count-weighted). Rounded to 0.1 by FHFA. It averages all terms, mostly
+#     30-year, so it is a close stand-in for a 30-year rate, and it lags market
+#     quotes by the usual lock-to-close period.
+#   2026: not yet in NMDB. MBA Weekly Applications Survey, 30-year fixed
+#     conforming contract rate, from four releases (Jan 21 6.16, Apr 15 6.42,
+#     Jul 15 6.65, Oct 14 7.50), straight-line between them and rounded to 0.1;
+#     Nov-Dec carry October forward. Approximate.
+# Credit add-ons follow the shape of the Fannie Mae Loan-Level Price Adjustment
+# (LLPA) matrix, expressed as rate instead of price. Illustrative.
+# -----------------------------------------------------------------------------
+[rates]
+product_spread = { "30Y Fixed" = 0.0, "15Y Fixed" = -0.70, "20Y Fixed" = -0.30, "30Y Fixed IO" = 0.25, "5/6 ARM" = -0.45, "7/6 ARM" = -0.35, "10/6 ARM" = -0.20 }
+# TECH: [lowest FICO in band, add-on]; the first band whose floor the FICO meets wins.
+fico_adj = [[740, 0.0], [680, 0.125], [620, 0.375], [0, 0.75]]
+ltv_adj = [[95, 0.25], [80, 0.125], [0, 0.0]]
+occupancy_adj = { "Primary" = 0.0, "Second Home" = 0.25, "Investor" = 0.50 }
+purpose_adj = { "Purchase" = 0.0, "Rate/Term Refi" = 0.0, "Cash-Out Refi" = 0.25 }
+# TECH: loan-level noise (pricing day, lock date, lender), then round to 1/8.
+noise_sd = 0.125
+increment = 0.125
+min_rate = 1.875
+
+# TECH: 12 values per year, January to December, in percent. This sub-table must
+#   come after the plain [rates] keys: in TOML every key after a [table] header
+#   belongs to that table.
+[rates.base_rate_30y_by_month]
+"2015" = [4.1, 3.9, 3.9, 4.0, 3.9, 4.0, 4.2, 4.2, 4.2, 4.1, 4.1, 4.1]
+"2016" = [4.2, 4.1, 4.0, 4.0, 3.9, 3.9, 3.8, 3.7, 3.7, 3.7, 3.7, 4.0]
+"2017" = [4.2, 4.3, 4.4, 4.4, 4.3, 4.3, 4.2, 4.2, 4.2, 4.1, 4.2, 4.3]
+"2018" = [4.2, 4.4, 4.6, 4.7, 4.8, 4.8, 4.8, 4.8, 4.9, 5.0, 5.1, 5.1]
+"2019" = [5.0, 4.8, 4.7, 4.5, 4.4, 4.3, 4.1, 4.0, 3.9, 3.9, 3.9, 4.0]
+"2020" = [3.9, 3.8, 3.6, 3.4, 3.3, 3.3, 3.2, 3.0, 3.0, 2.9, 2.9, 2.9]
+"2021" = [2.8, 2.8, 2.9, 3.1, 3.1, 3.1, 3.1, 3.0, 3.0, 3.0, 3.1, 3.2]
+"2022" = [3.2, 3.5, 3.8, 4.3, 4.8, 5.1, 5.4, 5.3, 5.4, 5.9, 6.4, 6.4]
+"2023" = [6.2, 6.1, 6.3, 6.2, 6.2, 6.4, 6.5, 6.7, 6.9, 7.1, 7.4, 7.1]
+"2024" = [6.7, 6.6, 6.7, 6.7, 6.9, 6.8, 6.7, 6.5, 6.2, 6.1, 6.4, 6.6]
+"2025" = [6.7, 6.7, 6.6, 6.4, 6.5, 6.6, 6.5, 6.5, 6.3, 6.2, 6.1, 6.2]
+"2026" = [6.2, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.9, 7.2, 7.5, 7.5, 7.5]
+
+# -----------------------------------------------------------------------------
+# Home prices. Annual change in percent, shape of the FHFA House Price Index
+# (fhfa.gov/hpi); 2025-2026 illustrative estimates. A loan-level lognormal noise
+# term spreads individual homes around the index.
+# -----------------------------------------------------------------------------
+[hpi]
+annual_change_pct_by_year = { "2015" = 5.5, "2016" = 6.0, "2017" = 6.5, "2018" = 5.8, "2019" = 5.0, "2020" = 10.0, "2021" = 17.5, "2022" = 8.5, "2023" = 6.5, "2024" = 4.5, "2025" = 2.5, "2026" = 1.5 }
+loan_noise_sd = 0.08
+
+# -----------------------------------------------------------------------------
+# Subordinate liens. A closed-end second counts fully in CLTV and HCLTV; a HELOC
+# counts its drawn amount in CLTV and its full line in HCLTV. Percent of value.
+# -----------------------------------------------------------------------------
+[sub_liens]
+closed_end_rate = 0.05
+heloc_rate = 0.06
+closed_end_pct = [5.0, 15.0]
+heloc_line_pct = [10.0, 20.0]
+excluded_programs = ["USDA", "Jumbo"]
+
+# -----------------------------------------------------------------------------
+# Collateral and parties.
+# -----------------------------------------------------------------------------
+[collateral]
+property_type = { "SFR" = 64, "PUD" = 18, "Condo" = 11, "2-4 Unit" = 7 }
+multi_units = { "2" = 70, "3" = 15, "4" = 15 }
+# BUSINESS: roughly population-weighted (US Census), including DC and PR.
+states = { "CA" = 11.7, "TX" = 9.0, "FL" = 6.8, "NY" = 5.8, "PA" = 3.9, "IL" = 3.8, "OH" = 3.5, "GA" = 3.3, "NC" = 3.2, "MI" = 3.0, "NJ" = 2.8, "VA" = 2.6, "WA" = 2.3, "AZ" = 2.2, "TN" = 2.1, "MA" = 2.1, "IN" = 2.0, "MO" = 1.8, "MD" = 1.8, "WI" = 1.8, "CO" = 1.8, "MN" = 1.7, "SC" = 1.6, "AL" = 1.5, "LA" = 1.4, "KY" = 1.4, "OR" = 1.3, "OK" = 1.2, "CT" = 1.1, "UT" = 1.0, "IA" = 0.95, "NV" = 0.95, "AR" = 0.9, "MS" = 0.9, "KS" = 0.9, "PR" = 0.9, "NM" = 0.6, "NE" = 0.6, "ID" = 0.6, "WV" = 0.5, "HI" = 0.4, "NH" = 0.4, "ME" = 0.4, "RI" = 0.3, "MT" = 0.3, "DE" = 0.3, "SD" = 0.27, "ND" = 0.23, "AK" = 0.22, "DC" = 0.2, "VT" = 0.19, "WY" = 0.17 }
+
+[parties]
+channel = { "Retail" = 45, "Correspondent" = 35, "Broker" = 20 }
+# BUSINESS: fictional company names. Any resemblance to a real firm is accidental.
+sellers = ["Quillbrook Home Lending", "Stonemere Mortgage", "Tidewren Lending", "Larkspur Hollow Mortgage", "Ninebark Home Finance", "Alder & Finch Mortgage"]
+servicers = ["Kestrelmoor Servicing", "Ashgrove Loan Servicing", "Fernhollow Servicing"]
+# BUSINESS: share of loans where the seller keeps the servicing.
+servicing_retained_rate = 0.35
+
+# -----------------------------------------------------------------------------
+# Delinquency. A logistic score turns credit risk into a probability of being
+# delinquent; the intercept is solved so the tape averages target_rate.
+# Direction of each driver: Fannie Mae Single-Family Loan Performance Data and
+# the MBA National Delinquency Survey. Coefficients and target: illustrative.
+# Status buckets: MBA delinquency method.
+# -----------------------------------------------------------------------------
+[delinquency]
+target_rate = 0.07
+# TECH: log-odds per unit; each driver is centered so the intercept stays readable.
+fico_per_100 = -1.30     # per 100 FICO points above 700
+dti_per_10 = 0.35        # per 10 DTI points above 36
+ltv_per_10 = 0.30        # per 10 LTV points above 80
+investor = 0.50
+cash_out = 0.30
+# BUSINESS: how delinquent loans split across MBA buckets.
+bucket_weights = { "30" = 45, "60" = 15, "90" = 8, "120+" = 12, "FC" = 10, "BK" = 5, "REO" = 5 }
+# BUSINESS: missed payments behind each bucket, [min, max]. A loan must be old
+#   enough to have missed them. BK can be current on payments.
+missed_payments = { "30" = [1, 1], "60" = [2, 2], "90" = [3, 3], "120+" = [4, 12], "FC" = [5, 24], "BK" = [0, 6], "REO" = [7, 30] }
+# BUSINESS: months spent in REO at most, before which the loan was in FC.
+max_reo_months = 3
+max_bk_months = 3
+# BUSINESS: modification and forbearance are far more common on troubled loans.
+mod_rate = { current = 0.02, delinquent = 0.15 }
+forbearance_rate = { current = 0.005, delinquent = 0.10 }
+
+# -----------------------------------------------------------------------------
+# Coverage minimums. After random sampling, the generator guarantees at least
+# this many loans of each kind, so every screen has material to show.
+# -----------------------------------------------------------------------------
+[coverage.high_ltv]
+# BUSINESS: original LTV above 125 only happens through FHFA's high-LTV refinance
+#   programs (HARP, ended 2018). Conventional rate/term refis, 2015-2018.
+count = 20
+ltv = [125.5, 160.0]
+program = "Conventional"
+purpose = "Rate/Term Refi"
+years = [2015, 2018]
+
+[coverage.stories]
+# BUSINESS: minimum loans per spec story. The stories themselves (products,
+#   rules, tiers, states) live in app/config/spec_stories.toml. For a tiered
+#   story the minimum applies to every band between consecutive caps, e.g.
+#   LLB = 25 means 25 loans in each LLB tier, not 25 in total.
+# TECH: the generator can force two rule shapes: `orig_upb <= {cap}` (tiers)
+#   and `state = '..'`. A minimum on any other story is an error.
+LLB = 25
+NY = 25
+PR = 25
+
+[coverage.tiered.LLB]
+# BUSINESS: forced low-balance loans come from agency-eligible programs, and the
+#   smallest real loans start around $40,000.
+floor = 40000
+programs = ["Conventional", "FHA", "VA", "USDA"]
+
+[coverage.arm_reset]
+# BUSINESS: ARMs whose first rate reset falls in [as_of, as_of + window).
+count = 15
+window_months = 6
+product = "5/6 ARM"
+programs = ["Conventional", "High-Balance", "Jumbo", "Non-QM"]
+
+# BUSINESS: minimum counts of serious delinquency. "90+" means 90 or 120+
+#   (FC and REO are counted on their own). Forced loans are the riskiest
+#   current loans that are old enough.
+[[coverage.delinquency]]
+label = "90+"
+statuses = ["90", "120+"]
+count = 10
+assign = "90"
+
+[[coverage.delinquency]]
+label = "FC"
+statuses = ["FC"]
+count = 10
+assign = "FC"
+
+[[coverage.delinquency]]
+label = "REO"
+statuses = ["REO"]
+count = 10
+assign = "REO"

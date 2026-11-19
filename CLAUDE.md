@@ -31,6 +31,7 @@ python, frontend and e2e when working in those folders.
   (.claude/rules/showcase.md).
 - Business rules come from public industry sources, recorded in docs/public-sources.md.
   Label every threshold and price as illustrative.
+- Ask me before adding any new source to docs/public-sources.md.
 - Every random process takes a seed. Never build SQL from user input; use parameters.
 - Never commit .env or secrets.
 - I use Windows 11 and PowerShell. Give me PowerShell commands, not bash.
