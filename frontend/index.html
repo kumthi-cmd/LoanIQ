@@ -3,13 +3,25 @@
   index.html: the one HTML page of the LoanIQ single-page app (SPA).
   TECH: Vite injects the bundled script at build time. Every screen is drawn by React
     inside #root; moving between screens never reloads this page.
+  BUSINESS: the tab shows the LoanIQ Labs flask and "LoanIQ · LoanIQ Labs": the app
+    first, then the brand behind it.
+  TECH: the three icon links are copied from brand/README.txt. /icon/ is published
+    from brand/icon/ by the brandIcons plugin (vite.config.ts): the .ico for old
+    browsers, the SVG for sharp tabs, the Apple icon for iPhone home screens.
+    site.webmanifest (public/) names the 192 and 512 px app icons for Android and
+    "install app". theme-color is Lab Navy (#0A1628, brand/README.txt).
 -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <title>LoanIQ</title>
+    <meta name="theme-color" content="#0A1628" />
+    <link rel="icon" href="/icon/favicon.ico" sizes="any">
+    <link rel="icon" href="/icon/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icon/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <title>LoanIQ · LoanIQ Labs</title>
   </head>
   <body>
     <div id="root"></div>

@@ -30,9 +30,22 @@ async function openTape(page: Page) {
   await expect(page.getByTestId("row-count")).not.toHaveText("… loans");
 }
 
-test("shows the name, the synthetic data badge and the live sidebar", async ({ page }) => {
+test("shows the LoanIQ Labs logo, the synthetic data badge and the live sidebar", async ({ page }) => {
   await openTape(page);
-  await expect(page.getByRole("heading", { name: "LoanIQ" })).toBeVisible();
+  // BUSINESS: the brand is the page's top heading, and the tab says app then brand.
+  await expect(page).toHaveTitle("LoanIQ · LoanIQ Labs");
+  const logo = page.getByRole("heading", { level: 1, name: "LoanIQ Labs" })
+    .getByRole("img", { name: "LoanIQ Labs" });
+  await expect(logo).toBeVisible();
+  // TECH: the image actually loaded (a broken src still has alt text and a box).
+  await expect.poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+    .toBe(true);
+  // BUSINESS: the header logo is drawn for 48 px, so "LABS" stays bold and sharp.
+  // TECH: shown 48 px high, and that is the SVG's own height, so the browser shows
+  //   it at its natural size with no scaling.
+  const box = await logo.boundingBox();
+  expect(box?.height).toBeCloseTo(48, 0);
+  expect(await logo.evaluate((img: HTMLImageElement) => img.naturalHeight)).toBe(48);
   await expect(page.getByText("Synthetic data · demonstration only")).toBeVisible();
   await expect(page.getByRole("link", { name: "Loan Tape" })).toHaveAttribute("aria-current", "page");
 });
@@ -185,10 +198,46 @@ test("the explain panel shows the Business and Technical explanation", async ({ 
 
 test("a screen URL reloads into the app, and unknown API URLs stay JSON 404s", async ({ page, request }) => {
   await page.goto("/some/screen");
-  await expect(page.getByRole("heading", { name: "LoanIQ" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "LoanIQ Labs" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Screen not found" })).toBeVisible();
   await page.getByRole("link", { name: "Go to the Loan Tape" }).click();
   await expect(page.getByRole("columnheader", { name: "Loan ID" })).toBeVisible();
   const res = await request.get("/api/does-not-exist");
   expect(res.status()).toBe(404);
+});
+
+// BUSINESS: the browser tab, bookmarks and phone home screens show the LoanIQ Labs
+//   flask. Every icon index.html and the web manifest name must load from the build.
+// TECH: request is Playwright's HTTP client, so this checks what FastAPI serves from
+//   frontend/dist, which the brandIcons plugin filled from brand/icon/.
+test("the favicon, app icons and web manifest load", async ({ page, request }) => {
+  const svg = await request.get("/icon/favicon.svg");
+  expect(svg.status()).toBe(200);
+  expect(svg.headers()["content-type"]).toContain("image/svg+xml");
+  expect(await svg.text()).toContain("<svg");
+
+  // TECH: every icon link in the page's <head> resolves.
+  await page.goto("/");
+  const hrefs = await page.locator('head link[rel="icon"], head link[rel="apple-touch-icon"]')
+    .evaluateAll((links) => links.map((l) => l.getAttribute("href")));
+  expect(hrefs).toEqual(["/icon/favicon.ico", "/icon/favicon.svg", "/icon/apple-touch-icon.png"]);
+  // TECH: FastAPI answers unknown paths with index.html (status 200) so screen URLs
+  //   reload into the SPA; checking for an image type catches a missing icon.
+  for (const href of hrefs) {
+    const res = await request.get(href!);
+    expect(res.status(), href!).toBe(200);
+    expect(res.headers()["content-type"], href!).toMatch(/^image\//);
+  }
+
+  // BUSINESS: "install app" and Android home screens use the manifest's icons.
+  const manifestRes = await request.get("/site.webmanifest");
+  expect(manifestRes.status()).toBe(200);
+  const manifest = await manifestRes.json();
+  expect(manifest.icons.map((i: { src: string }) => i.src))
+    .toEqual(["/icon/app-icon-192.png", "/icon/app-icon-512.png"]);
+  for (const icon of manifest.icons) {
+    const res = await request.get(icon.src);
+    expect(res.status(), icon.src).toBe(200);
+    expect(res.headers()["content-type"]).toContain("image/png");
+  }
 });

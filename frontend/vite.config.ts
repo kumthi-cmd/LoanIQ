@@ -12,19 +12,30 @@
  *     the same relative URLs (/api/loans) in dev and in the build, with no CORS setup.
  *   - The "@content" alias points at ../content, where visitor-facing words live
  *     (.claude/rules/showcase.md). server.fs.allow lets the dev server read it.
+ *   - The "@brand" alias points at ../brand, the LoanIQ Labs logo kit (the only
+ *     copy; see brand/README.txt). Code imports the logo it shows from there, and
+ *     Vite publishes just that file, with a hashed name, under assets/.
+ *   - brandIcons() publishes brand/icon/ at /icon/ with fixed names, because
+ *     index.html and public/site.webmanifest link to the favicons by URL
+ *     (src/build/brandIcons.ts explains why an alias cannot do that).
+ *   - public/ (Vite's default publicDir) holds site.webmanifest, copied as-is to
+ *     the root of dist.
  *   - test: Vitest settings. jsdom is a simulated browser for component tests;
  *     globals makes describe/it/expect available without imports.
  */
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
+import { brandIcons } from "./src/build/brandIcons.ts";
 
 const contentDir = fileURLToPath(new URL("../content", import.meta.url));
+const brandDir = fileURLToPath(new URL("../brand", import.meta.url));
+const brandIconDir = fileURLToPath(new URL("../brand/icon", import.meta.url));
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 export default defineConfig({
-  plugins: [react()],
-  resolve: { alias: { "@content": contentDir } },
+  plugins: [react(), brandIcons(brandIconDir)],
+  resolve: { alias: { "@content": contentDir, "@brand": brandDir } },
   build: {
     // TECH: Vite warns above 500 kB per JavaScript file. LoanIQ registers AG Grid's
     //   AllCommunityModule (every free grid feature), which alone is most of the

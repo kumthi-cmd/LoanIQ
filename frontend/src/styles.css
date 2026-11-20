@@ -5,6 +5,11 @@
  *   the LoanIQ design canvas. Color carries meaning only: blue is the one accent
  *   (links, bars, the current screen), red is delinquency, amber is the synthetic
  *   data warning (.claude/rules/frontend.md: color only for meaning).
+ *   The LoanIQ Labs brand colours are defined below as --brand-* tokens, but the
+ *   page keeps the design board's palette: Neural Gold appears only inside the
+ *   logo artwork, because every accent on the board already means something
+ *   (blue = interactive or selected, amber = warning), and gold beside the amber
+ *   badge would blur that warning (docs/decisions.md, 2026-11-19).
  * TECH: colors are CSS custom properties ("tokens") on :root, so every rule uses
  *   the same few values and the grid theme can match them. font-variant-numeric:
  *   tabular-nums gives every digit the same width, so numbers line up in columns.
@@ -30,6 +35,22 @@
   --warn-text: #f5c86a;
   --warn-border: #6b5220;
   --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  /* BUSINESS: the LoanIQ Labs brand colours. The source of truth is brand/README.txt
+   *   ("COLOURS"); these mirror it so CSS can use them by name. Not used for UI
+   *   accents yet (see the header comment). If the README changes, change these.
+   * TECH: contrast on the app's dark panel (#0f1724), WCAG 2.x, checked by
+   *   src/theme/contrast.test.ts: gold 9.9:1, slate 8.4:1. Amber on white is only
+   *   2.5:1, so it must not carry text on a light page. */
+  --brand-navy: #0a1628;          /* Lab Navy: backgrounds, ink */
+  --brand-gold: #f2b705;          /* Neural Gold: brain, "IQ" on dark */
+  --brand-amber: #d49a00;         /* Amber: "IQ" on white */
+  --brand-flask-blue: #2563eb;    /* Flask Blue, top of the liquid gradient */
+  --brand-flask-blue-deep: #1a3f9a; /* Flask Blue, bottom of the gradient */
+  --brand-slate: #9fb3cc;         /* Slate: "LABS" on dark */
+  --brand-slate-on-white: #51647d; /* Slate: "LABS" on white */
+  --brand-ink-navy: #0b2545;      /* Ink Navy: flask and "Loan" on white */
+
   color-scheme: dark;
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
   font-size: 13px;
@@ -80,7 +101,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
   padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; }
-.app-title { font-size: 17px; font-weight: 700; margin: 0; letter-spacing: 0.01em; }
+/* TECH: the <h1> only wraps the logo image; line-height 0 stops the inline image
+ *   from sitting on a text baseline and adding stray space under it. width auto
+ *   keeps the SVG's aspect ratio from its height. */
+.app-title { margin: 0; line-height: 0; }
+.brand-logo { display: block; width: auto; }
 .badge {
   padding: 3px 10px; border-radius: 999px; font-size: 11px;
   background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border);

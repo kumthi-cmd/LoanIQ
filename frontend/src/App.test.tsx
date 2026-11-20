@@ -80,9 +80,15 @@ afterEach(() => vi.unstubAllGlobals());
 const renderApp = () => render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ["/"] })} />);
 
 describe("App", () => {
-  it("shows the name, what it is and the synthetic data badge", async () => {
+  it("shows the LoanIQ Labs logo, what it is and the synthetic data badge", async () => {
     renderApp();
-    expect(screen.getByRole("heading", { name: "LoanIQ" })).toBeInTheDocument();
+    // BUSINESS: the brand is the page's one top heading, read out as "LoanIQ Labs".
+    // TECH: the heading's name comes from the logo image's alt text, so both must
+    //   match, and the image must be the 48 px dark-background header logo from brand/.
+    const heading = screen.getByRole("heading", { level: 1, name: "LoanIQ Labs" });
+    const logo = within(heading).getByRole("img", { name: "LoanIQ Labs" });
+    expect(logo).toHaveAttribute("src", expect.stringContaining("loaniq-labs_horizontal_dark-bg_48px"));
+    expect(logo).toHaveAttribute("height", "48");
     expect(screen.getByText("Mortgage capital markets desk")).toBeInTheDocument();
     expect(screen.getByText("Synthetic data · demonstration only")).toBeInTheDocument();
   });

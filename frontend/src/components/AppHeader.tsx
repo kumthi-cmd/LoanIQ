@@ -4,15 +4,24 @@
  * Where it sits: App layout -> [AppHeader]; the row count comes from the current
  * screen's grid (through the layout's state).
  *
- * BUSINESS: the name and what it is (a mortgage capital markets desk), a clear
+ * BUSINESS: the LoanIQ Labs logo and what the app is (a mortgage capital markets desk), a clear
  *   "synthetic data" warning so no visitor mistakes the loans for real borrowers,
  *   the "Ask the tape" box (planned for Step 4, so shown but disabled), and how many
  *   loans match the current filter.
- * TECH: rowCount is null until the grid's first block arrives (shown as "…").
+ * TECH: the logo is brand/logo/loaniq-labs_horizontal_dark-bg_48px.svg (the README's
+ *   choice for the app's dark header: a version drawn for 48 px, with a bold "LABS"),
+ *   imported through the "@brand" alias so brand/ stays the only copy. It sits inside the page's one <h1> as an <img> whose alt text is
+ *   "LoanIQ Labs", so the heading and the image are both named "LoanIQ Labs" for
+ *   screen readers and tests. The lettering is outlined in the SVG, so it needs no font.
+ *   rowCount is null until the grid's first block arrives (shown as "…").
  *   The count is in an aria-live region so screen readers announce it when a
  *   filter changes it. The search box is a real <input> that is disabled, so it is
  *   visible and labelled but cannot be typed into or focused by Tab.
  */
+// TECH: importing an image file gives its published URL as a string. Vite copies
+//   the SVG into the build under assets/ with a content hash in its name, so a new
+//   logo is never served from a stale browser cache.
+import logoUrl from "@brand/logo/loaniq-labs_horizontal_dark-bg_48px.svg";
 import { formatNumber } from "../grid/columnFormats";
 
 interface AppHeaderProps {
@@ -20,17 +29,16 @@ interface AppHeaderProps {
   rowCount: number | null;
 }
 
-/** TECH: the three-bar logo mark; decorative, so hidden from screen readers. */
-function LogoMark() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-      <rect x="1" y="1" width="24" height="24" rx="6" fill="var(--panel-2)" stroke="var(--border)" />
-      <rect x="6" y="14" width="3" height="6" rx="1" fill="var(--accent)" />
-      <rect x="11.5" y="10" width="3" height="10" rx="1" fill="var(--accent)" />
-      <rect x="17" y="6" width="3" height="14" rx="1" fill="var(--accent)" />
-    </svg>
-  );
-}
+/**
+ * BUSINESS: the header logo is drawn for exactly this height: "LoanIQ" reads at 30 px
+ *   and "LABS" at a bold 12 px, clearly legible on the navy bar. (The v1 logo at 36 px
+ *   showed "LABS" thin, widely spaced and barely visible.)
+ * TECH: the logo's height in CSS pixels. The SVG's own size is 144.04 x 48, so at
+ *   48 px it is shown at its natural size (about 144 px wide) and nothing is scaled.
+ *   It is taller than the 36 px header controls, so the header bar grows by 12 px;
+ *   align-items: center in .app-header keeps the controls centred beside it.
+ */
+const LOGO_HEIGHT_PX = 48;
 
 /**
  * The header bar.
@@ -43,8 +51,9 @@ export function AppHeader({ rowCount }: AppHeaderProps) {
   return (
     <header className="app-header">
       <div className="brand">
-        <LogoMark />
-        <h1 className="app-title">LoanIQ</h1>
+        <h1 className="app-title">
+          <img src={logoUrl} alt="LoanIQ Labs" height={LOGO_HEIGHT_PX} className="brand-logo" />
+        </h1>
       </div>
       <span className="muted">Mortgage capital markets desk</span>
       <span className="badge">Synthetic data · demonstration only</span>

@@ -18,6 +18,8 @@ professional seeing LoanIQ for the first time can follow it.
 - Loan tape fields, types and units: `docs/domain/loan-tape-schema.md` (from Step 1)
 - Slotting rules: `docs/domain/slotting-rules.md` (from Step 5)
 - Visitor-facing pages and screen explanations: `content/`
+- LoanIQ Labs logo kit, colours and which file to use where: `brand/README.txt`.
+  brand/ is the only copy of the artwork: never copy or edit it; the build publishes it.
 Rules in .claude/rules/ load by themselves: comments, testing and showcase always;
 python, frontend and e2e when working in those folders.
 

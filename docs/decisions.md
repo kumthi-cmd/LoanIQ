@@ -1,6 +1,46 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-19: The header shows a 48 px logo with a bold "LABS"
+Decision: the header shows brand/logo/loaniq-labs_horizontal_dark-bg_48px.svg at
+48 px high, a version of the logo drawn for that size. "LABS" is bold, 12 px,
+#D3DEEC and followed by a gold rule. "LoanIQ" is 30 px Space Grotesk Bold, outlined
+in the SVG. The flask and brain are simpler, with thicker strokes. The v1 file stays in
+brand/ for the other uses the README lists.
+Why: in the v1 logo at 36 px, "LABS" (Montserrat Regular, tracked wide, Slate #9FB3CC)
+was too thin to read. The new SVG is 48 px high, so the header shows it at its natural
+size with no scaling.
+Alternatives considered: keeping the v1 artwork and only making it bigger; redrawing
+only "LABS" in the v1 Montserrat style.
+Note: this file's lettering (Space Grotesk) and "LABS" colour (#D3DEEC) differ from
+the README's TYPE and COLOURS (Montserrat; Slate #9FB3CC). The brand tokens in
+styles.css still follow the README. The rest of the kit (favicons, stacked and light
+logos) is v1 until it is redrawn.
+
+## 2026-11-19: The LoanIQ Labs brand comes from brand/, unchanged
+Decision: brand/ is the only copy of the logo kit. The build publishes from it and
+nothing is copied into frontend/:
+- brand/icon/ appears at /icon/ with fixed names, through a small Vite plugin
+  (frontend/src/build/brandIcons.ts). Favicons need unhashed URLs, because
+  index.html and the web manifest name them directly.
+- The header logo (logo/loaniq-labs_horizontal_dark-bg.svg) is imported through an
+  "@brand" alias, like "@content", so Vite publishes only that file, with a hashed name.
+- The web manifest is app metadata, not artwork, so it lives in frontend/public/.
+- The header shows the logo inside the page's <h1>, alt text "LoanIQ Labs". The tab
+  title is "LoanIQ · LoanIQ Labs".
+- The brand colours are CSS tokens (--brand-*), checked against brand/README.txt by
+  a test. The page keeps the design board's palette, and Neural Gold appears only in
+  the logo. Every accent on the board already has a meaning (blue = interactive or
+  selected, amber = the synthetic-data warning), and gold beside the amber badge
+  would blur the warning (.claude/rules/frontend.md: color only for meaning).
+Why: one copy of the artwork means a new version of the kit reaches the app with no
+copying. Keeping colour for meaning keeps the warning unmistakable.
+Alternatives considered: Vite's publicDir pointed at brand/ (it would also publish the
+README and the 3200 px brand sheet); copying the icons into frontend/public (two
+copies that drift); a gold accent for the current screen or primary buttons.
+Note: the README's Amber (#D49A00) on white is 2.5:1, below WCAG AA for text. It
+matters only if a light page is ever added.
+
 ## 2026-11-19: The Loan Tape screen follows the "1 · Loan Tape" design board
 Decision: the screen matches the LoanIQ design canvas: a dark desk layout, a header
 with the synthetic-data badge and a disabled "Ask the tape" box, a sidebar grouped

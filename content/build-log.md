@@ -1,6 +1,44 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 1e, the LoanIQ Labs brand (2026-11-19)
+- Built: the LoanIQ Labs logo in the header (the flask-and-brain horizontal logo for
+  dark backgrounds, 48 px high, read out as "LoanIQ Labs"), the flask favicon in the
+  browser tab, a web manifest with the 192 and 512 px app icons, and the tab title
+  "LoanIQ · LoanIQ Labs". The brand colours are CSS tokens (`--brand-navy`,
+  `--brand-gold` and the rest). The page keeps the design board's palette.
+- Desk problem it solves: a visitor can see whose work this is at a glance, and can
+  find the tab among a dozen others, while the screen's colours still mean only
+  what they meant before (blue to act, amber to warn, red for late loans).
+- My key decisions: `brand/` is the only copy of the artwork, published by the build
+  and never copied into the app; Neural Gold stays inside the logo instead of
+  becoming a UI accent, so it never competes with the amber synthetic-data warning;
+  the web manifest lives with the app in `frontend/public/`.
+- What Claude Code did: read the brand README and sheet; proposed the plan and three
+  open decisions; wrote a small Vite plugin that serves `brand/icon/` at `/icon/` in
+  dev and copies it into the build, an `@brand` alias for the header logo, the
+  favicon links and manifest, the header change, the brand tokens, a WCAG contrast
+  checker, the tests and the decision record; took a screenshot of the header; ran
+  every layer. Along the way: Vitest's `css: false` setting turns even a raw CSS
+  import into an empty string, so the contrast test reads `styles.css` from disk;
+  jsdom's `URL` class rejects `file:` URLs, so test paths are built with `node:path`;
+  FastAPI answers unknown paths with the app's page (status 200), so the icon test
+  checks for an image type, not just 200. Existing title tests now find the logo by
+  its accessible name, and also check that the image really loaded and is 48 px high,
+  its natural size.
+- What I changed after review: the logo from 28 px to 36 px high, after the screenshot
+  showed "LoanIQ" smaller than the tagline and "LABS" barely legible. "LABS" was still
+  hard to read at 36 px, so I had the header logo redrawn for 48 px in Claude Design
+  (a bold "LABS" with a gold rule, Space Grotesk lettering) and added it to brand/
+  as loaniq-labs_horizontal_dark-bg_48px.svg.
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 184 tests (no
+  change), coverage 98.8%. Front end: 104 Vitest tests (22 new: the icon plugin's
+  build and dev-server hooks, including "../" paths; WCAG AA contrast for every text
+  colour on its background; the brand tokens against `brand/README.txt`; the logo in
+  the heading). End to end: 14 Playwright tests (1 new, for the favicon, app icons and
+  manifest; 2 updated, for the logo and the tab title) against the built app.
+- My take:
+
 ## Step 1d, the Loan Tape screen to the design board (2026-11-19)
 - Built: the Loan Tape screen redone to the "1 · Loan Tape" board of the LoanIQ
   design canvas. A header with the logo, "Mortgage capital markets desk", the
