@@ -1,0 +1,218 @@
+# =============================================================================
+# ci.yml: LoanIQ continuous integration on GitHub Actions.
+#
+# MIRRORS test.ps1. The "tests" job runs the same layers in the same order:
+#   pytest with coverage (80% minimum) -> type check -> Vitest -> build -> Playwright.
+#   If you add, remove or reorder a layer in one file, change the other in the same
+#   commit. backend/tests/test_deploy_config.py fails when the two drift apart.
+#
+# Where it sits: git push -> [this workflow: tests, then container] -> Render
+#   deploys main only after these checks pass (render.yaml: autoDeployTrigger
+#   checksPass).
+#
+# BUSINESS: nothing reaches the live site unless every test passes on a clean
+#   machine, and the exact container the host will run has started and served the
+#   tape and the screens. A visitor never sees a broken build.
+# TECH:
+#   - GitHub Actions basics: a workflow has jobs; each job runs on a fresh virtual
+#     machine (runs-on) and is a list of steps. "uses:" runs a published action
+#     (pinned to a major version); "run:" runs shell commands (bash on Linux).
+#   - The repo is private, so Actions minutes are limited (2,000 a month). Kept
+#     lean: one Linux runner, Chromium only, pip and npm caches, the Playwright
+#     report uploaded only on failure, and older runs on the same branch cancelled.
+#   - Linux paths: the venv's Python is .venv/bin/python, not .venv\Scripts\python.exe.
+#     playwright.config.ts already picks the right one per platform.
+# =============================================================================
+
+name: CI
+
+# TECH: when the workflow runs. Every push to any branch, plus pull requests into
+#   main. A branch with an open PR into main runs twice (push and PR); the PR run
+#   tests the branch merged with main, which is what main will become.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+# TECH: one run at a time per branch (or PR). When a new push arrives, the older,
+#   now-outdated run is cancelled, which saves minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# TECH: the workflow only reads the code. Least privilege for the automatic token.
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1 "tests": every layer of test.ps1, in the same order.
+  # ---------------------------------------------------------------------------
+  tests:
+    name: tests (test.ps1 layers)
+    runs-on: ubuntu-latest
+    # TECH: a hung run stops here instead of burning minutes (a normal run is ~5).
+    timeout-minutes: 20
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      # TECH: Python 3.12, as in backend/.venv. cache: pip keeps downloaded wheels
+      #   between runs, keyed on requirements.txt, so installs are fast until a pin
+      #   changes.
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      # TECH: the venv lives at backend/.venv, as on your PC, so the same commands
+      #   work and playwright.config.ts finds .venv/bin/python to start the server.
+      - name: Create backend/.venv and install the back end
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r requirements.txt
+
+      # TECH: Node from .nvmrc (the one place its major version lives). cache: npm
+      #   keeps npm's download cache, keyed on both lock files.
+      - name: Set up Node (version from .nvmrc)
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      # BUSINESS: layer 1, the business rules: tape generator, API, SQL safety,
+      #   UPB-weighted summaries, and the timing budgets in api.toml.
+      # TECH: if a timing test fails only here (GitHub's runners are slower than a
+      #   PC), do not raise the budgets in api.toml: stop and decide what to do.
+      - name: "Back end: pytest with coverage (80% minimum)"
+        working-directory: backend
+        run: .venv/bin/python -m pytest --cov=app --cov-report=term-missing:skip-covered --cov-fail-under=80
+
+      # TECH: npm ci installs the exact versions in the lock file. test.ps1 does this
+      #   only when node_modules is missing; on a fresh runner it always is.
+      - name: Install frontend packages
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      # BUSINESS: layer 2, the screens: types match the API, components show the
+      #   right numbers in the right formats.
+      - name: "Front end: type check"
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: "Front end: Vitest"
+        working-directory: frontend
+        run: npx vitest run
+
+      # TECH: layer 3, writes frontend/dist, which FastAPI serves to Playwright.
+      - name: "Front end: build"
+        working-directory: frontend
+        run: npm run build
+
+      - name: Install e2e packages
+        working-directory: e2e
+        run: npm ci --no-audit --no-fund
+
+      # TECH: downloads Chromium only (not Firefox or WebKit) plus the Linux system
+      #   libraries it needs (--with-deps). Only Chromium is in playwright.config.ts.
+      - name: Install Playwright's Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      # BUSINESS: layer 4, what a visitor does in a real browser against the built
+      #   app: open the Loan Tape, filter, sort, read a number, open the explanation.
+      - name: "End to end: Playwright"
+        working-directory: e2e
+        run: npx playwright test
+
+      # TECH: only when a step above failed: keep the HTML report and traces for a
+      #   week to see what the browser saw. Download it from the run's summary page.
+      - name: Upload the Playwright report (failures only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Job 2 "container": build and run the image the host will run (tests H1).
+  # ---------------------------------------------------------------------------
+  container:
+    name: container (build, run, smoke test)
+    # TECH: only after "tests" passes; no point building a broken app.
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      # TECH: the Dockerfile builds the SPA and generates the seeded tape inside the
+      #   image, so this job needs no Python or Node of its own. Docker is
+      #   preinstalled on GitHub's Ubuntu runners.
+      - name: Build the image
+        run: docker build --tag loaniq:ci .
+
+      # TECH: PORT=8080, not the Dockerfile's default 10000, proves the server reads
+      #   $PORT when the container starts, as Render and other hosts require.
+      - name: Start the container with PORT=8080
+        run: docker run --detach --name loaniq --env PORT=8080 --publish 8080:8080 loaniq:ci
+
+      # BUSINESS: the live site is up only if the tape loaded: /api/health must
+      #   report more than 0 loans.
+      # TECH: polls every 2 seconds for up to 60, because uvicorn needs a moment to
+      #   load the Parquet tape into DuckDB. curl -f fails on HTTP errors; python3
+      #   (preinstalled) reads the JSON. set -e is off inside the loop on purpose.
+      - name: Wait for /api/health and check the loan count
+        run: |
+          for attempt in $(seq 1 30); do
+            if body=$(curl -fsS http://localhost:8080/api/health); then
+              echo "health: $body"
+              loans=$(echo "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin)["loans"])')
+              if [ "$loans" -gt 0 ]; then
+                echo "OK: $loans loans loaded"
+                exit 0
+              fi
+              echo "FAIL: health reports $loans loans"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "FAIL: /api/health did not answer within 60 seconds"
+          exit 1
+
+      # BUSINESS: a visitor opening the address gets the LoanIQ screens, not a 404
+      #   or a JSON error.
+      # TECH: "/" must return the SPA's index.html: the root element React draws into
+      #   and the tab title from frontend/index.html.
+      - name: Check that "/" serves the SPA
+        run: |
+          html=$(curl -fsS http://localhost:8080/)
+          echo "$html" | grep -q '<div id="root"></div>' || { echo 'FAIL: no <div id="root"> in /'; exit 1; }
+          echo "$html" | grep -q '<title>LoanIQ' || { echo "FAIL: no LoanIQ title in /"; exit 1; }
+          echo "OK: / serves the SPA"
+
+      # BUSINESS: the server runs without administrator rights.
+      # TECH: `id -u` prints the user id inside the container; 0 is root.
+      - name: Check the server is not running as root
+        run: |
+          uid=$(docker exec loaniq id -u)
+          [ "$uid" != "0" ] || { echo "FAIL: running as root"; exit 1; }
+          echo "OK: running as uid $uid"
+
+      # TECH: always print the server's log, so a failed start shows its error.
+      - name: Container log
+        if: always()
+        run: docker logs loaniq || true

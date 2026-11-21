@@ -1,4 +1,4 @@
-"""Tests for the deployment files at the repo root: Dockerfile, .dockerignore, .nvmrc.
+"""Tests for the deployment files: Dockerfile, .dockerignore, .nvmrc and the CI workflow.
 
 Where it sits: these files are not Python, but they decide what goes live. A wrong
   line there passes every other test and only breaks on the host. These checks run
@@ -7,12 +7,15 @@ Where it sits: these files are not Python, but they decide what goes live. A wro
 
 BUSINESS: protects what a visitor gets from the live site: the same code, Python and
   Node versions that passed the tests here, the same seeded synthetic tape, a server
-  that answers on the host's port, and no secrets or local data inside the image.
+  that answers on the host's port, no secrets or local data inside the image, and a
+  CI run that checks exactly what test.ps1 checks on your PC.
 TECH: reads the files as plain text (no Docker or YAML library needed). A tiny parser
   turns the Dockerfile into (INSTRUCTION, arguments) pairs, joining lines that end
   in a backslash and dropping comments. Paths the app uses are read from the app's
   own constants (main.SPA_DIR, main.LABELS_PATH, gen.DEFAULT_OUT_DIR), so if code
-  moves a folder, these tests fail until the Dockerfile follows.
+  moves a folder, these tests fail until the Dockerfile follows. ci.yml is split
+  into its steps with regular expressions; it is written in a regular shape (one
+  "- name:" per step, single-line run: for every test.ps1 layer) so that stays simple.
 """
 
 from __future__ import annotations
@@ -265,3 +268,144 @@ def test_dockerignore_does_not_drop_what_the_build_copies(folder: str) -> None:
     """
     patterns = dockerignore_patterns()
     assert not {folder, f"{folder}/", f"/{folder}", f"**/{folder}"} & patterns
+
+
+# =============================================================================
+# CI workflow: mirrors test.ps1 (.github/workflows/ci.yml)
+# =============================================================================
+
+CI_YML = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+TEST_PS1 = REPO_ROOT / "test.ps1"
+PLAYWRIGHT_CONFIG = REPO_ROOT / "e2e" / "playwright.config.ts"
+
+# TECH: the Windows venv Python in test.ps1 and its Linux path on the CI runner.
+WINDOWS_PYTHON = r".venv\Scripts\python.exe"
+LINUX_PYTHON = ".venv/bin/python"
+
+
+def ps1_layers() -> list[tuple[str, str, str]]:
+    """The test layers in test.ps1, as (name, folder, command) in run order.
+
+    TECH: matches every `Invoke-Step "<name>" "<folder>" { <command> }`. The npm ci
+      installs use a variable folder ($Folder), so they are not matched: they are
+      setup, not a test layer. Whitespace in commands is collapsed to one space.
+    """
+    text = TEST_PS1.read_text(encoding="utf-8")
+    pattern = re.compile(r'Invoke-Step\s+"([^"$]+)"\s+"(\w+)"\s+\{\s*(.+?)\s*\}', re.DOTALL)
+    return [(name, folder, " ".join(cmd.split())) for name, folder, cmd in pattern.findall(text)]
+
+
+def ci_job(job: str) -> str:
+    """The text of one job in ci.yml, from its "  <job>:" line to the next job."""
+    text = CI_YML.read_text(encoding="utf-8")
+    jobs = re.split(r"^  (?=[\w-]+:\s*$)", text.split("\njobs:\n", 1)[1], flags=re.MULTILINE)
+    matches = [block for block in jobs if block.startswith(f"{job}:")]
+    assert matches, f"job {job!r} not found in ci.yml"
+    return matches[0]
+
+
+def ci_steps(job: str) -> list[dict[str, str]]:
+    """The steps of one ci.yml job, each as {"name", "working-directory", "run", "if"}.
+
+    TECH: a step starts at "- name:". Values are the text after "key:" on one line,
+      with surrounding quotes removed. A multi-line run (run: |) shows as "|".
+    """
+    steps = []
+    for block in re.split(r"^\s*- name:", ci_job(job), flags=re.MULTILINE)[1:]:
+        step = {"name": block.splitlines()[0].strip().strip('"')}
+        for key in ("working-directory", "run", "if"):
+            found = re.search(rf"^\s*{key}:\s*(.+)$", block, flags=re.MULTILINE)
+            if found:
+                step[key] = found.group(1).strip()
+        steps.append(step)
+    return steps
+
+
+def test_ci_runs_every_test_ps1_layer_in_the_same_order() -> None:
+    """BUSINESS: green on GitHub means the same as green on your PC: every layer passed.
+
+    TECH: each test.ps1 layer must appear in the CI "tests" job with the same name,
+      folder and command (Windows venv path swapped for the Linux one), in the same
+      order. Extra CI steps (setup, installs, the report upload) may sit in between.
+    """
+    layers = [(name, folder, cmd.replace(WINDOWS_PYTHON, LINUX_PYTHON))
+              for name, folder, cmd in ps1_layers()]
+    assert len(layers) == 5, "test.ps1 changed: update ci.yml and this count together"
+    ci = [(s["name"], s.get("working-directory", ""), s.get("run", "")) for s in ci_steps("tests")]
+    positions = [ci.index(layer) if layer in ci else -1 for layer in layers]
+    assert -1 not in positions, f"missing from ci.yml: {layers[positions.index(-1)]}"
+    assert positions == sorted(positions), "ci.yml runs the test.ps1 layers in a different order"
+
+
+def test_ci_keeps_the_80_percent_coverage_floor() -> None:
+    """BUSINESS: the coverage rule (.claude/rules/testing.md) holds on GitHub too."""
+    pytest_step = next(s for s in ci_steps("tests") if "pytest" in s.get("run", ""))
+    assert "--cov-fail-under=80" in pytest_step["run"]
+
+
+def test_ci_venv_is_where_playwright_looks_for_python() -> None:
+    """BUSINESS: the browser tests start the real API, so they test the real app.
+
+    TECH: playwright.config.ts starts uvicorn with .venv/bin/python from backend/ on
+      Linux; CI must create the venv there.
+    """
+    assert f'"{LINUX_PYTHON}"' in PLAYWRIGHT_CONFIG.read_text(encoding="utf-8")
+    venv = next(s for s in ci_steps("tests") if s["name"].startswith("Create backend/.venv"))
+    assert venv["working-directory"] == "backend"
+    assert "python -m venv .venv" in ci_job("tests")
+
+
+def test_ci_uses_the_same_python_and_node_as_the_image() -> None:
+    """BUSINESS: CI tests the versions the live site runs.
+
+    TECH: Python from the Dockerfile's python:<x.y>-slim; Node from .nvmrc, which
+      setup-node reads directly.
+    """
+    tests = ci_job("tests")
+    assert f'python-version: "{base_image_version(RUNTIME, "python")}"' in tests
+    assert "node-version-file: .nvmrc" in tests
+
+
+def test_ci_installs_only_chromium_and_uploads_the_report_only_on_failure() -> None:
+    """BUSINESS: CI minutes are limited on a private repo (2,000 a month); keep runs lean.
+
+    TECH: one browser download, and the report artifact only when a step failed.
+    """
+    steps = ci_steps("tests")
+    assert any(s.get("run") == "npx playwright install --with-deps chromium" for s in steps)
+    upload = next(s for s in steps if "Upload the Playwright report" in s["name"])
+    assert upload["if"] == "failure()"
+
+
+def test_ci_cancels_older_runs_on_the_same_branch() -> None:
+    """BUSINESS: a quick second push does not pay for the first, outdated run."""
+    text = CI_YML.read_text(encoding="utf-8")
+    assert "group: ci-${{ github.workflow }}-${{ github.ref }}" in text
+    assert "cancel-in-progress: true" in text
+
+
+def test_ci_container_job_runs_after_tests_on_a_non_default_port() -> None:
+    """BUSINESS: the image is only built from code that passed, and must honour the
+      host's port.
+
+    TECH: `needs: tests` orders the jobs. PORT is set to something other than the
+      Dockerfile default (10000), so a server that ignores $PORT fails the job.
+    """
+    job = ci_job("container")
+    assert "needs: tests" in job
+    port = re.search(r"--env PORT=(\d+) --publish (\d+):(\d+)", job)
+    assert port and port.group(1) != "10000" and port.group(1) == port.group(3)
+
+
+def test_ci_container_smoke_test_uses_real_routes() -> None:
+    """BUSINESS: the smoke test checks the same health endpoint the host will poll.
+
+    TECH: the paths curl calls must be routes the app really has, and the HTML it
+      looks for must really be in frontend/index.html.
+    """
+    job = ci_job("container")
+    routes = {getattr(route, "path", "") for route in main.create_app().routes}
+    for path in re.findall(r"curl -fsS http://localhost:\d+(/[\w/]*)", job):
+        assert path == "/" or path in routes, f"{path} is not an API route"
+    index = (REPO_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert '<div id="root"></div>' in index and "<title>LoanIQ" in index
