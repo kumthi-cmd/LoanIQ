@@ -37,6 +37,7 @@ python, frontend and e2e when working in those folders.
 - Every random process takes a seed. Never build SQL from user input; use parameters.
 - Never commit .env or secrets.
 - I use Windows 11 and PowerShell. Give me PowerShell commands, not bash.
+- When reporting results, mark each success with ✅ and each failure with ❌.
 
 ## Keep facts in one place
 Don't copy a fact into a second file; point to where it lives. Thresholds and limits live
