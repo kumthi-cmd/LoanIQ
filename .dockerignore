@@ -1,0 +1,33 @@
+# .dockerignore: what never goes into the Docker build context (see Dockerfile).
+# BUSINESS: no secrets and no locally generated data in an image that goes on the
+#   internet. The tape is generated inside the image from the seed.
+# TECH: `docker build .` sends the repo folder to the builder; these patterns are left
+#   out. That keeps the build fast and stops local, Windows-built files (venv,
+#   node_modules, dist) from overwriting the clean Linux ones the Dockerfile makes.
+#   "**/" matches the name in any folder, not just the repo root.
+
+# Git history and local tool settings
+.git
+.claude
+
+# Secrets: never in an image
+**/.env
+**/.env.*
+
+# Python virtual environments and caches
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.coverage
+**/htmlcov
+
+# Node packages and build output (rebuilt inside the image)
+**/node_modules
+frontend/dist
+
+# Generated tape (rebuilt inside the image from the seed)
+data/
+
+# End-to-end test output
+e2e/test-results
+e2e/playwright-report
