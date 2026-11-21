@@ -1,6 +1,46 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-20: Host LoanIQ as one Docker container on Render, tested by GitHub Actions
+Decision: LoanIQ goes online as one service, built from one `Dockerfile` and deployed
+on Render with a Blueprint (`render.yaml`):
+- One container: FastAPI serves the built SPA at `/` and the API at `/api`, exactly as
+  `start.ps1` and the Playwright tests run it.
+- The seeded tape is generated when the image is built, with the generator's defaults.
+- The container runs as a non-root user and listens on `$PORT`.
+- GitHub Actions (`.github/workflows/ci.yml`) runs every `test.ps1` layer, then builds
+  and smoke-tests the image. Render deploys `main` only after those checks pass
+  (`autoDeployTrigger: checksPass`) and its health check (`/api/health`) answers.
+- Free plan while building, Starter before the link goes on any application.
+- The Node major version lives in `.nvmrc`, read by CI and checked against the
+  Dockerfile by a test. A test also fails if `ci.yml` and `test.ps1` drift apart.
+- CI runs on every push and on pull requests into `main`, not on every pull request.
+- One `requirements.txt`, so the image also holds the test tools (a few MB).
+Why:
+- One domain, no CORS, and the Step 4 Claude API key stays on the server, never in
+  the browser.
+- Production runs the same way the tests do, so a green test run means what it says.
+- A container keeps us portable: only `render.yaml` is Render-specific.
+- I have no Docker on my PC, so GitHub Actions builds and tests the image on every
+  push. The repo is private (2,000 Actions minutes a month), so CI is kept lean:
+  one Linux runner, Chromium only, caches, reports only on failure, older runs
+  cancelled. A run takes about 2 minutes, about 3 billed minutes.
+- Generating the tape at build time keeps `data/` out of Git, gives every deploy the
+  same loans, and keeps start-up fast.
+Alternatives considered:
+- Vercel for the SPA plus Render for the API: two services and two addresses, CORS
+  between them, and two deploys to keep in step for every change.
+- DigitalOcean App Platform: runs the same container, but has no free tier for an
+  app with a server.
+- Google Cloud Run: scales to zero and has a free allowance, but needs a Google Cloud
+  project, billing, a container registry and access settings before the first deploy.
+  A good next home if traffic grows, with no change to the Dockerfile.
+- AWS Lightsail containers: simple pricing, but no lasting free tier and more AWS
+  setup than Render.
+- Self-hosting on my PC through a Cloudflare Tunnel: free, but the site is down
+  whenever the laptop sleeps or travels, and it puts a public service on my own
+  machine.
+
 ## 2026-11-19: The header shows a 48 px logo with a bold "LABS"
 Decision: the header shows brand/logo/loaniq-labs_horizontal_dark-bg_48px.svg at
 48 px high, a version of the logo drawn for that size. "LABS" is bold, 12 px,

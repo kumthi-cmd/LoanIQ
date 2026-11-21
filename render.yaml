@@ -28,8 +28,8 @@ services:
     dockerContext: .
     # BUSINESS: free while the site is being built. It sleeps after about 15 minutes
     #   with no visitors, and the next visit waits up to a minute while it wakes up.
-    # TECH: when you upgrade, change "free" to "starter" here (always on, $7/month
-    #   at the time of writing) before the link goes on any application.
+    # TECH: when you upgrade, change "free" to "starter" here (always on; price and
+    #   timing in docs/roadmap.md), and in test_deploy_config.py, which records the plan.
     plan: free
     # TECH: Render's US East region (Virginia), closest to most US desks.
     region: virginia

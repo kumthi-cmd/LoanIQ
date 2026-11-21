@@ -1,6 +1,45 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Hosting, LoanIQ online: container, CI and Render (2026-11-20)
+- Built: a `Dockerfile` that builds the screens with Node and runs them with the API
+  on Python 3.12, as one container, with the seeded tape generated inside the image
+  and the server running as a non-root user on the host's `$PORT`; a `.dockerignore`
+  that keeps secrets and local files out; `.nvmrc` holding the Node version once; a
+  GitHub Actions workflow that runs every `test.ps1` layer on each push, then builds
+  the image, starts it and checks the tape and the screens; and `render.yaml`, a
+  Render Blueprint that deploys `main` only after those checks pass.
+- Desk problem it solves: anyone can open LoanIQ from a link, and what they see has
+  always passed every test, on a clean machine, in the exact container that serves
+  it. From now on every step goes live on push.
+- My key decisions: one container on Render instead of Vercel plus Render, so one
+  address, no CORS and the Claude key stays on the server; keep the container
+  portable so only `render.yaml` is Render-specific; GitHub Actions builds the image
+  because I have no Docker locally; keep CI lean for a private repo's minutes; free
+  plan now, Starter before the link goes on an application; Hosting before the About
+  page. Alternatives and reasons: docs/decisions.md.
+- What Claude Code did: ran `test.ps1`, fast-forwarded `main` and made the `hosting`
+  branch; wrote the Dockerfile, `.dockerignore`, CI workflow and Blueprint, each
+  commented for business and tech; wrote `test_deploy_config.py`, 42 checks that read
+  those files without Docker, including one that fails if `ci.yml` and `test.ps1` stop
+  running the same layers in the same order; watched the CI runs with `gh`; updated
+  the architecture, decisions, roadmap and How it was built pages. Along the way: a
+  timing test on the 50,000-loan tape failed locally at about 360 ms against its
+  300 ms budget. Nothing in the app had changed; the Surface was on battery, which
+  slows the CPU (the back-end tests took 77 s instead of 12 s). Plugged in, it passed,
+  and it passes on GitHub's runner. The budget did not change.
+- What I changed after review: CI runs on every push and on pull requests into `main`
+  only, so a branch is not tested twice for every PR; added the deployment-file checks
+  and the How it was built paragraph; asked for ✅ and ❌ on every result, now in
+  CLAUDE.md; closed Chrome and plugged in the laptop to find the timing failure's cause.
+- Tests and coverage: every layer passes through `test.ps1` and in CI. Back end: 226
+  tests (42 new, in `test_deploy_config.py`), coverage 98.8%. Front end: 104 Vitest
+  tests (no change). End to end: 14 Playwright tests (no change). CI: the `tests` and
+  `container` jobs both pass, about 2 minutes a run; the container job is the test
+  of the Dockerfile, checking 2,000 loans at `/api/health`, the SPA at `/` and a
+  non-root user.
+- My take:
+
 ## Step 1e, the LoanIQ Labs brand (2026-11-19)
 - Built: the LoanIQ Labs logo in the header (the flask-and-brain horizontal logo for
   dark backgrounds, 48 px high, read out as "LoanIQ Labs"), the flask favicon in the

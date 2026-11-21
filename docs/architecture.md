@@ -14,6 +14,34 @@ loan tape -> slotting -> best execution -> position monitor and optimizer
 | Best execution | 6 | Prices every slot from the price file |
 | Blotter and positions | 7 | Trades, P&L, DV01, limits |
 | Optimizer | 8 | MILP that maximizes proceeds at price; outputs pool candidates |
+| Hosting | Hosting | One Docker container (`Dockerfile`), tested by GitHub Actions (`.github/workflows/ci.yml`) and deployed by Render (`render.yaml`). See "Hosting" below |
+
+## Hosting
+LoanIQ runs as one service in production, the same way it runs locally and in the
+Playwright tests: FastAPI serves the built SPA at `/` and the API at `/api`. One
+address means no CORS and, from Step 4, the Claude API key stays on the server.
+
+    git push -> GitHub Actions: tests -> container -> (main only) Render: build -> health check -> live
+
+- Container: `Dockerfile` at the repo root, built from the repo root (Vite reads
+  `../content` and `../brand`). Stage 1 builds the SPA with Node (version in `.nvmrc`);
+  stage 2 runs it on Python 3.12 with `backend/`, `content/` and `frontend/dist` in the
+  repo's layout under `/app`. The seeded tape is generated when the image is built
+  (`data/` is not in Git), so every deploy serves the same loans. Runs as a non-root
+  user on `$PORT`. `.dockerignore` keeps secrets, venvs, `node_modules` and local data out.
+  Portable: only `render.yaml` is host-specific.
+- CI: `.github/workflows/ci.yml` on every push and on pull requests into `main`. Job
+  `tests` mirrors `test.ps1` layer for layer; job `container` builds the image, runs
+  it and checks `/api/health` and `/`. A newer push cancels the older run on the same
+  branch.
+- Render: `render.yaml` (a Blueprint) defines one web service that deploys `main` only
+  after every check passes, and switches traffic only once `/api/health` answers.
+  Plan, region and settings live in that file.
+- Domain: still to come. The site starts on Render's free address; LoanIQLabs.com
+  (Namecheap) is added before the link goes on any application (docs/roadmap.md).
+- Checks without Docker: `backend/tests/test_deploy_config.py` reads the Dockerfile,
+  `.dockerignore`, `ci.yml` and `render.yaml` and fails if they drift from the app
+  or from `test.ps1`.
 
 ## Running it
 - Everything, tested first: `.\start.ps1` from the repo root, then http://localhost:8000.

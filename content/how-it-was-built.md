@@ -15,7 +15,8 @@ change. Claude Code wrote the code and the tests under those standards.
 1. I describe the step and how we'll know it's done.
 2. Claude Code proposes a plan, and I approve or change it.
 3. Claude Code builds and tests, and I review every change.
-4. The tests gate the start of the app. I commit, and GitHub runs the tests again.
+4. The tests gate the start of the app. I commit and push, GitHub runs the tests again,
+   and only a green `main` goes live.
 
 Screens are designed before they are built. I lay each screen out on a Claude Design
 canvas, one board per screen, with sample numbers. Claude Code reads the board,
@@ -27,6 +28,13 @@ One script, `test.ps1`, runs every layer: back-end tests with coverage, front-en
 type checks and component tests, the production build, and browser tests that click
 through the built app the way a visitor would. `start.ps1` runs it first and starts
 LoanIQ only if everything passes.
+
+The live site follows the same rule. Every push runs the same layers again on GitHub
+Actions, on a clean Linux machine, then builds the exact container the host will run,
+starts it and checks that the tape loaded and the screens load. Render deploys `main`
+only after all of that passes, and switches visitors to the new version only once it
+reports healthy. A test fails if the GitHub workflow and `test.ps1` stop running the
+same checks, so "green" means the same thing on my PC and online.
 
 ## By the numbers
 Tests, coverage and commits, filled in from content/build-facts.json.
