@@ -30,13 +30,15 @@ Why:
 Alternatives considered:
 - Vercel for the SPA plus Render for the API: two services and two addresses, CORS
   between them, and two deploys to keep in step for every change.
-- DigitalOcean App Platform: runs the same container, but has no free tier for an
-  app with a server.
+- DigitalOcean App Platform: runs the same container with similar ease. Not
+  chosen because Render's free plan lets us start at no cost while the site is being
+  built; worth comparing prices again before upgrading.
 - Google Cloud Run: scales to zero and has a free allowance, but needs a Google Cloud
   project, billing, a container registry and access settings before the first deploy.
   A good next home if traffic grows, with no change to the Dockerfile.
-- AWS Lightsail containers: simple pricing, but no lasting free tier and more AWS
-  setup than Render.
+- AWS Lightsail containers: runs the same container, with fixed monthly pricing.
+  Not chosen because it needs an AWS account and more setup than Render's Blueprint,
+  for a site that does not need AWS yet.
 - Self-hosting on my PC through a Cloudflare Tunnel: free, but the site is down
   whenever the laptop sleeps or travels, and it puts a public service on my own
   machine.
