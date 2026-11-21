@@ -1,0 +1,44 @@
+# =============================================================================
+# render.yaml: the Render Blueprint for LoanIQ. The only Render-specific file.
+#
+# Where it sits: push to main -> CI (.github/workflows/ci.yml) passes -> Render
+#   builds the Dockerfile and swaps in the new version once /api/health answers.
+#
+# BUSINESS: the live LoanIQ site. A visitor only ever sees a commit whose tests and
+#   container smoke test passed, and a failed start never replaces a working site.
+# TECH:
+#   - A Blueprint is Render's "infrastructure as code": you connect the repo once in
+#     the Render dashboard (New > Blueprint) and Render creates the service below.
+#     Later changes to this file are applied on the next sync.
+#   - Everything about the app itself lives in the Dockerfile, so moving to another
+#     host (DigitalOcean, Cloud Run, Lightsail) means replacing only this file.
+#   - No secret values here, ever: the file is in Git. Step 4's Claude API key goes
+#     in the Render dashboard (Environment), and is added below as an envVars entry
+#     with `sync: false`, which means "set in the dashboard, not in this file".
+#   - Render sets $PORT (10000 by default); the Dockerfile's CMD reads it.
+# =============================================================================
+
+services:
+  - type: web
+    name: loaniq
+    # TECH: build the image from the Dockerfile at the repo root, with the repo
+    #   root as build context (Vite reads ../content and ../brand).
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # BUSINESS: free while the site is being built. It sleeps after about 15 minutes
+    #   with no visitors, and the next visit waits up to a minute while it wakes up.
+    # TECH: when you upgrade, change "free" to "starter" here (always on, $7/month
+    #   at the time of writing) before the link goes on any application.
+    plan: free
+    # TECH: Render's US East region (Virginia), closest to most US desks.
+    region: virginia
+    # TECH: only main is deployed. Feature branches are tested by CI but never go live.
+    branch: main
+    # TECH: Render calls this path after each deploy and keeps calling it. A new
+    #   version takes traffic only once it answers with HTTP 200, so a version that
+    #   fails to load the tape never replaces a working one.
+    healthCheckPath: /api/health
+    # BUSINESS: deploy only after every GitHub check on the commit passed (the
+    #   "tests" and "container" jobs in ci.yml). A red build never goes live.
+    autoDeployTrigger: checksPass

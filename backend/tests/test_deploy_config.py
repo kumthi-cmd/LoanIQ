@@ -409,3 +409,83 @@ def test_ci_container_smoke_test_uses_real_routes() -> None:
         assert path == "/" or path in routes, f"{path} is not an API route"
     index = (REPO_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
     assert '<div id="root"></div>' in index and "<title>LoanIQ" in index
+
+
+# =============================================================================
+# Render Blueprint (render.yaml): the only host-specific file
+# =============================================================================
+
+RENDER_YAML = REPO_ROOT / "render.yaml"
+
+
+def render_settings() -> dict[str, str]:
+    """render.yaml's settings as {key: value}, with comments removed.
+
+    TECH: the Blueprint has one service with flat "key: value" lines, so a regular
+      expression reads it without a YAML library. "- type: web" counts as "type".
+    """
+    settings: dict[str, str] = {}
+    for raw in RENDER_YAML.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip().removeprefix("- ")
+        match = re.match(r"^([\w]+):\s*(\S.*)$", line)
+        if match:
+            settings[match.group(1)] = match.group(2).strip()
+    return settings
+
+
+@pytest.mark.parametrize("key, value", [
+    ("type", "web"), ("runtime", "docker"), ("plan", "free"), ("region", "virginia"),
+    ("branch", "main"), ("autoDeployTrigger", "checksPass"),
+])
+def test_render_service_settings(key: str, value: str) -> None:
+    """BUSINESS: one web service, on the free plan for now, in US East, deploying
+      main only and only after CI passed.
+
+    TECH: when you upgrade, change plan to "starter" in render.yaml and here
+      together: this test records the plan on purpose.
+    """
+    assert render_settings()[key] == value
+
+
+def test_render_builds_the_tested_dockerfile() -> None:
+    """BUSINESS: Render runs the same image the CI "container" job built and tested.
+
+    TECH: the Dockerfile path and build context resolve to the repo root.
+    """
+    settings = render_settings()
+    assert (REPO_ROOT / settings["dockerfilePath"]).resolve() == DOCKERFILE.resolve()
+    assert (REPO_ROOT / settings["dockerContext"]).resolve() == REPO_ROOT.resolve()
+
+
+def test_render_health_check_is_a_real_route() -> None:
+    """BUSINESS: Render only switches visitors to a new version once its health check
+      answers; a wrong path would mean no deploy ever goes live.
+
+    TECH: the path must be a route of the real app, and the same one the CI
+      container smoke test polls.
+    """
+    path = render_settings()["healthCheckPath"]
+    routes = {getattr(route, "path", "") for route in main.create_app().routes}
+    assert path in routes
+    assert f"http://localhost:8080{path}" in ci_job("container")
+
+
+def test_render_yaml_holds_no_secret_values() -> None:
+    """BUSINESS: render.yaml is in Git, so a key written there would leak.
+
+    TECH: any envVars entry must use `sync: false` (set in the Render dashboard)
+      rather than `value:`. Today there are no env vars at all.
+    """
+    text = "\n".join(line.split("#", 1)[0] for line in RENDER_YAML.read_text(encoding="utf-8").splitlines())
+    assert not re.search(r"^\s*value:", text, flags=re.MULTILINE)
+    assert not re.search(r"(?i)(api[_-]?key|secret|token|password)\s*:", text)
+
+
+def test_only_render_yaml_is_render_specific() -> None:
+    """BUSINESS: LoanIQ can move to another host by replacing one file.
+
+    TECH: no Dockerfile instruction (comments aside) and no CI step mentions Render.
+    """
+    assert not any("render" in f"{k} {a}".lower() for k, a in dockerfile_instructions())
+    ci_code = "\n".join(line.split("#", 1)[0] for line in CI_YML.read_text(encoding="utf-8").splitlines())
+    assert "render" not in ci_code.lower()
