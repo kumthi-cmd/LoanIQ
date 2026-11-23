@@ -11,10 +11,12 @@ monitored, and an optimizer turns the loans into pool candidates.
 - Business rules from public industry sources, with illustrative numbers.
 - Every screen explains itself, in business and technical terms.
 - Tests gate every change.
+- Live at https://www.loaniqlabs.com, deployed only after every test passes.
 
 ## Architecture
 The loan tape is stored in Parquet and queried in DuckDB. A FastAPI back end serves it to
-this React single-page app.
+this React single-page app. It runs as one Docker container on Render; GitHub Actions
+runs every test, then builds and checks that container before each deploy.
 
 ## What's next
-See the roadmap on the How it was built page.
+See [How it was built](/how-it-was-built).

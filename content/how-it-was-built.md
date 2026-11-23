@@ -37,4 +37,7 @@ reports healthy. A test fails if the GitHub workflow and `test.ps1` stop running
 same checks, so "green" means the same thing on my PC and online.
 
 ## By the numbers
-Tests, coverage and commits, filled in from content/build-facts.json.
+Every time all the test layers pass on my PC, `test.ps1` counts the tests in each layer,
+reads the back-end coverage and counts the commits, and writes them to
+`content/build-facts.json`. I commit that file, so the live site shows the numbers from
+the last full test run. The commit count is taken before that run's own commit.

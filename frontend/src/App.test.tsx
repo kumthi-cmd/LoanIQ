@@ -1,7 +1,8 @@
 /**
  * Tests for App.tsx with its header, sidebar and Loan Tape screen together.
  * BUSINESS: a visitor opening LoanIQ sees the synthetic-data warning, the whole
- *   workflow in the sidebar (only Loan Tape live, the rest marked Planned), the
+ *   workflow in the sidebar (Loan Tape, About and How it was built live, the rest
+ *   marked Planned), the
  *   tape's headline numbers and panels from the API, desk-question chips that filter
  *   the grid, the explanation open beside it, and a header count that follows the
  *   grid's filter.
@@ -93,12 +94,15 @@ describe("App", () => {
     expect(screen.getByText("Synthetic data · demonstration only")).toBeInTheDocument();
   });
 
-  it("lists the workflow in groups, with only Loan Tape live and the rest Planned", () => {
+  it("lists the workflow in groups, with Loan Tape and the Showcase pages live and the rest Planned", () => {
     renderApp();
     const nav = within(screen.getByRole("navigation", { name: "Screens" }));
     expect(nav.getByRole("link", { name: "Loan Tape" })).toHaveAttribute("aria-current", "page");
-    // BUSINESS: the one other link is the repo in the footer, not a screen.
-    expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual(["1Loan Tape", "kumthi-cmd/LoanIQ"]);
+    // BUSINESS: Loan Tape, then About and How it was built (Step 1f, no step number);
+    //   the last link is the repo in the footer, not a screen.
+    expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual(
+      ["1Loan Tape", "About", "How it was built", "kumthi-cmd/LoanIQ"],
+    );
     const slotting = nav.getByText("Slotting").closest("[aria-disabled]");
     expect(slotting).toHaveAttribute("aria-disabled", "true");
     expect(slotting).toHaveTextContent(/^5Slotting\s*Planned$/);

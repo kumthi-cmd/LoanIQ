@@ -250,6 +250,7 @@ def dockerignore_patterns() -> set[str]:
 @pytest.mark.parametrize("pattern", [
     ".git", "**/.env", "**/.venv", "**/node_modules", "frontend/dist", "data/",
     "**/.coverage", "**/.pytest_cache", "**/htmlcov", "e2e/test-results", "e2e/playwright-report",
+    "frontend/test-results",
 ])
 def test_dockerignore_keeps_out_secrets_local_builds_and_test_output(pattern: str) -> None:
     """BUSINESS: no secrets and no local, unreviewed data go into an image on the internet.

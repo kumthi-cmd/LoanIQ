@@ -19,6 +19,8 @@ import { useState } from "react";
 import { Outlet, type RouteObject } from "react-router";
 import { AppHeader } from "./components/AppHeader";
 import { Sidebar } from "./components/Sidebar";
+import { AboutScreen } from "./screens/AboutScreen";
+import { HowItWasBuiltScreen } from "./screens/HowItWasBuiltScreen";
 import { LoanTapeScreen } from "./screens/LoanTapeScreen";
 import { NotFoundScreen } from "./screens/NotFoundScreen";
 
@@ -50,13 +52,20 @@ export function Layout() {
   );
 }
 
-/** TECH: the route table. "index" is the screen at "/"; "*" catches unknown URLs. */
+/**
+ * TECH: the route table. "index" is the screen at "/"; "*" catches unknown URLs.
+ *   Child paths are relative to "/" ("about" is /about) and must match nav.ts; a
+ *   unit test checks every live nav item renders its own screen, not the "*" one.
+ */
 export const routes: RouteObject[] = [
   {
     path: "/",
     element: <Layout />,
     children: [
       { index: true, element: <LoanTapeScreen /> },
+      // BUSINESS: the Showcase pages, live from Step 1f.
+      { path: "about", element: <AboutScreen /> },
+      { path: "how-it-was-built", element: <HowItWasBuiltScreen /> },
       { path: "*", element: <NotFoundScreen /> },
     ],
   },

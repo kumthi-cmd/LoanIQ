@@ -2,8 +2,9 @@
  * content/content.ts: the SPA's single door to the visitor-facing words in content/.
  *
  * Where it sits: repo content/ (glossary, screen explanations, column terms, desk
- * question labels, screen captions) -> [content.ts] -> Explain panel, glossary
- * tooltips, grid header tooltips, panel captions, desk-question chips.
+ * question labels, screen captions, the Showcase pages and build facts) ->
+ * [content.ts] -> Explain panel, glossary tooltips, grid header tooltips, panel
+ * captions, desk-question chips, the About and How it was built pages.
  *
  * BUSINESS: every term is defined once, in content/glossary.json, and every screen's
  *   explanation lives in content/screens/<screen>.md (.claude/rules/showcase.md).
@@ -13,7 +14,11 @@
  *   Markdown file as one string, split here into its Business and Technical sections
  *   and rendered later by react-markdown.
  */
+import aboutMd from "@content/about.md?raw";
+import buildFactsJson from "@content/build-facts.json";
+import buildLogMd from "@content/build-log.md?raw";
 import deskQuestionsJson from "@content/desk-questions.json";
+import howItWasBuiltMd from "@content/how-it-was-built.md?raw";
 import glossaryJson from "@content/glossary.json";
 import loanColumnsJson from "@content/loan-columns.json";
 import loanTapeJson from "@content/screens/loan-tape.json";
@@ -126,3 +131,58 @@ export function fillCaption(text: string, values: Record<string, string | number
     name in values ? String(values[name]) : whole,
   );
 }
+
+// =============================================================================
+// Showcase pages: About and How it was built
+// =============================================================================
+
+/**
+ * The Showcase pages' Markdown, rendered whole by react-markdown.
+ * BUSINESS: what LoanIQ is (About), how it was built AI-first, and the build log of
+ *   every step, newest first. You edit the words in content/, never in a component.
+ * TECH: "?raw" strings, like the screen explanations, but not split into sections.
+ */
+export const showcasePages = {
+  about: aboutMd,
+  howItWasBuilt: howItWasBuiltMd,
+  buildLog: buildLogMd,
+} as const;
+
+/**
+ * The "By the numbers" facts, written by test.ps1 after every layer passes.
+ * BUSINESS: proof, not claims: how many tests guard LoanIQ, how much of the back end
+ *   they cover, and how many commits it took, as of the last full test run.
+ * TECH: every field is optional. content/build-facts.json is committed by hand after
+ *   a test run, so an older or partly written file must still render (the page shows
+ *   a dash for a missing number). Units: coverage in percent (98.8 means 98.8%);
+ *   date as YYYY-MM-DD.
+ */
+export interface BuildFacts {
+  backendTests?: number;
+  frontendTests?: number;
+  e2eTests?: number;
+  backendCoverage?: number;
+  commits?: number;
+  date?: string;
+}
+
+/**
+ * Keep only well-typed fields from a build-facts object.
+ * BUSINESS: a hand-edited or half-written file never shows "NaN" or nonsense.
+ * TECH: numbers must be finite and not negative; date must be a string. Anything
+ *   else, including a non-object input, is dropped.
+ */
+export function parseBuildFacts(raw: unknown): BuildFacts {
+  const facts: BuildFacts = {};
+  if (typeof raw !== "object" || raw === null) return facts;
+  const r = raw as Record<string, unknown>;
+  const numberKeys = ["backendTests", "frontendTests", "e2eTests", "backendCoverage", "commits"] as const;
+  for (const key of numberKeys) {
+    const v = r[key];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) facts[key] = v;
+  }
+  if (typeof r.date === "string" && r.date) facts.date = r.date;
+  return facts;
+}
+
+export const buildFacts: BuildFacts = parseBuildFacts(buildFactsJson);

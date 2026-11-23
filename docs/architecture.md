@@ -7,7 +7,7 @@ loan tape -> slotting -> best execution -> position monitor and optimizer
 | --- | --- | --- |
 | Loan tape | 1 | Synthetic tape from `backend/app/loan_tape_gen.py` (config in `backend/app/config/loan_tape_gen.toml`), written to `data/loan_tape.parquet` and `.csv`, loaded into DuckDB in memory. Fields: `docs/domain/loan-tape-schema.md` |
 | Loan API | 1 | FastAPI in `backend/app/main.py` (Step 1b): health, columns, paged loans and a UPB-weighted summary. SQL for sorting and AG Grid filters built safely in `backend/app/loan_query.py`; limits in `backend/app/config/api.toml`; column labels in `content/loan-columns.json`. Screen panels (`/api/loans/breakdowns`, `/api/loans/questions`, `/api/tape`) in `backend/app/tape_panels.py`; desk-question rules in `backend/app/config/desk_questions.toml`, validated by `backend/app/desk_questions.py` and applied with `/api/loans?question=<id>` |
-| SPA | 1 | `frontend/` (Step 1c, redesigned to the "1 · Loan Tape" board): Vite, React, TypeScript, React Router and AG Grid Community. Loan Tape screen at `/`: KPI tiles from `/api/loans/summary`, three panels (program mix, note-rate buckets, MBA delinquency) from `/api/loans/breakdowns`, desk-question chips from `/api/loans/questions`, and a grid on the Infinite Row Model paging `/api/loans` 100 loans at a time with server-side sort, filter and question. API types generated from FastAPI's OpenAPI spec (`backend/app/export_openapi.py`, `npm run gen:api`). Explanations and glossary tooltips read from `content/`. Built into `frontend/dist` and served by FastAPI at `/` |
+| SPA | 1 | `frontend/` (Step 1c, redesigned to the "1 · Loan Tape" board): Vite, React, TypeScript, React Router and AG Grid Community. Loan Tape screen at `/`: KPI tiles from `/api/loans/summary`, three panels (program mix, note-rate buckets, MBA delinquency) from `/api/loans/breakdowns`, desk-question chips from `/api/loans/questions`, and a grid on the Infinite Row Model paging `/api/loans` 100 loans at a time with server-side sort, filter and question. API types generated from FastAPI's OpenAPI spec (`backend/app/export_openapi.py`, `npm run gen:api`). Explanations and glossary tooltips read from `content/`. Showcase pages (Step 1f): About at `/about` (`content/about.md` under the stacked logo) and How it was built at `/how-it-was-built` (`content/how-it-was-built.md`, "By the numbers" from `content/build-facts.json`, written by `test.ps1` after every layer passes, then `content/build-log.md`). Built into `frontend/dist` and served by FastAPI at `/` |
 | Parser | 2 | Maps and cleans seller tapes |
 | Ask the Tape | 4 | Claude agent with read-only tools |
 | Slotting | 5 | Story tags from the validated rules in `backend/app/config/spec_stories.toml` (loaded by `backend/app/spec_stories.py`, Step 1a); down and up coupon from the note rate |
@@ -37,8 +37,7 @@ address means no CORS and, from Step 4, the Claude API key stays on the server.
 - Render: `render.yaml` (a Blueprint) defines one web service that deploys `main` only
   after every check passes, and switches traffic only once `/api/health` answers.
   Plan, region and settings live in that file.
-- Domain: still to come. The site starts on Render's free address; LoanIQLabs.com
-  (Namecheap) is added before the link goes on any application (docs/roadmap.md).
+- Domain: live at https://www.loaniqlabs.com (registered at Namecheap; docs/roadmap.md).
 - Checks without Docker: `backend/tests/test_deploy_config.py` reads the Dockerfile,
   `.dockerignore`, `ci.yml` and `render.yaml` and fails if they drift from the app
   or from `test.ps1`.
@@ -46,6 +45,7 @@ address means no CORS and, from Step 4, the Claude API key stays on the server.
 ## Running it
 - Everything, tested first: `.\start.ps1` from the repo root, then http://localhost:8000.
   It runs `.\test.ps1` (pytest, type check, Vitest, build, Playwright) and starts only if all pass.
+  After a green run, `test.ps1` also rewrites `content/build-facts.json`; commit it.
 - Dev mode, two terminals:
   1. API: in `backend\`, `.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload`
   2. SPA: in `frontend\`, `npm run dev`, then http://localhost:5173. Vite proxies `/api` to port 8000.

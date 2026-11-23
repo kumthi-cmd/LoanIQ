@@ -54,8 +54,12 @@ test("planned screens and features are shown but cannot be used", async ({ page 
   // BUSINESS: a visitor sees the whole workflow, and nothing pretends to work yet.
   await openTape(page);
   const nav = page.getByRole("navigation", { name: "Screens" });
-  for (const label of ["Tape Upload", "Ask the Tape", "Slotting", "Best Execution", "Optimizer", "About"]) {
-    const item = nav.locator("[aria-disabled='true']", { hasText: label });
+  // TECH: each sidebar entry is a list item; find it by role and its visible label
+  //   (.claude/rules/e2e.md). About and How it was built are live since Step 1f
+  //   (showcase.spec.ts).
+  for (const label of ["Tape Upload", "Ask the Tape", "Slotting", "Best Execution", "Optimizer"]) {
+    const item = nav.getByRole("listitem").filter({ hasText: label });
+    await expect(item).toHaveCount(1);
     await expect(item).toContainText("Planned");
     await expect(nav.getByRole("link", { name: label })).toHaveCount(0);
   }

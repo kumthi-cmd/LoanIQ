@@ -1,6 +1,44 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 1f, About and How it was built (2026-11-23)
+- Built: the two Showcase pages, now live in the sidebar. About shows the stacked
+  LoanIQ Labs logo above `content/about.md`. How it was built shows
+  `content/how-it-was-built.md`, then "By the numbers" (back-end, front-end and
+  end-to-end test counts, back-end coverage, commits and the date of the last full
+  test run), then this build log. After every layer passes, `test.ps1` now writes those
+  numbers to `content/build-facts.json`, which is committed so the live site at
+  https://www.loaniqlabs.com shows them.
+- Desk problem it solves: a capital markets or technology reader can see what LoanIQ
+  is, how it was built AI-first, and the evidence behind "tests gate every change",
+  without opening the repo.
+- My key decisions: write the facts from a green local run and commit them, instead of
+  having CI write to the repo; keep it a plain function, not a sixth test layer, so
+  CI and `test.ps1` still match; get the counts without running the tests again; show
+  a dash for any missing number; no Explain panel on these two pages, because each
+  page is itself the explanation. Reasons: docs/decisions.md.
+- What Claude Code did: proposed the plan and the trade-offs (the commit count is
+  one behind, and the file changes on most runs); built the two screens, a shared
+  Markdown renderer that keeps the header logo as the page's only top-level heading,
+  and the "By the numbers" tiles; wrote `Write-BuildFacts` in `test.ps1`; added the
+  tests; updated the architecture, decisions and roadmap. Along the way: `vitest list`
+  counted 91 front-end tests against 104 that really ran, because it lists an
+  `it.each` table as one test. Rather than show a wrong number, the Vitest layer now
+  also writes a JSON summary as it runs, and `test.ps1` reads the total from it. The
+  layer's command did not change. While fixing the "planned screens" browser test for
+  About, it also switched that test to find sidebar items by role and visible text,
+  an open follow-up from Step 1d.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 232 tests (6
+  new: the committed facts file and how `test.ps1` writes it, plus front-end test
+  output kept out of the image), coverage 98.8%. Front end: 117 Vitest tests (13 new:
+  every live sidebar route renders its own screen, the About logo and text, the How it
+  was built page order, the facts tiles with full and missing numbers, and the facts
+  parser; 1 updated, the sidebar's live links). End to end: 16 Playwright tests (2
+  new: About and How it was built opened from the sidebar; 1 updated, the planned
+  screens list without About).
+- My take:
+
 ## Hosting, LoanIQ online: container, CI and Render (2026-11-20)
 - Built: a `Dockerfile` that builds the screens with Node and runs them with the API
   on Python 3.12, as one container, with the seeded tape generated inside the image

@@ -280,6 +280,25 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
 }
 .term-chip[aria-pressed="true"] { border-style: solid; border-color: var(--accent); color: var(--accent-soft); }
 
+/* ---- Showcase pages: About, How it was built (Step 1f) ----
+   TECH: a readable measure (about 80 characters a line) for long-form text. */
+.showcase { max-width: 860px; line-height: 1.6; }
+.showcase-logo { display: block; width: 220px; height: auto; margin: 8px 0 16px; }
+.showcase-text h2 { font-size: 20px; margin: 18px 0 8px; }
+.showcase-text h3 { font-size: 16px; margin: 18px 0 6px; }
+.showcase-text p, .showcase-text ul, .showcase-text ol { margin: 0 0 10px; }
+.showcase-text ul, .showcase-text ol { padding-left: 20px; }
+.showcase-text code { font-family: var(--mono); font-size: 12px; color: var(--accent-soft); }
+.showcase-text a { color: var(--accent-soft); }
+.build-facts {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;
+  margin: 6px 0 24px;
+}
+.build-fact { padding: 10px 12px; border-radius: 6px; background: var(--panel); border: 1px solid var(--border); }
+.build-fact dt { font-size: 12px; color: var(--muted); }
+/* TECH: numbers in tabular figures so tiles line up (.claude/rules/frontend.md). */
+.build-fact dd { margin: 4px 0 0; font-size: 20px; font-variant-numeric: tabular-nums; }
+
 /* ---- Narrow screens ---- */
 @media (max-width: 760px) {
   .app-body { grid-template-columns: 1fr; }
