@@ -65,6 +65,7 @@ From Hosting (2026-11-20):
 From Step 1f (About and How it was built, 2026-11-23):
 - Commit content/build-facts.json after each green `test.ps1` run, so the live site's
   "By the numbers" stays current.
+- Redesign How it was built around three parts: approach, architecture and design.
 
 At the end of each step, update its status and actual hours. If a step runs more
 than 25% over its estimate, re-forecast the finish date.
