@@ -1,11 +1,17 @@
 # Roadmap
-Current step: Hosting (In Progress), moved ahead of the About page (decided 2026-11-20). Done: container, CI and Render Blueprint on the `hosting` branch, CI green. Left: merge to `main`, connect Render, then the domain. Step 1 done so far: 1a synthetic loan tape generator, 1b loan API, 1c SPA and loan grid, 1d Loan Tape screen to the design board (panels, desk questions, explain tabs), 1e LoanIQ Labs brand. Next after Hosting: About page.
+Current step: Step 1 (In Progress). Hosting is done: LoanIQ is live at
+https://www.loaniqlabs.com, deployed from `main` after CI passes. Step 1 done so far:
+1a synthetic loan tape generator, 1b loan API, 1c SPA and loan grid, 1d Loan Tape
+screen to the design board (panels, desk questions, explain tabs), 1e LoanIQ Labs
+brand, 1f About and How it was built pages (with "By the numbers" from
+content/build-facts.json). Left in Step 1: "My take" entries and the Loan Tape polish
+follow-ups below.
 
 | Step | Status | Estimate (active hours) | Actual (active hours) |
 | --- | --- | --- | --- |
 | 0 Setup | Done | 0.5 | 1 |
-| Hosting: live site, deploy on every push | In Progress | 4-6 | 1.5 so far |
-| 1 Loan tape, fast grid, About page | In Progress | 10-11 | 7.5 so far |
+| Hosting: live site, deploy on every push | Done | 4-6 | 1 |
+| 1 Loan tape, fast grid, About page | In Progress | 10-11 | 9 so far |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
 | 4 Ask the Tape agent | Not started | 5-7 | |
@@ -49,18 +55,16 @@ From Step 1d (Loan Tape screen to the design board, 2026-11-19):
 - Note-rate axis: the "8.0%" and "9.0%+" labels sit very close together.
 - Wrapping: the "Note rate distribution" title wraps to two lines, and the
   Forbearance chip drops to a second row. The design shows each on one line.
-- e2e: the "planned screens" test finds sidebar items by their `aria-disabled`
-  attribute; `.claude/rules/e2e.md` asks for role and visible text.
 
 From Hosting (2026-11-20):
-- Render: connect the repo as a Blueprint in the Render dashboard, then check the
-  free address serves the Loan Tape. Then Starter and the domain, as above.
 - Timing tests fail on battery power (the Surface slows its CPU). Run `test.ps1`
   plugged in.
 - The image holds the test tools from requirements.txt (pytest and friends, a few
   MB). Split into a runtime and a dev requirements file if the image size matters.
-- content/how-it-was-built.md says "By the numbers" is filled from
-  content/build-facts.json, which does not exist yet.
+
+From Step 1f (About and How it was built, 2026-11-23):
+- Commit content/build-facts.json after each green `test.ps1` run, so the live site's
+  "By the numbers" stays current.
 
 At the end of each step, update its status and actual hours. If a step runs more
 than 25% over its estimate, re-forecast the finish date.

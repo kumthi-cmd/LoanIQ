@@ -31,3 +31,6 @@ data/
 # End-to-end test output
 e2e/test-results
 e2e/playwright-report
+
+# Front-end test output (Vitest's JSON summary, read by test.ps1)
+frontend/test-results

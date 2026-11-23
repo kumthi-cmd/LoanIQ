@@ -18,3 +18,4 @@ data/
 # Test output
 e2e/test-results/
 e2e/playwright-report/
+frontend/test-results/

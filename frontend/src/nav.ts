@@ -57,8 +57,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     group: "Showcase",
     items: [
-      { label: "About", path: "/about", step: null, live: false },
-      { label: "How it was built", path: "/how-it-was-built", step: null, live: false },
+      // BUSINESS: live from Step 1f, so a visitor can read what LoanIQ is and how it
+      //   was built from any screen.
+      { label: "About", path: "/about", step: null, live: true },
+      { label: "How it was built", path: "/how-it-was-built", step: null, live: true },
     ],
   },
 ];

@@ -54,5 +54,11 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     css: false,
+    // TECH: two reporters. "default" is the usual console output. "json" also writes
+    //   a summary to test-results/vitest.json, which test.ps1 reads for the front-end
+    //   test count in content/build-facts.json. It is the reliable count: `vitest
+    //   list` shows an it.each table as one test (it showed 91 against 104 run).
+    //   The folder is in .gitignore and .dockerignore.
+    reporters: ["default", ["json", { outputFile: "test-results/vitest.json" }]],
   },
 });

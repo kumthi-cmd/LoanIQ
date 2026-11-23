@@ -1,6 +1,29 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-23: Build facts written by test.ps1 and committed, not written in CI
+Decision: after all five layers pass, a plain function at the end of `test.ps1`
+(`Write-BuildFacts`) writes `content/build-facts.json`: back-end, front-end and
+end-to-end test counts, back-end coverage, the commit count and the date. The file is
+committed; the How it was built page shows it under "By the numbers", and the Docker
+build bundles the committed copy.
+- Not a sixth `Invoke-Step`, and the five layer commands are unchanged, so `ci.yml`
+  and `test.ps1` still run the same layers (`test_deploy_config.py`).
+- Nothing is re-run. Back-end and end-to-end counts come from `pytest --collect-only`
+  and `playwright test --list`; coverage from the `.coverage` file pytest-cov leaves.
+- The front-end count comes from a JSON report the Vitest layer now writes
+  (`frontend/test-results/vitest.json`, set in `vite.config.ts`), not from
+  `vitest list`, which counts an `it.each` table as one test (91 against 104 run).
+- Every number is optional on the page: a missing one shows as a dash.
+- About and How it was built have no Explain panel: each page is itself the explanation.
+Why: the hosted site needs numbers, but CI writing to the repo would need write
+permission and a bot commit on every push. Committing a file from a green local run
+keeps CI read-only.
+Trade-offs: the commit count is taken before the run's own commit, so it is one
+behind; the file changes on most test runs, so it often shows in `git status`.
+Alternative considered: CI writes the file into the image at build time. Rejected for
+now: the container job would need the test results from the tests job.
+
 ## 2026-11-20: Host LoanIQ as one Docker container on Render, tested by GitHub Actions
 Decision: LoanIQ goes online as one service, built from one `Dockerfile` and deployed
 on Render with a Blueprint (`render.yaml`):

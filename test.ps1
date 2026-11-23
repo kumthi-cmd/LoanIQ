@@ -12,6 +12,8 @@ TECH: from the repo root:  .\test.ps1
      the built app in Chromium. Port 8000 must be free (stop any dev server first).
   Missing node_modules are installed with `npm ci` (exact versions from the lock
   file). The script exits with 1 on any failure, so start.ps1 can refuse to start.
+  When all four pass, Write-BuildFacts writes content/build-facts.json (test counts,
+  coverage, commits, date) for the How it was built page. Commit that file.
 #>
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -41,6 +43,78 @@ function Install-NodePackages([string]$Folder) {
     }
 }
 
+# BUSINESS: the "By the numbers" facts on the How it was built page: how many tests
+#   guard each layer, back-end coverage, and how many commits it took. Written only
+#   after every layer has passed, so the page never shows numbers from a failing run.
+#   Commit content/build-facts.json; the hosted site shows the last committed copy.
+# TECH: a plain function, NOT an Invoke-Step: backend/tests/test_deploy_config.py
+#   counts exactly five Invoke-Step layers and checks ci.yml runs the same ones.
+#   Nothing is re-run; each number comes from a quick listing or a file the layers
+#   left behind:
+#     back-end tests   pytest --collect-only -q   ("226 tests collected")
+#     coverage         coverage report --format=total --precision=1, from the
+#                      backend/.coverage file pytest-cov wrote (percent, e.g. 98.8)
+#     front-end tests  frontend/test-results/vitest.json (numTotalTests), written
+#                      by the Vitest layer's JSON reporter (vite.config.ts explains
+#                      why not `vitest list`)
+#     e2e tests        playwright test --list     ("Total: 14 tests in 1 file")
+#     commits          git rev-list --count HEAD (before this run's own commit)
+#   A number that cannot be read is left out with a warning: the page shows a dash,
+#   and a passing run is never failed by its own bookkeeping.
+#   The file is UTF-8 without a byte-order mark (Windows PowerShell 5.1's Out-File
+#   would add one) and with "\n" line endings, so it diffs cleanly in Git.
+function Write-BuildFacts([datetime]$RunStarted) {
+    Write-Host "`n=== Build facts: content/build-facts.json ===" -ForegroundColor Cyan
+    $facts = [ordered]@{}
+
+    # TECH: run a native command and return its output lines; never throw. Under
+    #   "Continue", stderr warnings from npm or Python don't become errors.
+    function Get-Lines([string]$Folder, [scriptblock]$Command) {
+        Push-Location (Join-Path $root $Folder)
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try { return @(& $Command 2>$null) } catch { return @() }
+        finally { $ErrorActionPreference = $previous; Pop-Location }
+    }
+    # TECH: first capture group of the first line matching $Pattern, as a number.
+    function Find-Number([string[]]$Lines, [string]$Pattern) {
+        foreach ($line in $Lines) {
+            if ($line -match $Pattern) { return [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture) }
+        }
+        return $null
+    }
+
+    # TECH: one fact per line. --collect-only lists tests without running them and,
+    #   with no --cov flag, leaves the .coverage file from the pytest layer untouched.
+    $facts.backendTests = Find-Number (Get-Lines "backend" { .venv\Scripts\python.exe -m pytest --collect-only -q }) '^(\d+) tests? collected'
+    $facts.frontendTests = $null
+    $vitestJson = Join-Path $root "frontend\test-results\vitest.json"
+    # TECH: only a report written by this run counts; an older file would be stale.
+    if ((Test-Path $vitestJson) -and (Get-Item $vitestJson).LastWriteTime -ge $RunStarted) {
+        try { $facts.frontendTests = [double](Get-Content $vitestJson -Raw | ConvertFrom-Json).numTotalTests } catch {}
+    }
+    $facts.e2eTests = Find-Number (Get-Lines "e2e" { npx playwright test --list }) '^Total: (\d+) tests?'
+    $facts.backendCoverage = Find-Number (Get-Lines "backend" { .venv\Scripts\python.exe -m coverage report --format=total --precision=1 }) '^(\d+(?:\.\d+)?)$'
+    $facts.commits = Find-Number (Get-Lines "." { git rev-list --count HEAD }) '^(\d+)$'
+
+    # TECH: build the JSON by hand: integers without ".0", coverage with one decimal,
+    #   invariant culture so a comma-decimal Windows locale cannot write "98,8".
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $lines = @()
+    foreach ($key in @("backendTests", "frontendTests", "e2eTests", "backendCoverage", "commits")) {
+        $value = $facts[$key]
+        if ($null -eq $value) { Write-Host "WARNING: could not read $key; left out" -ForegroundColor Yellow; continue }
+        $text = if ($key -eq "backendCoverage") { $value.ToString("0.0", $inv) } else { $value.ToString("0", $inv) }
+        $lines += "  `"$key`": $text"
+    }
+    $lines += "  `"date`": `"$($RunStarted.ToString('yyyy-MM-dd', $inv))`""
+    $json = "{`n" + ($lines -join ",`n") + "`n}`n"
+    $path = Join-Path $root "content\build-facts.json"
+    [IO.File]::WriteAllText($path, $json, (New-Object Text.UTF8Encoding($false)))
+    Write-Host $json.TrimEnd()
+}
+
+$runStarted = Get-Date
 try {
     Invoke-Step "Back end: pytest with coverage (80% minimum)" "backend" {
         .venv\Scripts\python.exe -m pytest --cov=app --cov-report=term-missing:skip-covered --cov-fail-under=80
@@ -55,5 +129,7 @@ try {
     Write-Host "`nTESTS FAILED: $_" -ForegroundColor Red
     exit 1
 }
+# TECH: after the try/catch, so it only runs when all five layers passed.
+Write-BuildFacts $runStarted
 Write-Host "`nAll test layers passed." -ForegroundColor Green
 exit 0
