@@ -36,6 +36,13 @@ only after all of that passes, and switches visitors to the new version only onc
 reports healthy. A test fails if the GitHub workflow and `test.ps1` stop running the
 same checks, so "green" means the same thing on my PC and online.
 
+An AI feature is tested like any other, plus one more gate. Ask the Tape's guardrails,
+tools and fallbacks are tested on every run with a scripted model that costs nothing.
+A set of golden questions, each with its true answer computed from the tape, must all
+pass that way too. Before a release, or a change of model, the same questions run on
+the live model, and a report shows how many it got right, how many tokens it used and
+what it cost.
+
 ## By the numbers
 Every time all the test layers pass on my PC, `test.ps1` counts the tests in each layer,
 reads the back-end coverage and counts the commits, and writes them to

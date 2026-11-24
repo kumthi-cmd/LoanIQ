@@ -4,6 +4,49 @@
  */
 
 export interface paths {
+    "/api/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description BUSINESS: answer one question, streaming each step.
+         *
+         *     TECH: a plain (sync) generator; FastAPI runs it on a worker thread, so the
+         *       blocking model calls never stall other requests.
+         */
+        post: operations["ask_api_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/queries/{query_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Query Result
+         * @description BUSINESS: every row behind one answer. TECH: 404 if unknown or expired (1 hour).
+         */
+        get: operations["query_result_api_ask_queries__query_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -154,6 +197,27 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AskRequest
+         * @description POST /api/ask body.
+         *
+         *     BUSINESS: a typed question, or a desk-question chip's id (which skips the model).
+         *     TECH: question length is checked against llm.toml max_question_chars in
+         *       ask_input, so the limit lives in config.
+         */
+        AskRequest: {
+            /**
+             * Desk Question
+             * @description A desk question id, e.g. ltv_over_125
+             */
+            desk_question?: string | null;
+            /**
+             * Question
+             * @description The visitor's question, in plain English
+             * @default
+             */
+            question: string;
+        };
+        /**
          * Breakdowns
          * @description GET /api/loans/breakdowns: the three summary panels, whole tape.
          *
@@ -274,6 +338,33 @@ export interface components {
             status: string;
         };
         /**
+         * StoredQuery
+         * @description One query_tape result, as the screen gets it.
+         *
+         *     BUSINESS: "Loans over 125 LTV: 20 rows" plus the SQL that produced them.
+         *     TECH: rows are lists in `columns` order (smaller JSON than dicts). row_count
+         *       is rows returned (at most max_rows); total_rows counts every row that
+         *       matched; truncated is True when total_rows > row_count.
+         */
+        StoredQuery: {
+            /** Columns */
+            columns: string[];
+            /** Query Id */
+            query_id: string;
+            /** Row Count */
+            row_count: number;
+            /** Rows */
+            rows: unknown[][];
+            /** Sql */
+            sql: string;
+            /** Title */
+            title: string;
+            /** Total Rows */
+            total_rows: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
          * Summary
          * @description GET /api/loans/summary: the pool's headline numbers.
          *
@@ -332,6 +423,70 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    ask_api_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    query_result_api_ask_queries__query_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredQuery"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_health_get: {
         parameters: {
             query?: never;

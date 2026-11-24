@@ -1,0 +1,185 @@
+# =============================================================================
+# golden_questions.toml: Ask the Tape questions with known answers.
+#
+# BUSINESS: the questions a trader asks of a new tape, each with its true answer
+#   computed straight from the tape. They must pass before a release
+#   (content/agent.md). The answers are not written here: truth_sql computes them
+#   from whatever tape is loaded (the seeded default in CI), so the file never goes
+#   stale when the generator changes.
+# TECH: read by app/agent/golden.py.
+#   check      count | usd | pct | number | text  (grading rules: golden.py)
+#   truth_sql  the plain, obvious query for the true answer: first column, first row
+#   sql        a reference query a good agent might write. Deliberately written
+#              differently (FILTER, IN lists, aliases, LIKE) so CI proves the
+#              guardrails accept realistic queries. Used only by the Fake in CI.
+#   answer     the Fake's answer; {value} is the reference query's result
+#   Run live:  .venv\Scripts\python.exe scripts\eval_agent.py   (from backend\)
+# =============================================================================
+
+[[question]]
+id = "loan_count"
+question = "How many loans are on the tape?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans"
+sql = "SELECT COUNT(loan_id) AS loans FROM loans"
+answer = "The tape holds {value} loans."
+
+[[question]]
+id = "total_upb"
+question = "What is the total current UPB of the tape?"
+check = "usd"
+truth_sql = "SELECT SUM(current_upb) FROM loans"
+sql = "SELECT SUM(current_upb) AS total_upb FROM loans"
+answer = "Total current UPB is {value}."
+
+[[question]]
+id = "wac"
+question = "What is the WAC of the tape?"
+check = "pct"
+truth_sql = "SELECT SUM(note_rate * current_upb) / SUM(current_upb) FROM loans"
+sql = "SELECT ROUND(SUM(note_rate * current_upb) / NULLIF(SUM(current_upb), 0), 3) AS wac FROM loans"
+answer = "The tape's WAC is {value}."
+
+[[question]]
+id = "wa_fico"
+question = "What is the UPB-weighted average FICO?"
+check = "number"
+truth_sql = "SELECT SUM(fico * current_upb) / SUM(current_upb) FROM loans"
+sql = "SELECT ROUND(SUM(fico * current_upb) / NULLIF(SUM(current_upb), 0), 1) AS wa_fico FROM loans"
+answer = "WA FICO is {value}."
+
+[[question]]
+id = "ltv_over_125"
+question = "How many loans have an LTV over 125?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE ltv > 125"
+sql = "SELECT COUNT(*) FILTER (WHERE ltv > 125) AS high_ltv FROM loans"
+answer = "{value} loans have an original LTV above 125."
+
+[[question]]
+id = "new_york_count"
+question = "How many New York loans are there?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE state = 'NY'"
+sql = "SELECT COUNT(*) AS n FROM loans AS l WHERE l.state = 'NY'"
+answer = "There are {value} New York loans."
+
+[[question]]
+id = "new_york_upb"
+question = "What is the current UPB of the New York loans?"
+check = "usd"
+truth_sql = "SELECT SUM(current_upb) FROM loans WHERE state = 'NY'"
+sql = "SELECT SUM(current_upb) AS ny_upb FROM loans WHERE state IN ('NY')"
+answer = "The New York loans carry {value} of current UPB."
+
+[[question]]
+id = "puerto_rico_wac"
+question = "What is the WAC of the Puerto Rico loans?"
+check = "pct"
+truth_sql = "SELECT SUM(note_rate * current_upb) / SUM(current_upb) FROM loans WHERE state = 'PR'"
+sql = "SELECT ROUND(SUM(note_rate * current_upb) / NULLIF(SUM(current_upb), 0), 3) AS wac FROM loans WHERE state = 'PR'"
+answer = "The Puerto Rico loans have a WAC of {value}."
+
+[[question]]
+id = "seriously_delinquent_count"
+question = "How many loans are seriously delinquent (90+ days, foreclosure, REO or bankruptcy)?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE dq_status IN ('90', '120+', 'FC', 'REO', 'BK')"
+sql = "SELECT COUNT(*) AS n FROM loans WHERE dq_status IN ('90', '120+', 'FC', 'REO', 'BK')"
+answer = "{value} loans are seriously delinquent."
+
+[[question]]
+id = "seriously_delinquent_upb"
+question = "What current UPB is seriously delinquent?"
+check = "usd"
+truth_sql = "SELECT SUM(current_upb) FROM loans WHERE dq_status IN ('90', '120+', 'FC', 'REO', 'BK')"
+sql = "SELECT SUM(current_upb) FILTER (WHERE dq_status IN ('90', '120+', 'FC', 'REO', 'BK')) AS sdq_upb FROM loans"
+answer = "{value} of current UPB is seriously delinquent."
+
+[[question]]
+id = "fha_count"
+question = "How many FHA loans are on the tape?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE program = 'FHA'"
+sql = "SELECT COUNT(*) AS fha FROM loans WHERE program = 'FHA'"
+answer = "There are {value} FHA loans."
+
+[[question]]
+id = "jumbo_upb"
+question = "What is the total current UPB of the Jumbo loans?"
+check = "usd"
+truth_sql = "SELECT SUM(current_upb) FROM loans WHERE program = 'Jumbo'"
+sql = "SELECT SUM(current_upb) AS jumbo_upb FROM loans WHERE program ILIKE 'jumbo'"
+answer = "The Jumbo loans total {value} of current UPB."
+
+[[question]]
+id = "largest_loan"
+question = "Which loan has the largest current UPB?"
+check = "text"
+truth_sql = "SELECT loan_id FROM loans ORDER BY current_upb DESC, loan_id LIMIT 1"
+sql = "SELECT loan_id, current_upb FROM loans ORDER BY current_upb DESC, loan_id LIMIT 1"
+answer = "The largest loan is {value}."
+
+[[question]]
+id = "top_seller_by_upb"
+question = "Which seller has the most current UPB on the tape?"
+check = "text"
+truth_sql = "SELECT seller FROM loans GROUP BY seller ORDER BY SUM(current_upb) DESC LIMIT 1"
+sql = "SELECT seller, SUM(current_upb) AS upb FROM loans GROUP BY seller ORDER BY upb DESC LIMIT 1"
+answer = "{value} has the most current UPB."
+
+[[question]]
+id = "investor_count"
+question = "How many investor-property loans are there?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE occupancy = 'Investor'"
+sql = "SELECT COUNT(*) AS investor FROM loans WHERE occupancy = 'Investor'"
+answer = "{value} loans are on investor properties."
+
+[[question]]
+id = "low_fico_count"
+question = "How many loans have a FICO below 700?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE fico < 700"
+sql = "SELECT COUNT(*) AS low_fico FROM loans WHERE fico < 700"
+answer = "{value} loans have a FICO below 700."
+
+[[question]]
+id = "modified_count"
+question = "How many loans have been modified?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE mod_flag"
+sql = "SELECT COUNT(*) AS modified FROM loans WHERE mod_flag = TRUE"
+answer = "{value} loans have been modified."
+
+[[question]]
+id = "arm_count"
+question = "How many ARMs are on the tape?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE product IN ('5/6 ARM', '7/6 ARM', '10/6 ARM')"
+sql = "SELECT COUNT(*) AS arms FROM loans WHERE product LIKE '%ARM'"
+answer = "There are {value} ARMs on the tape."
+
+[[question]]
+id = "wa_dti"
+question = "What is the UPB-weighted average DTI?"
+check = "pct"
+truth_sql = "SELECT SUM(dti * current_upb) / SUM(current_upb) FROM loans"
+sql = "SELECT ROUND(SUM(dti * current_upb) / NULLIF(SUM(current_upb), 0), 3) AS wa_dti FROM loans"
+answer = "WA DTI is {value}."
+
+[[question]]
+id = "originated_2024"
+question = "How many loans were originated in 2024?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE orig_date >= DATE '2024-01-01' AND orig_date < DATE '2025-01-01'"
+sql = "SELECT COUNT(*) AS n FROM loans WHERE EXTRACT(YEAR FROM orig_date) = 2024"
+answer = "{value} loans were originated in 2024."
+
+[[question]]
+id = "top_state_by_count"
+question = "Which state has the most loans?"
+check = "text"
+truth_sql = "SELECT state FROM loans GROUP BY state ORDER BY COUNT(*) DESC, state LIMIT 1"
+sql = "SELECT state, COUNT(*) AS n FROM loans GROUP BY state ORDER BY n DESC, state LIMIT 1"
+answer = "{value} has the most loans."

@@ -36,9 +36,13 @@ TECH:
       `npm run build`) at "/", so the whole of LoanIQ runs on one port in production
       and in the Playwright tests. In dev mode Vite serves the SPA instead and
       proxies /api here. See serve_spa() and docs/decisions.md.
+    - Ask the Tape (Step 4a): the agent in app/agent/ is built in the lifespan
+      (app.state.ask) and its routes (POST /api/ask, GET /api/ask/queries/{id}) are
+      added from app/agent/api.py with include_router. Its summarize_tape tool uses
+      tape_summary() below, so the agent quotes the same numbers as the screen.
     Limits (page sizes) and panel settings (note-rate buckets, status order) live in
     app/config/api.toml; column labels in content/loan-columns.json; chip labels in
-    content/desk-questions.json.
+    content/desk-questions.json; the agent's models and limits in app/config/llm.toml.
 """
 
 from __future__ import annotations
@@ -57,6 +61,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app import loan_tape_gen as gen
+from app.agent import api as ask_api
+from app.agent.config import AgentConfig
+from app.agent.providers.base import LLMProvider
+from app.agent.service import build_ask_service, close_ask_service
 from app.desk_questions import DESK_QUESTIONS_PATH, DeskQuestion, load_desk_questions
 from app.loan_query import ColumnTypes, QueryError, column_kind, parse_filter, parse_sort, select_list
 from app.tape_panels import (Breakdowns, QuestionCount, TapeInfo, bucket_spec, fetch_breakdowns,
@@ -312,6 +320,22 @@ def optional_float(value: Any) -> float | None:
     return None if value is None else float(value)
 
 
+def tape_summary(store: LoanStore) -> tuple[dict[str, Any], str]:
+    """The Ask the Tape summarize_tape tool: headline numbers, program mix, MBA status.
+
+    BUSINESS: the agent quotes exactly the numbers on the Loan Tape screen's tiles
+      and panels, because it calls the same functions.
+    TECH: returns (summary, SQL shown on screen). Program mix and status counts are
+      compact text ("Conventional 1,014 loans $..."), cheaper in tokens than JSON.
+    """
+    summary = fetch_summary(store).model_dump()
+    panels = fetch_breakdowns(store.con, RATE_BUCKETS, DQ_STATUS_ORDER)
+    summary["program_mix"] = "; ".join(f"{p.program} {p.loans:,} loans ${p.current_upb:,.2f}"
+                                       for p in panels.programs)
+    summary["dq_status"] = "; ".join(f"{s.status} {s.loans:,}" for s in panels.dq_status)
+    return summary, SUMMARY_SQL.strip().replace("?", f"'{CURRENT_STATUS}'")
+
+
 # =============================================================================
 # The app and its routes
 # =============================================================================
@@ -337,20 +361,30 @@ def spa_file(spa_dir: Path, path: str) -> Path | None:
 
 
 def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
-               questions_path: Path = DESK_QUESTIONS_PATH) -> FastAPI:
+               questions_path: Path = DESK_QUESTIONS_PATH,
+               agent_config: AgentConfig | None = None,
+               ask_providers: dict[str, LLMProvider] | None = None) -> FastAPI:
     """Build the FastAPI app that serves the tape in data_dir and the SPA in spa_dir.
 
     TECH: the lifespan loads the store before the first request and closes DuckDB
       at shutdown. Tests call create_app(tmp_folder) inside `with TestClient(app)`,
       which runs the lifespan. spa_dir is the Vite build; tests pass their own, and
       questions_path lets a test load a deliberately broken desk-question config.
+      agent_config and ask_providers let tests run Ask the Tape on their own limits
+      and on a FakeProvider; by default llm.toml and the real adapters are used.
     """
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.store = open_store(data_dir, questions_path)
+        store = open_store(data_dir, questions_path)
+        app.state.store = store
         app.state.labels = load_labels()
+        app.state.ask = build_ask_service(
+            data_dir / TAPE_FILE, store.columns, app.state.labels,
+            {qid: q.where for qid, q in store.questions.items()},
+            lambda: tape_summary(store), agent_config, ask_providers)
         yield
-        app.state.store.con.close()
+        close_ask_service(app.state.ask)
+        store.con.close()
 
     app = FastAPI(title="LoanIQ loan API", lifespan=lifespan,
                   description="Synthetic loan tape: paged, sorted and filtered in DuckDB. "
@@ -406,6 +440,9 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
     def tape(store: Store) -> TapeInfo:
         """BUSINESS: "41 fields · 6 fictional sellers" under the screen title."""
         return fetch_tape_info(store.con, len(store.columns))
+
+    # BUSINESS: Ask the Tape (Step 4a). TECH: before the catch-all below.
+    app.include_router(ask_api.router)
 
     # TECH: registered last, so every /api route above wins first. "{path:path}" is a
     #   FastAPI path parameter that matches the rest of the URL, slashes included.

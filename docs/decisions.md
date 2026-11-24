@@ -1,6 +1,101 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-23: Ask the Tape runs LoanIQ's own loop behind one provider interface
+Decision (Step 4a): the agent loop is LoanIQ code (`backend/app/agent/orchestrator.py`)
+calling the Messages API one round at a time, not Anthropic's Managed Agents or the
+SDK's tool runner. Every vendor sits behind `LLMProvider.chat()` (Strategy pattern):
+Anthropic (live), Offline (built-in rules), Fake (tests), OpenAI and Gemini (off
+until a key is set). Tools are defined once as JSON Schema; each adapter translates
+them and handles its own prompt caching (an explicit mark for Claude, automatic for
+the other two). All three SDKs are pinned in `requirements.txt` and imported only
+when their provider is used.
+Why: LoanIQ must see and check every tool call, count refusals, switch model
+mid-question and stop on its own 20-second clock; and the same loop must drive
+every vendor and the offline rules, so the screen and the tests see one engine.
+The tools read a local DuckDB file, so there is nothing for a hosted sandbox to do.
+Pinning all three SDKs means the OpenAI and Gemini adapters are tested against
+those SDKs' real response types, not hand-made look-alikes.
+Alternatives considered: Managed Agents (Anthropic hosts the loop and a sandbox;
+more than this needs, and it would not drive other vendors); the SDK tool runner
+(less code, but no place to count refusals or switch model mid-loop); pinning only
+`anthropic` (smaller image, but untested adapter code).
+
+## 2026-11-23: Ask the Tape queries pass three layers: allowlist, row cap, read-only file
+Decision (Step 4a): `query_tape` SQL is checked by sqlglot against an ALLOWLIST of
+syntax-tree nodes and functions, the table `loans` and the tape's columns
+(`backend/app/agent/sql_guard.py`). Filter values are lifted out into named bound
+parameters (`$p1`, `$p2`). The LIMIT is capped at 500 + 1 rows and each query is
+interrupted after 2 s. The query runs on a copy of the tape in a DuckDB file opened
+`read_only`, with external file access off and settings locked
+(`backend/app/agent/tape_db.py`). Limits live in `backend/app/config/llm.toml`.
+Why: the model's SQL is untrusted text. An allowlist refuses anything it does not
+know, including file readers such as `read_csv`. Named parameters, not `?`: tests
+showed sqlglot's tree walk does not follow print order, so positional values could
+bind to the wrong column. DuckDB cannot open an in-memory database read-only, so
+the copy is a small file in a new temporary folder on every start. Even a query
+that got past the checks could then not write or read anything but the tape.
+Alternatives considered: a denylist of dangerous keywords (fails open on a new
+trick); asking the model to send values separately (more for a small model to get
+wrong); running on the grid's in-memory connection (writable).
+
+## 2026-11-23: Claude Haiku 5.5 answers, Sonnet 5.5 after two refusals, rules as fallback
+Decision (Step 4a): tape questions run on `claude-haiku-5-5` at effort "low", with
+800 output tokens per call, at most 5 rounds and 20 seconds. After 2 refused tool
+calls in one question, the rest runs on `claude-sonnet-5-5`. Built-in rules answer
+when there is no key, when the model fails, times out, declines or runs out of
+rounds, when today's budget is spent, and always for desk-question chips. The answer
+says which. Prices in `llm.toml` are illustrative, from Anthropic's price list on
+2026-11-23.
+Why: the model only plans and explains; the tools do the math, so the cheapest
+current model at low effort is enough, and a stronger one is paid for only when the
+small one keeps writing bad queries. A visitor always gets an answer from the tape.
+Alternatives considered: Sonnet for everything (about 20 times the price for the
+same plan-and-explain job); no fallback (a dead screen whenever the API is down);
+Anthropic's server-side refusal fallback (LoanIQ's own fallback covers refusals and
+every other failure the same way).
+
+## 2026-11-23: Ask the Tape budget is counted in memory; visitors by hashed address
+Decision (Step 4a): every question's tokens are priced in Decimal dollars and logged
+as one JSON line (no question text, no address). A daily cap ($2.00) and a
+per-visitor limit (30 questions per UTC day) live in `llm.toml`, counted in memory
+(`backend/app/agent/budget.py`). A visitor is a salted hash of the last
+`X-Forwarded-For` entry, the one Render's proxy adds.
+Why: enough to stop runaway spend on a showcase with no database. The counts reset
+when the server restarts (Render's free plan sleeps after 15 idle minutes), so the
+cap is a guard, not a ledger; set a monthly spend limit in the Anthropic Console as
+the hard backstop. Earlier `X-Forwarded-For` entries can be typed by anyone, so they
+are ignored.
+Alternatives considered: a database or Redis for exact counts (a new service for a
+showcase); no per-visitor limit (one visitor could spend the whole day's budget).
+
+## 2026-11-23: POST /api/ask streams events with FastAPI's built-in SSE
+Decision (Step 4a): `POST /api/ask` answers with Server-Sent Events (FastAPI 0.165's
+`EventSourceResponse`): `tool_call`, `tool_result` (with the SQL and a query id),
+`escalated`, `fallback`, `answer`, `done` (tokens, cost, models). Each step streams
+as it happens; the answer arrives whole, not word by word. Full results are kept by
+query id in memory for an hour (`GET /api/ask/queries/{id}`); the model sees totals
+and 20 rows as CSV.
+Why: the visitor watches the agent work, and the SQL behind every number is on
+screen. Streaming the text word by word would mean a streaming path in all five
+adapters for little gain on a two-to-four-sentence answer; it can come later.
+Alternatives considered: one JSON response at the end (the screen is blank for
+several seconds); WebSockets (two-way, more than needed).
+
+## 2026-11-23: Golden questions are graded against the tape, not against stored answers
+Decision (Step 4a): `backend/evals/golden_questions.toml` holds 21 questions. Each
+has a `truth_sql` that computes its true answer from the loaded tape, and a
+reference query the Fake runs in CI through the real guardrails and tools. The
+grader (`backend/app/agent/golden.py`) accepts a number when it is the true value
+correctly rounded to the precision the answer wrote (within half a step) and within
+5% of it. `backend/scripts/eval_agent.py` runs the same questions on live models.
+Why: answers follow the tape when the generator changes, so the file never goes
+stale. The rounding rule matches how a trader writes numbers ($3.5M, 6.41%) without
+letting a wrong one through: a first, looser rule let 6.5% pass for 6.41%, and a
+test caught it.
+Alternatives considered: hard-coded answers (stale on the next tape change); an LLM
+judge (costs money on every CI run, and is less predictable than a number check).
+
 ## 2026-11-23: Loan Tape at 1440 px: explanation closed by default, columns fitted to content
 Decision (Step 1g, closing the Step 1d layout follow-ups, checked against the
 "1 · Loan Tape" board at 1440 px and measured in Chromium):

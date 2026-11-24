@@ -7,6 +7,9 @@ duckdb==2.0.0        # TECH: in-memory SQL over the Parquet tape (Step 1 API)
 sqlglot==30.33.0     # TECH: parses spec-story rules so only safe SQL is allowed
 fastapi==0.165.0     # TECH: the loan API (Step 1 API)
 uvicorn==0.54.0      # TECH: the web server that runs FastAPI
+anthropic==2.13.0    # TECH: Claude, the live Ask the Tape model (Step 4a)
+openai==3.58.0       # TECH: OpenAI adapter, off until OPENAI_API_KEY is set (Step 4a)
+google-genai==3.6.1  # TECH: Gemini adapter, off until GEMINI_API_KEY is set (Step 4a)
 pytest==9.2.0        # TECH: back-end test runner
 pytest-cov==7.1.0    # TECH: coverage report; the rule is 80% or more
 httpx2==2.16.2       # TECH: HTTP client behind FastAPI's TestClient for API tests

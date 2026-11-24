@@ -475,11 +475,25 @@ def test_render_yaml_holds_no_secret_values() -> None:
     """BUSINESS: render.yaml is in Git, so a key written there would leak.
 
     TECH: any envVars entry must use `sync: false` (set in the Render dashboard)
-      rather than `value:`. Today there are no env vars at all.
+      rather than `value:`. Since Step 4a the only one is ANTHROPIC_API_KEY.
     """
     text = "\n".join(line.split("#", 1)[0] for line in RENDER_YAML.read_text(encoding="utf-8").splitlines())
     assert not re.search(r"^\s*value:", text, flags=re.MULTILINE)
     assert not re.search(r"(?i)(api[_-]?key|secret|token|password)\s*:", text)
+
+
+def test_render_declares_the_claude_key_as_dashboard_only() -> None:
+    """BUSINESS: the live site can reach Claude for Ask the Tape, and the key itself
+      is never in Git.
+
+    TECH: the envVars entry names ANTHROPIC_API_KEY, the variable llm.toml's
+      [providers.anthropic] api_key_env reads, with sync: false.
+    """
+    from app.agent.config import load_agent_config
+    settings = render_settings()
+    assert settings["key"] == "ANTHROPIC_API_KEY"
+    assert settings["sync"] == "false"
+    assert load_agent_config().provider_keys["anthropic"] == settings["key"]
 
 
 def test_only_render_yaml_is_render_specific() -> None:

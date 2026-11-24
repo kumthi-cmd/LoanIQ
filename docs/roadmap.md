@@ -1,5 +1,7 @@
 # Roadmap
-Current step: Step 1 done (2026-11-23). Next: Step 2, tape upload and parser.
+Current step: Step 4a done (2026-11-23), the Ask the Tape engine (back end), on
+branch `step-4a`. Next: Step 4b, the Ask the Tape screen. Step 4 was taken ahead of
+Steps 2 and 3.
 Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
 after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
 1c SPA and loan grid, 1d Loan Tape screen to the design board (panels, desk
@@ -15,7 +17,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
-| 4 Ask the Tape agent | Not started | 5-7 | |
+| 4 Ask the Tape agent | In progress: 4a engine done, 4b screen next | 5-7 | |
 | 5 Slotting rules engine | Not started | 3-4 | |
 | 6 Price file and best execution | Not started | 5-7 | |
 | 7 Blotter and position monitor | Not started | 6-8 | |
@@ -60,6 +62,15 @@ From Step 1f (About and How it was built, 2026-11-23):
 - Commit content/build-facts.json after each green `test.ps1` run, so the live site's
   "By the numbers" stays current.
 - Redesign How it was built around three parts: approach, architecture and design.
+
+From Step 4a (Ask the Tape engine, 2026-11-23):
+- Set ANTHROPIC_API_KEY in the Render dashboard (Environment) and a monthly spend
+  limit in the Anthropic Console before the screen goes live; until then built-in
+  rules answer.
+- Run `backend\scripts\eval_agent.py` on Claude Haiku 5.5 once the key is set, to
+  measure real accuracy, tokens, cache hits and cost per question (content/agent.md
+  says about $0.001; the estimate is $0.001-0.002).
+- Stream the answer word by word if the whole-answer event feels slow on screen.
 
 At the end of each step, update its status and actual hours. If a step runs more
 than 25% over its estimate, re-forecast the finish date.
