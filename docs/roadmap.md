@@ -17,7 +17,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
-| 4 Ask the Tape agent | Done: 4a engine, 4b screen | 5-7 | |
+| 4 Ask the Tape agent | Done: 4a engine, 4b screen | 5-7 | 4a: not recorded; 4b: 4 |
 | 5 Slotting rules engine | Not started | 3-4 | |
 | 6 Price file and best execution | Not started | 5-7 | |
 | 7 Blotter and position monitor | Not started | 6-8 | |
