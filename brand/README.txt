@@ -1,5 +1,5 @@
-LoanIQ Labs — Neural Lab logo kit (v1)
-======================================
+LoanIQ Labs — logo kit (v1, symbol updated 2026-11-23)
+======================================================
 
 WHICH FILE TO USE
   LoanIQ app header (48 px high)      -> logo/loaniq-labs_horizontal_dark-bg_48px.svg
@@ -22,7 +22,7 @@ FAVICON — paste into the <head> of every page, with the icon/ folder at the si
 
 COLOURS
   Lab Navy     #0A1628   backgrounds, ink
-  Neural Gold  #F2B705   brain, "IQ" on dark
+  Neural Gold  #F2B705   coin and bubbles, "IQ" on dark
   Amber        #D49A00   "IQ" on white (more contrast than gold)
   Flask Blue   #2563EB -> #1A3F9A (liquid gradient)
   Slate        #9FB3CC   "LABS" on dark   |   #51647D on white
@@ -38,9 +38,23 @@ HEADER LOGO, 48 PX (added 2026-11-19)
   (144 x 48), so show it at that height. It makes "LABS" legible at header size:
   bold, brighter (#D3DEEC) and followed by a gold rule, instead of thin and tracked wide.
   It differs from the v1 kit above: Space Grotesk Bold lettering (outlined) instead of
-  Montserrat, and a simpler flask and brain with thicker strokes.
+  Montserrat, and a simpler flask with thicker strokes.
   The other files are still v1.
 
 CLEAR SPACE
   Keep empty space around the logo at least the width of the flask's neck.
   Don't stretch, recolour, or put the full-colour logo on busy photos (use mono-white there).
+
+NEW SYMBOL: FLASK WITH HOUSE AND COIN (added 2026-11-23)
+  Same flask as v1. The brain is replaced by a house standing in blue liquid, with a
+  gold $ coin on its front. Redrawn so far, with the same file names (the files the
+  site uses):
+    logo/loaniq-labs_horizontal_dark-bg_48px.svg   app header (lettering unchanged)
+    logo/loaniq-labs_stacked_dark-bg.svg           About page (lettering unchanged)
+    icon/ (every file)                             favicons and app icons
+  The other logo/ files and brand-sheet.png still show the v1 flask and brain.
+  Small sizes: the 16 and 32 px icons use a simpler flask (no bubbles, plain gold
+  coin); the 48 px header and favicon-48 drop the small bubbles.
+  Symbol colours, on navy:
+    glass line #E6EBF2, liquid #2F6BD9, roof #E8553F (shade #C2402D),
+    walls #FFFFFF (shade #E1E7EF), coin #F2B705 (ring #D99A00, $ in Lab Navy)

@@ -1,6 +1,22 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-23: The flask holds a house and a coin, not a brain
+Decision: the LoanIQ Labs symbol keeps the v1 flask, but the brain is replaced by a
+house standing in blue liquid with a gold $ coin on its front, drawn as a flat,
+chunky icon. Redrawn so far: the 48 px header logo, the stacked logo on the About
+page and every file in brand/icon/. File names are unchanged, so no code or tests
+change. The 16 and 32 px icons use a simpler flask (no bubbles, plain coin).
+Why: the house and coin point to home loans; the flask keeps the "Labs" idea and
+stays close to the old symbol.
+Alternatives considered (Claude Design canvas, 2026-11-23): a hand presenting a
+beaker, a beaker shaped like a house, and a coin dropping into a beaker. A draft with
+a hand under the house was dropped because the hand did not read as a hand.
+Note: the light-background, mono and PNG logos in brand/logo/ and brand-sheet.png
+still show the v1 flask and brain. The new files in brand/icon/ carry C2PA content
+credentials (provenance records), added when they were delivered; the 48 px header
+file's old credential was removed, because it described the old artwork.
+
 ## 2026-11-23: Build facts written by test.ps1 and committed, not written in CI
 Decision: after all five layers pass, a plain function at the end of `test.ps1`
 (`Write-BuildFacts`) writes `content/build-facts.json`: back-end, front-end and
