@@ -11,7 +11,8 @@
  *   The columns come from the API, so a new tape field appears in the grid without
  *   a front-end change. The column "kind" from the API decides the filter:
  *     text    -> agTextColumnFilter, contains / equals
- *     number  -> agNumberColumnFilter, equals / greater than / less than / between
+ *     number  -> agNumberColumnFilter, equals / not equal / greater or less than (or
+ *                equal) / between
  *     date, boolean -> sortable but not filterable yet (the API has no date or
  *                      boolean filter, so offering one would only produce errors)
  *   The filter options match exactly what backend/app/loan_query.py accepts.
@@ -30,9 +31,13 @@ export const PINNED_COLUMN = "loan_id";
 export const DQ_COLUMN = "dq_status";
 export const CURRENT_STATUS = "Current";
 
-// TECH: the AG Grid filter options the API supports, per column kind.
+// TECH: the AG Grid filter options the API supports, per column kind. The "or equal"
+//   and "not equal" options were added in Step 4b, so an Ask the Tape filter such as
+//   fico >= 700 opens in the grid exactly as written (backend/app/loan_query.py).
 export const TEXT_FILTER_OPTIONS = ["contains", "equals"];
-export const NUMBER_FILTER_OPTIONS = ["equals", "greaterThan", "lessThan", "inRange"];
+export const NUMBER_FILTER_OPTIONS = [
+  "equals", "notEqual", "greaterThan", "greaterThanOrEqual", "lessThan", "lessThanOrEqual", "inRange",
+];
 
 type Formatter = (p: ValueFormatterParams<LoanRow>) => string;
 

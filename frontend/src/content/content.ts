@@ -15,6 +15,9 @@
  *   and rendered later by react-markdown.
  */
 import aboutMd from "@content/about.md?raw";
+import askTheTapeJson from "@content/ask-the-tape.json";
+import askTheTapeScreenJson from "@content/screens/ask-the-tape.json";
+import askTheTapeMd from "@content/screens/ask-the-tape.md?raw";
 import buildFactsJson from "@content/build-facts.json";
 import buildLogMd from "@content/build-log.md?raw";
 import deskQuestionsJson from "@content/desk-questions.json";
@@ -78,6 +81,7 @@ export const deskQuestionLabels: DeskQuestionLabel[] = deskQuestionsJson.questio
  */
 export const screenExplanations = {
   "loan-tape": loanTapeMd,
+  "ask-the-tape": askTheTapeMd,
 } as const;
 
 export type ScreenId = keyof typeof screenExplanations;
@@ -89,6 +93,7 @@ export type ScreenId = keyof typeof screenExplanations;
  */
 export const screenTerms: Record<ScreenId, string[]> = {
   "loan-tape": loanTapeJson.terms,
+  "ask-the-tape": askTheTapeScreenJson.terms,
 };
 
 /** A screen explanation split for the Explain panel's two tabs. */
@@ -120,6 +125,14 @@ export function splitExplanation(md: string): ExplanationSections {
  *   touching code. TECH: from content/screens/loan-tape.json.
  */
 export const loanTapeContent = loanTapeJson;
+
+/**
+ * The Ask the Tape screen's captions, prompts, tool blurbs and guardrails (Step 4b).
+ * BUSINESS: every word the screen shows that the back end does not send.
+ * TECH: the "screen" section of content/ask-the-tape.json; the same file's
+ *   "offline" and "notices" sections are read by the back end, never here.
+ */
+export const askTheTapeContent = askTheTapeJson.screen;
 
 /**
  * Fill {name} placeholders in a caption.

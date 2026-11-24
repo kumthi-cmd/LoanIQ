@@ -24,9 +24,15 @@
  *     The count also goes up to the header through the layout's outlet context.
  *   - Layout is flex with wrapping: at narrow widths the explanation moves under the
  *     grid and the three panels stack (styles.css).
+ *   - The URL can carry a filter, sort and desk question (Step 4b): Ask the Tape's
+ *     "Open in Loan Tape" links here as /?filter=...&sort=... (ask/loanTapeUrl.ts).
+ *     useSearchParams (React Router) reads the URL's query string. The grid gets a
+ *     React key made from it, so a new link builds a fresh grid with that filter;
+ *     "Show the whole tape" removes the parameters and the grid opens on the whole tape again.
+ *     Columns the link filters or sorts on are shown even if hidden by default.
  */
-import { useCallback, useEffect, useState } from "react";
-import { useOutletContext } from "react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOutletContext, useSearchParams } from "react-router";
 import { fetchBreakdowns, fetchColumns, fetchQuestionCounts, fetchSummary, fetchTapeInfo } from "../api/client";
 import type { Breakdowns, ColumnInfo, QuestionCount, Summary, TapeInfo } from "../api/types";
 import { ColumnPicker } from "../components/ColumnPicker";
@@ -37,7 +43,8 @@ import { KpiTiles } from "../components/KpiTiles";
 import { LoanGrid } from "../components/LoanGrid";
 import { NoteRatePanel } from "../components/NoteRatePanel";
 import { ProgramMixPanel } from "../components/ProgramMixPanel";
-import { fillCaption, loanTapeContent } from "../content/content";
+import { columnsInUse, readLoanTapeParams } from "../ask/loanTapeUrl";
+import { deskQuestionLabels, fillCaption, loanTapeContent } from "../content/content";
 import { formatNumber } from "../grid/columnFormats";
 import { DEFAULT_VISIBLE_COLUMNS, gridConfig } from "../grid/gridConfig";
 import type { LayoutContext } from "../App";
@@ -50,6 +57,9 @@ import type { LayoutContext } from "../App";
 function defaultHidden(columns: ColumnInfo[]): Set<string> {
   return new Set(columns.map((c) => c.name).filter((n) => !DEFAULT_VISIBLE_COLUMNS.includes(n)));
 }
+
+/** TECH: the desk-question ids a URL may name (content/desk-questions.json). */
+const QUESTION_IDS = deskQuestionLabels.map((q) => q.id);
 
 /** TECH: "…" until a count is known, else the count with commas. */
 const countOrDots = (n: number | null | undefined) => (n === null || n === undefined ? "…" : formatNumber(n, "count"));
@@ -73,6 +83,24 @@ export function LoanTapeScreen() {
   //   12 default columns show at 1440 px; "Explain this screen" opens it (Step 1g).
   const [explainOpen, setExplainOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // BUSINESS: the filter, sort and chip an Ask the Tape answer opened the grid with.
+  const fromUrl = useMemo(
+    () => readLoanTapeParams(searchParams, QUESTION_IDS, columns?.map((c) => c.name) ?? []),
+    [searchParams, columns],
+  );
+  const linked = fromUrl.filter !== null || fromUrl.sort.length > 0;
+
+  // BUSINESS: a desk question in the URL turns its chip on; a new URL resets it.
+  useEffect(() => setQuestion(fromUrl.question), [fromUrl.question]);
+
+  // BUSINESS: every column the link filters or sorts on is visible, so the trader
+  //   sees what is filtering the grid. TECH: runs again once the columns load.
+  useEffect(() => {
+    const used = columnsInUse(fromUrl);
+    if (used.length === 0) return;
+    setHidden((prev) => (used.some((c) => prev.has(c)) ? new Set([...prev].filter((c) => !used.includes(c))) : prev));
+  }, [fromUrl]);
 
   useEffect(() => {
     // TECH: start every request together; each fills its own piece of the screen.
@@ -147,9 +175,18 @@ export function LoanTapeScreen() {
           </div>
           <DeskQuestionChips counts={questionCounts} active={question} onChange={setQuestion} />
           <p className="panel-note">{captions.panelsScope}</p>
+          {linked && (
+            <p className="linked-filter" data-testid="linked-filter">
+              <span>{captions.fromAsk}</span>
+              <button type="button" className="btn btn-small" onClick={() => setSearchParams({})}>
+                {captions.clearLinked}
+              </button>
+            </p>
+          )}
           <section className="grid-card" aria-label="Loan grid">
             {columns && (
-              <LoanGrid columns={columns} onRowCount={onRowCount} question={question} hiddenColumns={hidden} />
+              <LoanGrid key={searchParams.toString()} columns={columns} onRowCount={onRowCount} question={question}
+                hiddenColumns={hidden} initialFilter={fromUrl.filter} initialSort={fromUrl.sort} />
             )}
             <div className="grid-foot">
               <span data-testid="grid-showing">

@@ -26,8 +26,12 @@
  *     and asks again from row 0, keeping the trader's sort and column filters.
  *   - Hidden columns (the "Columns" picker) only change each column's `hide` flag;
  *     the rows already loaded stay, because every row already holds every field.
+ *   - initialFilter and initialSort (Step 4b, from the URL when Ask the Tape opens
+ *     an answer here) go into AG Grid's initialState, which the grid reads once
+ *     when it is created, before its first request. The screen re-creates the grid
+ *     (a new React key) when the URL changes, so a new link applies cleanly.
  */
-import type { ColDef } from "ag-grid-community";
+import type { ColDef, GridState, SortModelItem } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { useMemo, useState } from "react";
 import type { ColumnInfo, LoanRow } from "../api/types";
@@ -55,6 +59,10 @@ interface LoanGridProps {
   question?: string | null;
   /** Column names the trader has hidden with the Columns picker. */
   hiddenColumns?: ReadonlySet<string>;
+  /** BUSINESS: column filters to open with (an Ask the Tape answer's). TECH: AG Grid filter model. */
+  initialFilter?: Record<string, unknown> | null;
+  /** BUSINESS: the sort to open with ("largest balance first"). */
+  initialSort?: SortModelItem[];
 }
 
 // TECH: one shared empty set, so the default prop is the same object every redraw
@@ -66,8 +74,17 @@ const NO_HIDDEN: ReadonlySet<string> = new Set();
  * BUSINESS: the desk's main working view of a tape.
  * TECH: getRowId uses loan_id so AG Grid can track rows across blocks.
  */
-export function LoanGrid({ columns, onRowCount, question = null, hiddenColumns = NO_HIDDEN }: LoanGridProps) {
+export function LoanGrid({
+  columns, onRowCount, question = null, hiddenColumns = NO_HIDDEN, initialFilter = null, initialSort,
+}: LoanGridProps) {
   const [error, setError] = useState<string | null>(null);
+  // TECH: read once by AG Grid at creation; useState keeps the first value so a
+  //   redraw never hands the grid a "new" initial state.
+  const [initialState] = useState<GridState | undefined>(() =>
+    initialFilter || initialSort?.length
+      ? { filter: { filterModel: initialFilter ?? {} }, sort: { sortModel: initialSort ?? [] } }
+      : undefined,
+  );
   const columnDefs = useMemo(() => buildColumnDefs(columns, hiddenColumns), [columns, hiddenColumns]);
   const datasource = useMemo(
     () =>
@@ -98,6 +115,7 @@ export function LoanGrid({ columns, onRowCount, question = null, hiddenColumns =
           defaultColDef={DEFAULT_COL_DEF}
           rowModelType="infinite"
           datasource={datasource}
+          initialState={initialState}
           cacheBlockSize={gridConfig.blockSize}
           maxBlocksInCache={gridConfig.maxBlocksInCache}
           tooltipShowDelay={gridConfig.tooltipShowDelayMs}

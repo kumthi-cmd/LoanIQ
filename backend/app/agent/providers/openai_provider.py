@@ -25,10 +25,9 @@ import json
 import os
 from typing import Any
 
-from app.agent.providers.anthropic_provider import sdk_reason
 from app.agent.providers.base import (AssistantTurn, ChatOptions, ChatTurn, LLMProvider, Message,
                                       ProviderError, ProviderUnavailable, ToolCall, ToolResults,
-                                      ToolSpec, Usage, UserText)
+                                      ToolSpec, Usage, UserText, sdk_error)
 
 # TECH: OpenAI finish_reason -> LoanIQ's neutral stop_reason.
 FINISH_REASONS = {"stop": "end_turn", "tool_calls": "tool_use", "length": "max_tokens",
@@ -127,5 +126,5 @@ class OpenAIProvider(LLMProvider):
         try:
             resp = client.chat.completions.create(**params)
         except Exception as exc:
-            raise ProviderError(sdk_reason(exc), f"OpenAI call failed: {exc}") from exc
+            raise sdk_error(exc, "OpenAI") from exc
         return parse_completion(resp)

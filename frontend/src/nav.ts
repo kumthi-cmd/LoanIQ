@@ -37,7 +37,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Loan Tape", path: "/", step: 1, live: true },
       { label: "Tape Upload", path: "/upload", step: 2, live: false },
       { label: "Explorer", path: "/explorer", step: 3, live: false },
-      { label: "Ask the Tape", path: "/ask", step: 4, live: false },
+      // BUSINESS: live from Step 4b: plain-English questions answered from the tape.
+      { label: "Ask the Tape", path: "/ask", step: 4, live: true },
     ],
   },
   {

@@ -10,7 +10,9 @@
     "panelsScope": "Panels and chip counts cover the whole tape. The grid follows the chip and your column filters.",
     "gridShowing": "{matching} of {total} loans",
     "gridPaging": "server-paged, {blockSize} loans per block as you scroll",
-    "gridServer": "Sort and filter run in DuckDB, never in the browser"
+    "gridServer": "Sort and filter run in DuckDB, never in the browser",
+    "fromAsk": "Filtered from Ask the Tape: the column filters and sort below are the answer's. Change them like any other filter.",
+    "clearLinked": "Show the whole tape"
   },
   "terms": ["WAC", "UPB", "FICO", "LTV", "MBA delinquency", "Spec story", "Desk question"]
 }

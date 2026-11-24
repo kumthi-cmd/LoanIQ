@@ -1,0 +1,4 @@
+{
+  "_about": "The glossary terms the Ask the Tape screen's Explain panel offers (the first is shown open). The Business and Technical explanation is in ask-the-tape.md; the screen's captions are in ../ask-the-tape.json under \"screen\"; every term's definition is in content/glossary.json.",
+  "terms": ["Tool call", "Guardrail", "Saved query", "Built-in rules (Offline)", "Desk question", "WAC", "LLB"]
+}

@@ -30,6 +30,8 @@ TECH:
       works.
     - One JSON log line per question: provider, models, rounds, tokens, cost,
       fallback reason, time. The question's text and the visitor are not logged.
+      When a model call fails, one more line (log_provider_error, Step 4b) gives
+      the provider's status and its own error message, never the key or question.
 """
 
 from __future__ import annotations
@@ -84,6 +86,7 @@ class Run:
     usage: dict[str, Usage] = field(default_factory=dict)
     query_ids: list[str] = field(default_factory=list)
     model_used: bool = False
+    model: str | None = None
 
     def add(self, model: str, usage: Usage) -> None:
         """Add one call's tokens under its model."""
@@ -127,6 +130,8 @@ class Orchestrator:
                 served_by, model = provider.name, self.last_model(run, route)
             except (ProviderError, RoundLimit) as exc:
                 reason = exc.reason if isinstance(exc, ProviderError) else "round_limit"
+                if isinstance(exc, ProviderError):
+                    self.log_provider_error(provider, run, exc, question)
                 yield Event("fallback", {"reason": reason, "notice": self.notice(reason)})
         if reason is not None:
             rules = self.offline.pinned(desk_question) if desk_question else self.offline
@@ -153,6 +158,15 @@ class Orchestrator:
             return "unavailable"
         return self.meter.check(visitor)
 
+    def status(self, visitor: str) -> str | None:
+        """Why built-in rules would answer this visitor's next typed question, or None.
+
+        BUSINESS: lets the screen show the Offline banner before anyone asks.
+        TECH: the same checks as ask(), without calling anything or counting.
+        """
+        route = self.cfg.tasks[TASK]
+        return self.blocked_reason(self.providers.get(route.provider, self.offline), visitor, None)
+
     # ------------------------------------------------------------------ the loop
 
     def loop(self, provider: LLMProvider, route: TaskRoute | None, question: str,
@@ -168,6 +182,7 @@ class Orchestrator:
         model = route.model if route else OFFLINE_MODEL
         failures = 0
         for _ in range(lim.max_rounds):
+            run.model = model  # TECH: the model being called, for the error log
             turn = provider.chat(self.system, messages, TOOL_SPECS, model,
                                  lim.max_output_tokens, self.options(route, model, run))
             run.rounds += 1
@@ -235,6 +250,25 @@ class Orchestrator:
         """Dollars for every model call in the question (budget.cost_usd per model)."""
         return sum((cost_usd(u, self.cfg.price(m)) for m, u in run.usage.items()
                     if m in self.cfg.models), Decimal(0))
+
+    @staticmethod
+    def log_provider_error(provider: LLMProvider, run: Run, exc: ProviderError, question: str) -> None:
+        """One warning log line saying why a model call failed.
+
+        BUSINESS: when Ask the Tape falls back to built-in rules, the operator
+          reading Render's logs sees the provider's own words ("credit balance is
+          too low", "model not found") and its HTTP status, not just "http_400".
+        TECH: provider, model, reason, status and the provider's message, which
+          base.sdk_detail has already cut to length and cleared of API keys. The
+          visitor's question is never logged: if the provider echoed it back, it is
+          replaced with "[question]" here.
+        """
+        detail = exc.detail or str(exc)
+        if question.strip():
+            detail = detail.replace(question.strip(), "[question]")
+        log.warning(json.dumps({"event": "provider_error", "provider": provider.name,
+                                "model": run.model, "reason": exc.reason,
+                                "status": exc.status, "message": detail}))
 
     def notice(self, reason: str) -> str:
         """The visitor-facing notice for a fallback reason (content/ask-the-tape.json)."""

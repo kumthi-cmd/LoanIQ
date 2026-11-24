@@ -16,6 +16,10 @@
  *     expected numbers from the API rather than hard-coding them.
  *   - One worker: all tests share one server and its in-memory tape.
  *   - The SPA must be built first (npm run build in frontend/); test.ps1 does that.
+ *   - ANTHROPIC_API_KEY is blanked for the test server (Step 4b), so Ask the Tape is
+ *     always answered by the built-in rules: free, repeatable, and never dependent
+ *     on a key someone has set in their shell. The live model is measured by
+ *     backend/scripts/eval_agent.py instead.
  */
 import { defineConfig, devices } from "@playwright/test";
 
@@ -40,6 +44,8 @@ export default defineConfig({
     cwd: "../backend",
     url: "http://localhost:8000/api/health",
     reuseExistingServer: false,
+    // TECH: added to the server's environment; an empty key switches the model off.
+    env: { ANTHROPIC_API_KEY: "" },
     timeout: 120_000,
   },
 });

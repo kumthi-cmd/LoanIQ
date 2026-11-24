@@ -115,11 +115,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
   display: flex; align-items: center; gap: 10px; padding: 0 12px; min-height: 36px;
   border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--muted);
 }
+/* TECH: the header box is a form (Step 4b); its border lights up while the input
+ *   inside has focus, since the input itself has no border or outline. */
+.ask-box:focus-within { border-color: var(--accent); }
 .ask-box input {
-  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--muted); font: inherit;
+  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit;
 }
-.ask-box input:disabled { cursor: not-allowed; }
+.ask-box input:focus-visible { outline: none; }
 .ask-box input::placeholder { color: var(--muted); }
+.ask-box kbd { font-family: inherit; }
 .row-count { font-weight: 600; }
 
 .app-body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 0; }
@@ -310,6 +314,153 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
 .build-fact dt { font-size: 12px; color: var(--muted); }
 /* TECH: numbers in tabular figures so tiles line up (.claude/rules/frontend.md). */
 .build-fact dd { margin: 4px 0 0; font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* ---- Loan Tape: a filter opened from Ask the Tape (Step 4b) ---- */
+.linked-filter {
+  margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 12px;
+  border: 1px solid var(--accent-border); background: var(--accent-bg); color: var(--accent-soft);
+  border-radius: 6px; font-size: 12.5px;
+}
+.btn-small { min-height: 30px; padding: 0 10px; font-size: 12px; }
+
+/* ---- Ask the Tape (Step 4b), to the "Ask the Tape" design board ----
+   TECH: two columns that wrap: the conversation takes the room, the side panels
+   keep 340-460 px, and on narrow screens the side panels move below. */
+.ask-layout { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+.conversation {
+  flex: 999 1 600px; min-width: 0; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; display: flex; flex-direction: column;
+}
+.turns { padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; }
+.ask-empty { margin: 0; line-height: 1.6; }
+.ask-side { flex: 1 1 340px; max-width: 460px; display: flex; flex-direction: column; gap: 12px; }
+.turn { display: flex; flex-direction: column; gap: 8px; }
+.question-bubble {
+  align-self: flex-end; max-width: 78%; padding: 12px 14px; line-height: 1.5; white-space: pre-wrap;
+  border-radius: 10px 10px 2px 10px; background: var(--accent-bg); border: 1px solid var(--accent-border);
+}
+.question-meta { align-self: flex-end; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.saved-as { display: inline-flex; align-items: center; gap: 8px; }
+.saved-as svg { color: var(--accent); }
+.saved-tag {
+  font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 4px;
+  background: var(--panel-2); border: 1px solid var(--accent-border); color: var(--accent-soft);
+}
+.answer { display: flex; gap: 12px; align-items: flex-start; margin-top: 4px; }
+.answer-avatar {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; background: var(--panel-2);
+  border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: var(--accent-soft);
+}
+.answer-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.answer-text { line-height: 1.6; }
+.answer-text p, .answer-text ul, .answer-text ol { margin: 0 0 8px; }
+.answer-text ul, .answer-text ol { padding-left: 20px; }
+.answer-text code { font-family: var(--mono); font-size: 12px; color: var(--accent-soft); }
+/* BUSINESS: built-in rules answered; the warning colours of the synthetic-data badge. */
+.answer-notice {
+  margin: 0; padding: 6px 10px; border-radius: 4px;
+  background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border);
+}
+.tool-chips { display: flex; flex-direction: column; gap: 8px; }
+.tool-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-chip {
+  min-height: 28px; padding: 0 8px; border-radius: 4px; cursor: pointer; font-size: 11.5px;
+  font-family: var(--mono); border: 1px solid var(--border); background: transparent; color: var(--muted);
+}
+.tool-chip[aria-expanded="true"] { border-color: var(--accent-border); color: var(--accent-soft); background: var(--accent-bg); }
+.tool-chip-refused { border-style: dashed; }
+.tool-detail {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+}
+.sql-block {
+  margin: 0; font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--accent-soft);
+  white-space: pre-wrap; overflow-x: auto;
+}
+.tool-reason { color: var(--warn-text); }
+.loan-id-link {
+  padding: 0; border: 0; background: none; cursor: pointer; font-family: var(--mono); font-size: 12px;
+  color: var(--accent-soft); text-decoration: underline dotted;
+}
+.result { display: flex; flex-direction: column; gap: 8px; }
+.result-table-wrap { border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; }
+.result-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.result-table th {
+  background: var(--panel-2); color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.04em; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.result-table td { padding: 7px 10px; border-bottom: 1px solid var(--row-line); white-space: nowrap; }
+.result-table .num { text-align: right; }
+.result-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; color: var(--muted); font-size: 11.5px;
+}
+.result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.result-actions a.btn { text-decoration: none; color: var(--text); }
+.ask-form {
+  margin-top: auto; padding: 14px 20px 18px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.prompt-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.prompt-chip {
+  min-height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+}
+.prompt-chip:disabled { color: var(--muted); cursor: not-allowed; }
+.ask-input-row { display: flex; gap: 10px; align-items: flex-end; }
+.ask-input-row textarea {
+  flex: 1; resize: none; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: inherit; line-height: 1.5;
+}
+.ask-input-row textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.send-btn {
+  width: 44px; height: 44px; border-radius: 8px; border: none; cursor: pointer;
+  background: var(--accent); color: var(--bg); display: flex; align-items: center; justify-content: center;
+}
+.send-btn:disabled { background: var(--panel-2); color: var(--muted); cursor: not-allowed; }
+.side-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.side-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.side-card-title { font-weight: 600; }
+.side-card-divider { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--row-line); }
+.saved-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.saved-button { min-height: 32px; padding: 0 10px; font-size: 11.5px; cursor: pointer; background: var(--accent-bg); white-space: nowrap; }
+.saved-button:disabled { cursor: wait; }
+.tool-list { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.tool-item { display: flex; flex-direction: column; gap: 2px; }
+.tool-item dd { margin: 0; line-height: 1.4; }
+.tool-name { font-family: var(--mono); font-size: 12px; color: var(--accent-soft); }
+.guard-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.guard-list li { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.5; }
+.guard-list svg { margin-top: 3px; flex: 0 0 auto; color: var(--accent); }
+/* BUSINESS: built-in rules are answering for now; the warning colours again. */
+.offline-banner {
+  display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 8px 12px; border-radius: 6px;
+  font-size: 12.5px; background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border);
+}
+.offline-banner .muted { color: var(--warn-text); }
+/* TECH: the loan drawer sits on the right edge; the backdrop dims the rest. */
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: 50; background: rgba(5, 9, 16, 0.6);
+  display: flex; justify-content: flex-end;
+}
+.loan-drawer {
+  width: min(440px, 100%); height: 100%; overflow-y: auto; padding: 16px 18px;
+  background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;
+}
+.drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mono-title { margin: 0; font-family: var(--mono); font-size: 16px; color: var(--accent-soft); }
+.loan-fields { margin: 0; display: flex; flex-direction: column; }
+.loan-field {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 6px 0;
+  border-bottom: 1px solid var(--row-line); font-size: 12.5px;
+}
+.loan-field dt { color: var(--muted); }
+.loan-field dd { margin: 0; font-variant-numeric: tabular-nums; }
+.loan-field dd.num { text-align: right; }
 
 /* ---- Narrow screens ---- */
 @media (max-width: 760px) {

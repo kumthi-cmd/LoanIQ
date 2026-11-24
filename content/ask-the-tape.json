@@ -1,5 +1,5 @@
 {
-  "_about": "Visitor-facing words for Ask the Tape that the back end sends: the built-in rules' answer templates and the notice shown when built-in rules answered instead of the model. Placeholders in {braces} are filled by backend/app/agent/providers/offline_provider.py with numbers from LoanIQ's tools. Which question a rule answers is set in backend/app/config/llm.toml [[offline.rule]]; chip labels come from content/desk-questions.json. All data is synthetic; all numbers come from the tape.",
+  "_about": "Visitor-facing words for Ask the Tape. \"offline\" and \"notices\" are sent by the back end: the built-in rules' answer templates and the notice shown when built-in rules answered instead of the model. Placeholders in {braces} are filled by backend/app/agent/providers/offline_provider.py with numbers from LoanIQ's tools. Which question a rule answers is set in backend/app/config/llm.toml [[offline.rule]]; chip labels come from content/desk-questions.json. All data is synthetic; all numbers come from the tape. \"screen\" holds the Ask the Tape screen's own captions (frontend/src/screens/AskTheTapeScreen.tsx, Step 4b); the longer explanation is in screens/ask-the-tape.md.",
   "offline": {
     "desk_question": "{label}: {loans} loans with {upb} of current UPB, at a WAC of {wac}. The loans are listed below, largest balance first.",
     "desk_question_empty": "{label}: no loans on this tape answer this question.",
@@ -15,5 +15,66 @@
     "refusal": "Answered by built-in rules: the AI model declined this question.",
     "round_limit": "Answered by built-in rules: the AI model needed more steps than LoanIQ allows for one question.",
     "error": "Answered by built-in rules: the AI model could not be reached."
+  },
+  "screen": {
+    "eyebrow": "Step 4 · Plain-English questions, answered from the tape",
+    "tagline": "Claude agent · read-only tools · every answer shows its query",
+    "placeholder": "Ask about the tape: loans, stories, averages, terms…",
+    "readOnlyNote": "The agent reads the tape only. It cannot change loans, trades or prices.",
+    "emptyState": "Ask a question about the tape, or pick one below. Answers come with the SQL behind them and the loans they found.",
+    "prompts": [
+      "10 largest balances with LTV over 125",
+      "WAC and WA FICO by program",
+      "ARMs that reset in the next 12 months",
+      "What is MTM LTV?"
+    ],
+    "thinking": "Working on it…",
+    "rowsShown": "{shown} of {total} rows shown",
+    "rowsCapped": "{total} rows match; the first {returned} were returned",
+    "showAll": "Show all {count}",
+    "showFewer": "Show fewer",
+    "openInLoanTape": "Open in Loan Tape",
+    "cannotOpen": "Can't open in the Loan Tape: {reason}",
+    "saveQuery": "Save query",
+    "savedAs": "Saved as",
+    "savedTitle": "Saved queries",
+    "savedHint": "Last 5 · click to rerun",
+    "savedEmpty": "Save an answer's query to rerun it here in one click, without the model.",
+    "rerunNote": "Rerun of a saved query: the stored SQL ran on the tape again. No AI model was called.",
+    "offlineTitle": "Offline is answering",
+    "offlineMore": "Desk questions and saved queries work as usual.",
+    "toolsTitle": "Tools the agent can call",
+    "tools": [
+      {
+        "name": "list_columns",
+        "what": "The tape’s fields, types and units, from the schema."
+      },
+      {
+        "name": "query_tape",
+        "what": "One read-only SELECT over DuckDB with bound values; 500-row cap."
+      },
+      {
+        "name": "summarize_tape",
+        "what": "Count, current UPB and UPB-weighted WAC, FICO and LTV."
+      },
+      {
+        "name": "lookup_term",
+        "what": "A definition and why it matters, from the shared glossary."
+      },
+      {
+        "name": "get_loan",
+        "what": "Every field of one loan, by its loan ID."
+      }
+    ],
+    "guardrailsTitle": "Guardrails",
+    "guardrails": [
+      "Read-only connection: the agent cannot write to the tape.",
+      "Every query is checked first: one SELECT, known columns, values bound as parameters.",
+      "Every answer shows the SQL behind it; click a tool to see it.",
+      "Synthetic loans only. No real borrowers, names or addresses."
+    ],
+    "loanDrawerTitle": "Loan {loanId}",
+    "loanDrawerNote": "Every field of this loan, read by the agent's get_loan tool.",
+    "errorPrefix": "Could not get an answer: "
   }
 }

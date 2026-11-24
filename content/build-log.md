@@ -1,6 +1,60 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 4b, the Ask the Tape screen (2026-11-24)
+- Built: the Ask the Tape screen, built to the "Ask the Tape" design board. A trader
+  types a question, or picks an example. The answer streams in with a chip for each
+  tool the agent called; clicking a chip shows the exact SQL it ran. Under the answer
+  are the rows behind it, formatted like the Loan Tape. Every loan ID, in the answer
+  or the table, opens a drawer with all of that loan's fields, read by the agent's
+  own `get_loan` tool. "Open in Loan Tape" opens the full grid with the same filter
+  and sort, written as ordinary column filters. When a filter can't be written that
+  way, the button says why. "Save query" keeps the answer's SQL in the browser (the
+  last 5), and one click reruns it with no AI model. A small "Offline" banner shows
+  when built-in rules are answering. The header's "Ask the tape" box and Ctrl K open
+  the screen with the question filled in but not sent. Ask the Tape is now live in
+  the sidebar. Back end: `GET /api/ask/status`, `GET /api/ask/loans/{id}`,
+  `POST /api/ask/rerun`, a Loan Tape link on every query result, and the grid's
+  number filter gains "or equal" and "not equal". When a model call fails, the log
+  now has the provider's own message and status, never the key or the question.
+- Desk problem it solves: the answer is a starting point, not a dead end. From one
+  question the trader can check the SQL, inspect a single loan, take the slice into
+  the full grid to keep working, and rerun the same question on the next tape for
+  free.
+- My key decisions: build to the design board, with tool chips that show their SQL,
+  a loan drawer, "Open in Loan Tape" from the URL, saved queries rerun without the
+  model, an Offline banner, and Ctrl K. "Send to Slotting" stays hidden until Step
+  5. The answer's filter is translated into the grid's own column filters, and is
+  refused with a reason rather than approximated. Saved queries live in the browser
+  and rerun through the same guardrails as the model's SQL. Every result is a plain
+  table for now. Model errors are logged with the provider's message. Reasons:
+  docs/decisions.md.
+- What Claude Code did: read the design board on the canvas and the Step 4a engine,
+  proposed the plan and three decisions, then built the back-end routes and the SQL
+  to grid-filter translation, the screen and its components, the content and
+  glossary entries, and the tests, and ran every layer. Along the way:
+  - The redaction test caught a real bug: "Authorization: Bearer tok123" kept the
+    token, because the pattern took "Bearer" as the value. The pattern now removes
+    the token.
+  - The first end-to-end run found two ambiguous locators: AG Grid's floating filter
+    has its own "Clear" button, so the Loan Tape's button became "Show the whole
+    tape", and the Offline notice appears in the banner and under the answer.
+  - Existing tests changed only where the requirement changed: Ask the Tape is live
+    in the sidebar and routes, the header box is enabled instead of disabled, and
+    "not equal" is now a supported grid filter (the rejection case moved to
+    "notBlank").
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 452 tests
+  (59 new: the SQL to grid-filter translation, each operator and each refusal, and
+  a check that the grid counts the same loans as the agent's SQL; the status, loan
+  and rerun routes and their guardrails; the new grid operators; provider error
+  logging with keys and questions removed; the screen's tool list matching the
+  agent's), coverage 99.1%. Front end: 173 Vitest tests (49 new: the stream reader,
+  the turn model, saved queries, the Loan Tape URL, formatting, the screen's whole
+  loop, the header box and Ctrl K, the Loan Tape's filter from the URL). End to
+  end: 24 Playwright tests (6 new, on the built-in rules).
+- My take:
+
 ## Step 4a, the Ask the Tape engine (back end) (2026-11-23)
 - Built: the engine behind Ask the Tape, following the design in content/agent.md.
   A visitor's question goes to Claude Haiku 5.5, which plans and explains; five

@@ -24,6 +24,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.agent.loan_tape_link import LoanTapeLink
+
 
 class StoredQuery(BaseModel):
     """One query_tape result, as the screen gets it.
@@ -31,7 +33,9 @@ class StoredQuery(BaseModel):
     BUSINESS: "Loans over 125 LTV: 20 rows" plus the SQL that produced them.
     TECH: rows are lists in `columns` order (smaller JSON than dicts). row_count
       is rows returned (at most max_rows); total_rows counts every row that
-      matched; truncated is True when total_rows > row_count.
+      matched; truncated is True when total_rows > row_count. loan_tape is how to
+      open the result in the Loan Tape with the same filter (loan_tape_link.py,
+      Step 4b); None only for results stored before it existed.
     """
     query_id: str
     title: str
@@ -41,6 +45,7 @@ class StoredQuery(BaseModel):
     row_count: int
     total_rows: int
     truncated: bool
+    loan_tape: LoanTapeLink | None = None
 
 
 class QueryStore:
