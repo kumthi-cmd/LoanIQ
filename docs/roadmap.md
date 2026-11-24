@@ -1,5 +1,8 @@
 # Roadmap
-Current step: Step 4c done (2026-11-24): Ask the Tape answers about specific loans
+Current step: Step 4d done (2026-11-24): the gold Agent mark beside Ask the Tape
+(sidebar and title) with a one-line tooltip and a popover explaining the agent
+(content/agent.md and a loop diagram). Planned Tape Upload and Explorer moved to the
+end of the Trade group. Step 4c: Ask the Tape answers about specific loans
 show the Loan Tape's 12 default columns, packed to the data (one list for both
 screens in api.toml). Step 4b, the Ask the Tape screen, is on `main`. Step 4a, the
 engine, is merged into `main`. Step 4 was
@@ -19,7 +22,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
-| 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns | 5-7 | 7 (4a: 3, 4b: 4) |
+| 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns, 4d Agent mark | 5-7 | 8.5 (4a: 3, 4b: 4, 4d: 1.5) |
 | 5 Slotting rules engine | Not started | 3-4 | |
 | 6 Price file and best execution | Not started | 5-7 | |
 | 7 Blotter and position monitor | Not started | 6-8 | |

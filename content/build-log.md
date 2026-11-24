@@ -1,6 +1,45 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 4d, the Agent mark and its explainer (2026-11-24)
+- Built: a small gold "Agent" mark (the LoanIQ Labs flask and the word "Agent") beside
+  Ask the Tape in the sidebar and beside the screen's title. Hovering it shows the new
+  glossary entry "Agent" in one line. Clicking it opens a popover with
+  `content/agent.md` and a new diagram, `content/diagrams/ask-the-tape-agent.svg`. The
+  diagram shows the loop (question, Claude plans, guardrails, tool on DuckDB, result
+  back, repeat, answer with SQL) and who does what (Claude, orchestrator, tools,
+  DuckDB). The planned Tape Upload and Explorer moved to the end of the Trade group,
+  after Optimizer.
+- Desk problem it solves: a visitor can see which screen uses AI and, in one click,
+  that Claude only plans and explains while LoanIQ's code and DuckDB produce every
+  number. Without that, a trader has no reason to trust the answer.
+- My key decisions: the mark is its own button after the link, never inside it; the
+  explainer reuses `content/agent.md` word for word; the diagram is an image, not
+  inlined markup; Tape Upload and Explorer go at the end of Trade, not in a new group.
+- What Claude Code did: added `agent` to the nav items, built AgentMark and
+  AgentExplainer (tooltip and popover drawn at the end of the page, so the scrolling
+  sidebar cannot clip them), gave ShowcaseMarkdown an optional heading id so the
+  popover is named by its own heading, drew the SVG in the app's colours, and wrote
+  the tests. Tests caught two things. First, after an outside click the browser moves
+  focus to the page once the click is handled, which undid the return to the mark.
+  Focus now comes back after the click, and only if it did not land in another box.
+  Second, the route test found links by label, and the Ask the Tape link is now
+  named "Ask the Tape, agent" on purpose.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 461 tests
+  (unchanged), coverage 99.1%. Front end: 186 Vitest tests (12 new: only agent items
+  show the mark, outside the link, whose name says "agent"; the tooltip reads the
+  glossary on hover and focus; the sidebar mark opens the explainer without
+  navigating, with the diagram; an outside click closes it and returns focus, but
+  never steals it from a box the visitor clicked; the title mark opens it, Esc closes
+  it and focus returns; Close and a second click close it; the Agent term exists;
+  five popover-placement checks. 2 updated: the sidebar test checks the Trade group's
+  new order, and the route test asks for the agent link's name). End to end: 27 Playwright tests (2 new:
+  the sidebar mark sits on the link's row, opens the explainer without leaving the
+  Loan Tape, the diagram loads, Esc closes it and focus returns; the title mark opens
+  and closes the same explainer).
+- My take:
+
 ## Step 4c, Ask the Tape answers show the default loan columns (2026-11-24)
 - Built: every Ask the Tape answer about specific loans now shows the 12 columns the
   Loan Tape opens with (loan ID, seller, program, product, note rate, current UPB,

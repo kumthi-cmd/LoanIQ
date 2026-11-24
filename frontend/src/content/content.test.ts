@@ -5,6 +5,7 @@
  *   Technical sections (.claude/rules/showcase.md).
  */
 import { describe, expect, it } from "vitest";
+import { AGENT_TERM } from "../components/AgentMark";
 import { TILES } from "../components/KpiTiles";
 import {
   columnTerms, deskQuestionLabels, fillCaption, glossary, lookupTerm, screenExplanations, screenTerms,
@@ -25,6 +26,11 @@ describe("glossary", () => {
     for (const [column, term] of Object.entries(columnTerms)) {
       expect(lookupTerm(term), `${column} -> ${term}`).toBeDefined();
     }
+  });
+
+  // BUSINESS: the Agent mark's tooltip reads its one line from the glossary (Step 4d).
+  it("has the term the Agent mark's tooltip reads", () => {
+    expect(lookupTerm(AGENT_TERM)?.definition).toBeTruthy();
   });
 
   it("has every term the KPI tiles point to", () => {

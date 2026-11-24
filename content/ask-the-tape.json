@@ -17,6 +17,13 @@
     "error": "Answered by built-in rules: the AI model could not be reached."
   },
   "screen": {
+    "agentMark": {
+      "label": "Agent",
+      "linkSuffix": ", agent",
+      "openLabel": "Agent: how the Ask the Tape agent works",
+      "close": "Close",
+      "diagramAlt": "The Ask the Tape agent loop. A question goes to Claude, which plans the next step and picks a tool. LoanIQ's orchestrator checks the call against its guardrails: one read-only query, known columns, row and time limits. The tool runs on DuckDB and the result goes back to Claude, which repeats until it can answer. The answer comes back with the SQL behind it. Who does what: Claude plans and explains; the orchestrator runs the loop and enforces the limits; the tools do every calculation; DuckDB is the single source of truth."
+    },
     "eyebrow": "Step 4 · Plain-English questions, answered from the tape",
     "tagline": "Claude agent · read-only tools · every answer shows its query",
     "placeholder": "Ask about the tape: loans, stories, averages, terms…",

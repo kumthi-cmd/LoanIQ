@@ -33,7 +33,8 @@ The screen sends the question to `POST /api/ask` and reads the answer as a strea
 Server-Sent Events: each tool call and its result (with the SQL), any fallback, the
 answer, then a summary with the cost. Each result's rows come from
 `GET /api/ask/queries/{id}`. The agent's loop, tools and guardrails are described in
-`content/agent.md`.
+`content/agent.md`. The gold **Agent** mark beside the title and in the sidebar
+opens that same text and a diagram of the loop, without leaving the screen.
 
 Three more routes serve the screen, and none of them calls a model:
 - `GET /api/ask/status` tells the screen whether the model or the built-in rules will

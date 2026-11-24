@@ -26,6 +26,7 @@
  *     The effect runs on every navigation (location.key), so Ctrl K works again
  *     while already on this screen.
  *   - Saved queries live in the screen's state and in localStorage (savedQueries.ts).
+ *   - The Agent mark beside the title (Step 4d) opens how the agent works.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useLocation, useSearchParams } from "react-router";
@@ -36,6 +37,7 @@ import { applyEvent, failTurn, newTurn, rerunTurn, resultSteps, type Turn } from
 import {
   addSaved, findSaved, loadSaved, storeSaved, tagFor, type SavedQuery,
 } from "../ask/savedQueries";
+import { AgentMark } from "../components/AgentMark";
 import { AgentToolsPanel } from "../components/ask/AgentToolsPanel";
 import { AnswerTurn } from "../components/ask/AnswerTurn";
 import { LoanDrawer } from "../components/ask/LoanDrawer";
@@ -194,7 +196,12 @@ export function AskTheTapeScreen() {
       <div className="screen-title-row">
         <div className="screen-title">
           <span className="eyebrow">{words.eyebrow}</span>
-          <h2>Ask the Tape</h2>
+          {/* BUSINESS: the Agent mark says Claude answers here; click it to see how.
+              TECH: beside the h2, not inside it, so the heading stays "Ask the Tape". */}
+          <div className="screen-title-heading">
+            <h2>Ask the Tape</h2>
+            <AgentMark />
+          </div>
         </div>
         <span className="muted tape-line">{words.tagline}</span>
         <div className="title-actions">

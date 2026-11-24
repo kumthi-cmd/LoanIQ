@@ -8,7 +8,8 @@
  *   - an answer shows its tool chips, the SQL behind them and its loans;
  *   - a loan ID opens the loan drawer;
  *   - "Open in Loan Tape" shows exactly the same loans in the grid, or says why not;
- *   - a saved query survives a reload and reruns without any model call.
+ *   - a saved query survives a reload and reruns without any model call;
+ *   - the Agent mark (sidebar and title) explains the agent without navigating (4d).
  * TECH: the test server runs with ANTHROPIC_API_KEY blanked (playwright.config.ts),
  *   so the built-in rules answer: free and repeatable. Expected counts come from
  *   the API (`request` fixture), never hard-coded. Elements are found by role and
@@ -147,4 +148,48 @@ test("a loan-level answer shows the 12 default columns, packed to the data (Step
     const box = await table.getByRole("columnheader", { name, exact: true }).boundingBox();
     expect(box!.width).toBeLessThan(70);
   }
+});
+
+// BUSINESS (Step 4d): the Agent mark says Claude answers Ask the Tape. From any
+//   screen, clicking it explains the agent (content/agent.md and the loop diagram)
+//   without leaving the screen; Esc closes it and the keyboard is back on the mark.
+// TECH: the diagram must really load from the built app (naturalWidth > 0), and the
+//   mark must sit on the same row as its link, at 1440 px wide.
+test("the sidebar Agent mark explains the agent without navigating, and Esc closes it", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Screens" });
+  const link = nav.getByRole("link", { name: "Ask the Tape, agent", exact: true });
+  const mark = nav.getByRole("button", { name: /^Agent/ });
+  await expect(mark).toHaveCount(1);
+  await expect(mark).toContainText("Agent");
+
+  // TECH: one row: the mark's middle lies within the link's height, right of it.
+  const lb = (await link.boundingBox())!;
+  const mb = (await mark.boundingBox())!;
+  expect(mb.x).toBeGreaterThanOrEqual(lb.x + lb.width - 1);
+  expect(mb.y + mb.height / 2).toBeGreaterThan(lb.y);
+  expect(mb.y + mb.height / 2).toBeLessThan(lb.y + lb.height);
+
+  await mark.click();
+  await expect(page).toHaveURL(/\/$/);
+  const dialog = page.getByRole("dialog", { name: "The Ask the Tape agent" });
+  await expect(dialog).toBeVisible();
+  const diagram = dialog.getByRole("img", { name: /The Ask the Tape agent loop/ });
+  await expect(diagram).toBeVisible();
+  expect(await diagram.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(mark).toBeFocused();
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("the Agent mark beside the Ask the Tape title opens the same explainer", async ({ page }) => {
+  await page.goto("/ask");
+  const main = page.getByRole("main");
+  await main.getByRole("button", { name: /^Agent/ }).click();
+  await expect(page.getByRole("dialog", { name: "The Ask the Tape agent" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });

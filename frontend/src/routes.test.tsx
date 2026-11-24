@@ -37,11 +37,14 @@ describe("live routes", () => {
     expect(live.map((i) => i.path)).toEqual(["/", "/ask", "/about", "/how-it-was-built"]);
   });
 
-  it.each(live.map((i) => [i.label, i.path]))("%s (%s) renders its own screen", (label, path) => {
+  // TECH: an agent item's link is named "<label>, agent" (Step 4d, Sidebar.tsx), so a
+  //   screen reader hears that Claude answers there; the test asks for that name.
+  it.each(live.map((i) => [i.label, i.path, i.agent ? `${i.label}, agent` : i.label]))(
+    "%s (%s) renders its own screen", (_label, path, linkName) => {
     renderAt(path);
     expect(screen.queryByRole("heading", { name: "Screen not found" })).not.toBeInTheDocument();
     // BUSINESS: the sidebar marks this entry as the current page.
-    expect(screen.getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: linkName })).toHaveAttribute("aria-current", "page");
   });
 
   // TECH: the control case: the "*" route still catches a path no screen owns.
