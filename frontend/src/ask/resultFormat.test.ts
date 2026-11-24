@@ -10,11 +10,11 @@ import type { ColumnInfo } from "../api/types";
 import { columnLabel, formatCell, isNumericColumn, linkLoanIds, loanIdFromHref } from "./resultFormat";
 
 const COLS = new Map<string, ColumnInfo>([
-  ["current_upb", { name: "current_upb", type: "DECIMAL(14,2)", kind: "number", label: "Current UPB ($)" }],
-  ["note_rate", { name: "note_rate", type: "DECIMAL(6,3)", kind: "number", label: "Note Rate (%)" }],
-  ["ltv", { name: "ltv", type: "DECIMAL(6,2)", kind: "number", label: "LTV (%)" }],
-  ["orig_date", { name: "orig_date", type: "DATE", kind: "date", label: "Origination date" }],
-  ["modified", { name: "modified", type: "BOOLEAN", kind: "boolean", label: "Modified" }],
+  ["current_upb", { name: "current_upb", type: "DECIMAL(14,2)", kind: "number", label: "Current UPB ($)", default_visible: false }],
+  ["note_rate", { name: "note_rate", type: "DECIMAL(6,3)", kind: "number", label: "Note Rate (%)", default_visible: false }],
+  ["ltv", { name: "ltv", type: "DECIMAL(6,2)", kind: "number", label: "LTV (%)", default_visible: false }],
+  ["orig_date", { name: "orig_date", type: "DATE", kind: "date", label: "Origination date", default_visible: false }],
+  ["modified", { name: "modified", type: "BOOLEAN", kind: "boolean", label: "Modified", default_visible: false }],
 ]);
 
 describe("formatCell", () => {

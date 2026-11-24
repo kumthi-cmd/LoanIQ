@@ -4,6 +4,9 @@
  * BUSINESS: how many loans the grid fetches per request, how many it keeps in
  *   memory, and which of the tape's ~41 fields a trader sees first. ILLUSTRATIVE
  *   engineering and display choices, not industry rules.
+ *   WHICH columns show first is not here: it lives once, in
+ *   backend/app/config/api.toml [columns], and reaches the grid as each column's
+ *   default_visible flag (Step 4c), because Ask the Tape uses the same list.
  * TECH: blockSize (loans per request) must not exceed the API's max_limit (500, in
  *   backend/app/config/api.toml), or the server caps the block and the grid would
  *   show gaps. 100 matches the API's default_limit. maxBlocksInCache x blockSize is
@@ -19,20 +22,6 @@ export const gridConfig = {
 } as const;
 
 /**
- * The columns shown when the screen opens, in the order they appear on the tape.
- * BUSINESS: the fields a trader reads first on any tape: who sold it, what it is
- *   (program, product), where (state), its coupon and size (note rate, current UPB),
- *   its credit (FICO, LTV, DTI), whether it pays (DQ status) and who lives there
- *   (occupancy). Every other field stays one click away under "Columns".
- * TECH: names are tape columns from /api/loans/columns; a name the tape does not
- *   have is ignored. loan_id is always shown and pinned (loanColumns.ts).
- */
-export const DEFAULT_VISIBLE_COLUMNS: readonly string[] = [
-  "loan_id", "seller", "program", "product", "state", "note_rate",
-  "current_upb", "fico", "ltv", "dti", "dq_status", "occupancy",
-];
-
-/**
  * Starting width of each default column, in CSS pixels, fitted to its content.
  * BUSINESS: at 1440 px, the width the "1 · Loan Tape" design board is drawn for, all
  *   12 default columns show without scrolling sideways while the explanation is
@@ -41,7 +30,8 @@ export const DEFAULT_VISIBLE_COLUMNS: readonly string[] = [
  *   choices, sized like the board's table: narrow for 3-digit FICO and 2-letter
  *   state, wide for seller names. A trader can still drag any column wider.
  * TECH: applied in buildColumnDefs (loanColumns.ts); a column not listed keeps the
- *   grid default (LoanGrid.tsx). The sum must stay within the grid's width at 1440 px
+ *   grid default (LoanGrid.tsx). The keys must be exactly api.toml's
+ *   [columns] default_visible names; loanColumns.test.ts reads that file to check. The sum must stay within the grid's width at 1440 px
  *   with the explanation closed (about 1,150 px); Playwright checks it in a real
  *   browser (e2e/tests/loan-tape-layout.spec.ts).
  */

@@ -24,6 +24,9 @@ TECH:
       ToolOutcome.rejected tells the orchestrator to count a guardrail failure.
     - The model gets totals plus the first rows_to_model rows as compact CSV (far
       fewer tokens than JSON). The full result goes to the QueryStore.
+    - A loan-level result (one row per loan_id) is widened for the screen with the
+      default tape columns (api.toml [columns], Step 4c): add_base_columns. The
+      model still reads only the columns its SQL selected (agent_view).
 """
 
 from __future__ import annotations
@@ -179,14 +182,19 @@ class TapeTools:
       glossary   content/glossary.json entries: {term, definition, why}
       summarize  returns (summary dict, the SQL behind it); main.py supplies it so
                  the tool's numbers match the Loan Tape screen exactly
+      base_columns  the default columns every loan-level result shows on screen
+                 (api.toml [columns]); [] shows only what the SQL selected
     """
 
     def __init__(self, con: duckdb.DuckDBPyConnection, columns: ColumnTypes,
                  labels: dict[str, str], glossary: list[dict[str, str]],
                  summarize: Callable[[], tuple[dict[str, Any], str]],
-                 store: QueryStore, limits: Limits) -> None:
+                 store: QueryStore, limits: Limits, base_columns: list[str] | None = None) -> None:
         self.con, self.columns, self.labels = con, columns, labels
         self.glossary, self.summarize, self.store, self.limits = glossary, summarize, store, limits
+        # TECH: only real tape columns; they are later quoted into SQL, so a name the
+        #   tape does not have must never get that far.
+        self.base_columns = [c for c in (base_columns or []) if c in columns]
 
     def run(self, call: ToolCall) -> ToolOutcome:
         """Run one call. Never raises: failures become error results.
@@ -226,8 +234,11 @@ class TapeTools:
           store every row -> totals + first rows as CSV for the model.
         """
         stored = self.run_query(args["sql"], args["title"])
-        content = query_text(stored, self.limits.rows_to_model)
-        preview = [dict(zip(stored.columns, r)) for r in stored.rows[:self.limits.rows_to_model]]
+        # TECH: the model reads only the columns its own SQL selected, so the added
+        #   display columns cost no tokens and cannot change its answer.
+        own = agent_view(stored)
+        content = query_text(own, self.limits.rows_to_model)
+        preview = [dict(zip(own.columns, r)) for r in own.rows[:self.limits.rows_to_model]]
         data = {"query_id": stored.query_id, "row_count": stored.row_count,
                 "total_rows": stored.total_rows, "rows": preview}
         # TECH: loan_tape rides on the event so the screen's "Open in Loan Tape"
@@ -242,9 +253,12 @@ class TapeTools:
         """Check, run and store one SELECT. Shared by query_tape and saved-query reruns.
 
         BUSINESS: a saved query reruns through exactly the gate the model's SQL
-          passes, so a rerun can do nothing the agent could not (Step 4b).
+          passes, so a rerun can do nothing the agent could not (Step 4b). A
+          loan-level result also shows the default tape columns (Step 4c).
         TECH: guard -> run capped query -> count the full match only if capped ->
-          store every row with its Loan Tape link. Raises ToolFailure.
+          add the default columns -> store every row with its Loan Tape link.
+          Raises ToolFailure. The stored SQL and the Loan Tape link are the agent's
+          own query; the added columns are for display only.
         """
         lim = self.limits
         try:
@@ -255,12 +269,67 @@ class TapeTools:
         truncated = len(rows) > lim.max_rows
         rows = rows[:lim.max_rows]
         total = run_sql(self.con, q.count_sql, q.params, lim.query_timeout_ms)[1][0][0] if truncated else len(rows)
+        names, rows, added = self.add_base_columns(names, rows)
         stored = StoredQuery(query_id=QueryStore.new_id(), title=str(title)[:120],
                              sql=q.display_sql, columns=names, rows=rows, row_count=len(rows),
                              total_rows=total, truncated=truncated,
-                             loan_tape=loan_tape_link(q.display_sql, self.columns))
+                             loan_tape=loan_tape_link(q.display_sql, self.columns),
+                             added_columns=added)
         self.store.put(stored)
         return stored
+
+    def add_base_columns(self, names: list[str], rows: list[list[Any]]
+                         ) -> tuple[list[str], list[list[Any]], list[str]]:
+        """Widen a loan-level result with the default tape columns, for the screen.
+
+        BUSINESS: "the 5 largest New York loans" may come back from the agent as just
+          loan ID and balance. A trader still wants seller, program, coupon, FICO, LTV
+          and the rest beside it, as on the Loan Tape, so every loan-level answer
+          shows the same default columns (api.toml [columns]).
+        TECH:
+          - Applies only when the result has a loan_id column, its column names are
+            unique, and no loan_id repeats (one row per loan). Grouped results
+            ("UPB by state") and empty results come back unchanged.
+          - One extra parameterised query fetches the base columns for the returned
+            loan IDs: loan_id IN (SELECT UNNEST(?)), with the IDs as ONE list
+            parameter (DuckDB's UNNEST turns a list into rows). Column names come from
+            the tape's own column list, never from the model. select_list casts
+            money to DOUBLE, as for the grid.
+          - Column order: loan_id, then the base columns in tape order (as the Loan
+            Tape grid shows them), then the agent's other columns in its order. A base column the agent selected
+            keeps the agent's value (it may be computed, e.g. ROUND(ltv) AS ltv).
+          - Row order stays the agent's (its ORDER BY): rows are rebuilt in Python
+            by loan ID, not re-sorted by DuckDB.
+          Returns (columns, rows, names of the columns added).
+        """
+        if (not rows or not self.base_columns or "loan_id" not in names
+                or len(set(names)) != len(names)):
+            return names, rows, []
+        id_at = names.index("loan_id")
+        ids = [r[id_at] for r in rows]
+        if len(set(ids)) != len(ids):
+            return names, rows, []
+        added = [c for c in self.base_columns if c not in names and c != "loan_id"]
+        if not added:
+            return names, rows, []
+        # TECH: fetch the missing base columns for exactly these loans.
+        fetch = ["loan_id", *added]
+        sql = (f"SELECT {select_list({c: self.columns[c] for c in fetch})} FROM loans "
+               "WHERE loan_id IN (SELECT UNNEST(?))")
+        _, extra_rows = run_sql(self.con, sql, [ids], self.limits.query_timeout_ms)
+        by_id = {r[0]: r[1:] for r in extra_rows}
+        # BUSINESS: loan ID first, the trader's default fields next, then whatever
+        #   the agent computed for this question (rate spread, loan age, ...).
+        order = ["loan_id", *[c for c in self.base_columns if c != "loan_id"],
+                 *[n for n in names if n not in self.base_columns and n != "loan_id"]]
+        added_at = {c: i for i, c in enumerate(added)}
+        own_at = {n: i for i, n in enumerate(names)}
+        missing = [None] * len(added)
+        out = []
+        for r in rows:
+            fetched = by_id.get(r[id_at], missing)
+            out.append([r[own_at[c]] if c in own_at else fetched[added_at[c]] for c in order])
+        return order, out, added
 
     def summarize_tape(self, _: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """BUSINESS: what a trader quotes first about a tape. TECH: the screen's own SQL."""
@@ -306,6 +375,22 @@ def check_input(call: ToolCall) -> None:
         raise ToolFailure(f"{call.name} takes exactly {sorted(expected) or 'no'} arguments.")
     if any(not isinstance(call.input[k], str) for k in expected):
         raise ToolFailure(f"{call.name}: every argument must be text.")
+
+
+def agent_view(q: StoredQuery) -> StoredQuery:
+    """The result as the agent's SQL produced it: the added display columns removed.
+
+    BUSINESS: the model answers from the columns it asked for; the default columns
+      added for the trader's screen (add_base_columns) are not part of its evidence.
+    TECH: a copy (Pydantic model_copy) with the added columns dropped from columns
+      and from every row; the stored result itself is not changed.
+    """
+    if not q.added_columns:
+        return q
+    keep = [i for i, c in enumerate(q.columns) if c not in q.added_columns]
+    return q.model_copy(update={"columns": [q.columns[i] for i in keep],
+                                "rows": [[r[i] for i in keep] for r in q.rows],
+                                "added_columns": []})
 
 
 def query_text(q: StoredQuery, rows_to_model: int) -> str:

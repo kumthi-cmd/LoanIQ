@@ -7,18 +7,21 @@
 import type { CellClassParams, ColDef, ValueFormatterParams } from "ag-grid-community";
 import { describe, expect, it } from "vitest";
 import type { ColumnInfo, LoanRow } from "../api/types";
-import { DEFAULT_COLUMN_WIDTHS, DEFAULT_VISIBLE_COLUMNS } from "./gridConfig";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { DEFAULT_COLUMN_WIDTHS } from "./gridConfig";
 import { buildColumnDefs, isDelinquent, NUMBER_FILTER_OPTIONS, TEXT_FILTER_OPTIONS } from "./loanColumns";
 
 const COLUMNS: ColumnInfo[] = [
-  { name: "loan_id", type: "VARCHAR", kind: "text", label: "Loan ID" },
-  { name: "current_upb", type: "DECIMAL(14,2)", kind: "number", label: "Current UPB ($)" },
-  { name: "note_rate", type: "DOUBLE", kind: "number", label: "Note Rate (%)" },
-  { name: "ltv", type: "DOUBLE", kind: "number", label: "LTV (%)" },
-  { name: "orig_date", type: "DATE", kind: "date", label: "Origination Date" },
-  { name: "mod_flag", type: "BOOLEAN", kind: "boolean", label: "Modified" },
-  { name: "dq_status", type: "VARCHAR", kind: "text", label: "DQ Status" },
-  { name: "property_type", type: "VARCHAR", kind: "text", label: "Property Type" },
+  { name: "loan_id", type: "VARCHAR", kind: "text", label: "Loan ID", default_visible: false },
+  { name: "current_upb", type: "DECIMAL(14,2)", kind: "number", label: "Current UPB ($)", default_visible: false },
+  { name: "note_rate", type: "DOUBLE", kind: "number", label: "Note Rate (%)", default_visible: false },
+  { name: "ltv", type: "DOUBLE", kind: "number", label: "LTV (%)", default_visible: false },
+  { name: "orig_date", type: "DATE", kind: "date", label: "Origination Date", default_visible: false },
+  { name: "mod_flag", type: "BOOLEAN", kind: "boolean", label: "Modified", default_visible: false },
+  { name: "dq_status", type: "VARCHAR", kind: "text", label: "DQ Status", default_visible: false },
+  { name: "property_type", type: "VARCHAR", kind: "text", label: "Property Type", default_visible: false },
 ];
 
 const defs = buildColumnDefs(COLUMNS);
@@ -109,6 +112,19 @@ describe("buildColumnDefs with hidden columns", () => {
   });
 });
 
+/**
+ * The default column names from backend/app/config/api.toml [columns] default_visible.
+ * TECH: the list lives in the back end since Step 4c (one list for both screens).
+ *   Node's fs reads the TOML in the test only; a regex pulls the quoted names out of
+ *   the default_visible = [ ... ] array, so no TOML package is needed.
+ */
+function configuredDefaultColumns(): string[] {
+  const toml = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../../backend/app/config/api.toml"), "utf8");
+  const array = /default_visible\s*=\s*\[([^\]]*)\]/.exec(toml);
+  if (!array) throw new Error("api.toml has no [columns] default_visible list");
+  return [...array[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+}
+
 describe("buildColumnDefs default widths (Step 1g)", () => {
   // BUSINESS: the default columns start fitted to their content, so all 12 show at
   //   1440 px with the explanation closed (e2e/tests/loan-tape-layout.spec.ts checks
@@ -128,7 +144,7 @@ describe("buildColumnDefs default widths (Step 1g)", () => {
   // BUSINESS: every default column has a width, and they add up to less than the
   //   grid's width at 1440 px with the explanation closed (about 1,150 px).
   it("sizes all 12 default columns within the 1440 px budget", () => {
-    expect(Object.keys(DEFAULT_COLUMN_WIDTHS).sort()).toEqual([...DEFAULT_VISIBLE_COLUMNS].sort());
+    expect(Object.keys(DEFAULT_COLUMN_WIDTHS).sort()).toEqual(configuredDefaultColumns().sort());
     const total = Object.values(DEFAULT_COLUMN_WIDTHS).reduce((a, b) => a + b, 0);
     expect(total).toBeLessThanOrEqual(1150);
   });

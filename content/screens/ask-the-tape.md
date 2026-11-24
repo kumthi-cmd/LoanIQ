@@ -19,6 +19,16 @@ When the AI model isn't available, built-in rules answer instead and a small
 reached. The desk questions and saved queries still work. All loans are synthetic.
 
 ## Technical
+When an answer is about specific loans (one row per loan), its table always shows
+the same 12 columns the Loan Tape opens with, in the same order, followed by any
+column the agent worked out for the question. The server adds them. It reads the
+list from one setting (`backend/app/config/api.toml`) that both screens use, and
+fetches the missing fields for exactly those loan IDs in one query with bound
+values. The AI model never sees the added columns, so they cost nothing in tokens and
+can't change its answer. The SQL shown on screen is still exactly what the agent
+ran. Each column is as wide as its widest value, and headers wrap if needed, so all
+12 fit across without stretching.
+
 The screen sends the question to `POST /api/ask` and reads the answer as a stream of
 Server-Sent Events: each tool call and its result (with the SQL), any fallback, the
 answer, then a summary with the cost. Each result's rows come from

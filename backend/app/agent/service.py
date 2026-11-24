@@ -54,10 +54,13 @@ def build_ask_service(parquet_path: Path, columns: ColumnTypes, labels: dict[str
                       desk_where: dict[str, str],
                       summarize: Callable[[], tuple[dict[str, Any], str]],
                       cfg: AgentConfig | None = None,
-                      providers: dict[str, LLMProvider] | None = None) -> AskService:
+                      providers: dict[str, LLMProvider] | None = None,
+                      base_columns: list[str] | None = None) -> AskService:
     """Build the agent for one tape.
 
     TECH: desk_where is desk question id -> validated SQL rule (desk_questions.py).
+      base_columns are the default columns every loan-level result shows
+      (api.toml [columns], via main.default_columns); None or [] adds none.
       Injected providers replace the vendor adapters by name; offline is always
       LoanIQ's own.
     """
@@ -67,7 +70,8 @@ def build_ask_service(parquet_path: Path, columns: ColumnTypes, labels: dict[str
     offline = OfflineProvider(cfg.offline_rules, desk_where, chip_labels, words["offline"])
     tape = open_readonly_tape(parquet_path)
     store = QueryStore(cfg.limits.query_store_size, cfg.limits.query_store_ttl_s)
-    tools = TapeTools(tape.con, columns, labels, read_json("glossary.json"), summarize, store, cfg.limits)
+    tools = TapeTools(tape.con, columns, labels, read_json("glossary.json"), summarize, store, cfg.limits,
+                      base_columns or [])
     meter = SpendMeter(cfg.budget)
     all_providers = {**build_providers(cfg, offline), **(providers or {}), "offline": offline}
     orchestrator = Orchestrator(cfg, all_providers, offline, tools, meter, words["notices"])

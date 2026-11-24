@@ -1,6 +1,8 @@
 # Roadmap
-Current step: Step 4b done (2026-11-24), the Ask the Tape screen, on branch
-`step-4b` (PR into `main`). Step 4a, the engine, is merged into `main`. Step 4 was
+Current step: Step 4c done (2026-11-24): Ask the Tape answers about specific loans
+show the Loan Tape's 12 default columns, packed to the data (one list for both
+screens in api.toml). Step 4b, the Ask the Tape screen, is on `main`. Step 4a, the
+engine, is merged into `main`. Step 4 was
 taken ahead of Steps 2 and 3.
 Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
 after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
@@ -17,7 +19,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
-| 4 Ask the Tape agent | Done: 4a engine, 4b screen | 5-7 | 7 (4a: 3, 4b: 4) |
+| 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns | 5-7 | 7 (4a: 3, 4b: 4) |
 | 5 Slotting rules engine | Not started | 3-4 | |
 | 6 Price file and best execution | Not started | 5-7 | |
 | 7 Blotter and position monitor | Not started | 6-8 | |

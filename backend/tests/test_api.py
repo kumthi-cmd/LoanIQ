@@ -109,10 +109,33 @@ def test_columns_list_every_tape_column_with_type_and_label(client: TestClient) 
     assert [c["name"] for c in cols] == gen.COLUMNS
     by_name = {c["name"]: c for c in cols}
     assert by_name["current_upb"] == {"name": "current_upb", "type": "DECIMAL(14,2)",
-                                      "kind": "number", "label": "Current UPB ($)"}
+                                      "kind": "number", "label": "Current UPB ($)",
+                                      "default_visible": True}
     assert by_name["state"]["kind"] == "text"
     assert by_name["orig_date"]["kind"] == "date"
     assert by_name["mod_flag"]["kind"] == "boolean"
+
+
+def test_columns_mark_the_configured_defaults(client: TestClient) -> None:
+    """BUSINESS: the Loan Tape opens on the fields a trader reads first, and the list
+    comes from ONE place (api.toml [columns]) that Ask the Tape uses too (Step 4c).
+
+    TECH: exactly the configured names are default_visible, all of them real tape
+      columns, in tape order with loan_id first.
+    """
+    cols = client.get("/api/loans/columns").json()
+    shown = [c["name"] for c in cols if c["default_visible"]]
+    assert set(shown) == set(main.DEFAULT_VISIBLE_COLUMNS) and len(shown) == 12
+    assert shown == [n for n in gen.COLUMNS if n in shown] and shown[0] == "loan_id"
+
+
+def test_default_columns_drop_unknown_and_repeated_names() -> None:
+    """BUSINESS: a typo in the display config hides a column; it never breaks the tape.
+
+    TECH: default_columns follows tape order and drops names the tape lacks and repeats.
+    """
+    tape = {"loan_id": "VARCHAR", "fico": "INTEGER", "ltv": "DOUBLE"}
+    assert main.default_columns(tape, ["loan_id", "nope", "ltv", "fico", "ltv"]) == ["loan_id", "fico", "ltv"]
 
 
 def test_labels_file_covers_exactly_the_tape_columns() -> None:

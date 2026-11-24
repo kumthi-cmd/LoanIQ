@@ -43,10 +43,12 @@ vi.mock("./components/LoanGrid", () => ({
 }));
 
 const SUMMARY = { loan_count: 2000, total_current_upb: 6.4e8, wac: 6.4, wa_fico: 742, wa_ltv: 78, delinquent_loans: 61 };
+// TECH: default_visible is the API's flag from api.toml [columns] (Step 4c): loan_id
+//   and state open visible, servicer starts hidden.
 const COLUMNS = [
-  { name: "loan_id", type: "VARCHAR", kind: "text", label: "Loan ID" },
-  { name: "state", type: "VARCHAR", kind: "text", label: "State" },
-  { name: "servicer", type: "VARCHAR", kind: "text", label: "Servicer" },
+  { name: "loan_id", type: "VARCHAR", kind: "text", label: "Loan ID", default_visible: true },
+  { name: "state", type: "VARCHAR", kind: "text", label: "State", default_visible: true },
+  { name: "servicer", type: "VARCHAR", kind: "text", label: "Servicer", default_visible: false },
 ];
 const BREAKDOWNS = {
   programs: [{ program: "Conventional", loans: 1014, current_upb: 212_804_314.92 }],

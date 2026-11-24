@@ -56,7 +56,7 @@ describe("resultSteps", () => {
 describe("rerunTurn and failTurn", () => {
   it("builds a finished turn from stored results, saying no model was called", () => {
     const q = { query_id: "q_9", title: "LTV > 125", sql: "SELECT 1", columns: [], rows: [], row_count: 20,
-      total_rows: 20, truncated: false, loan_tape: null } as StoredQuery;
+      total_rows: 20, truncated: false, loan_tape: null, added_columns: [] } as StoredQuery;
     const turn = rerunTurn("t2", "Every loan over 125 LTV", [q], "No AI model was called.");
     expect(turn).toMatchObject({ status: "done", rerun: true, question: "Every loan over 125 LTV" });
     expect(turn.answer?.text).toBe("No AI model was called.");

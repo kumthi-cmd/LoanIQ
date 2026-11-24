@@ -45,3 +45,23 @@ note_rate_last_bucket_low = 9.0
 #   entry and is shown as the headline line, not as a bar.
 # TECH: a status on the tape that is missing here is still counted, after these.
 dq_status_order = ["Current", "30", "60", "90", "120+", "FC", "REO", "BK"]
+
+[columns]
+# BUSINESS: the fields a trader reads first on any tape: who sold it, what it is
+#   (program, product), where (state), its coupon and size (note rate, current UPB),
+#   its credit (FICO, LTV, DTI), whether it pays (DQ status) and who lives there
+#   (occupancy). Both screens use this ONE list:
+#     - the Loan Tape grid opens with these columns (every other field is one click
+#       away under "Columns");
+#     - an Ask the Tape result with one row per loan always shows these columns,
+#       even when the agent's SQL selected only two or three (Step 4c).
+#   ILLUSTRATIVE display choices, not industry rules.
+# TECH: tape column names. Both screens show them in TAPE order (loan_id first),
+#   whatever the order here (main.default_columns). GET /api/loans/columns marks each column default_visible from this list. A name
+#   the tape does not have is ignored (main.py). The Loan Tape's starting width for
+#   each of them is in frontend/src/grid/gridConfig.ts DEFAULT_COLUMN_WIDTHS, and a
+#   Vitest test checks that every name here has a width there.
+default_visible = [
+  "loan_id", "seller", "program", "product", "state", "note_rate",
+  "current_upb", "fico", "ltv", "dti", "dq_status", "occupancy",
+]

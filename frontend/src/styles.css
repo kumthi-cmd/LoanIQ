@@ -384,13 +384,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
   color: var(--accent-soft); text-decoration: underline dotted;
 }
 .result { display: flex; flex-direction: column; gap: 8px; }
-.result-table-wrap { border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; }
-.result-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* BUSINESS: an answer's loans read like a dense desk blotter: each column as wide as
+ *   its widest value, so 12 or more fields fit across without scrolling.
+ * TECH: width auto (not 100%) lets the browser's table layout size every column to
+ *   its content instead of stretching a 2-column result across the panel. Headers
+ *   may wrap at spaces ("CURRENT UPB ($)" on two lines), so the data, not the label,
+ *   sets the width; cells never wrap. The wrapper scrolls sideways when the table is
+ *   wider than the panel, and fits its border to the table (fit-content). */
+.result-table-wrap { border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; max-width: 100%; width: fit-content; }
+.result-table { width: auto; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .result-table th {
-  background: var(--panel-2); color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.04em; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  background: var(--panel-2); color: var(--muted); font-weight: 500; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 0.03em; text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border);
+  white-space: normal; vertical-align: bottom; line-height: 1.25;
 }
-.result-table td { padding: 7px 10px; border-bottom: 1px solid var(--row-line); white-space: nowrap; }
+.result-table td { padding: 4px 8px; border-bottom: 1px solid var(--row-line); white-space: nowrap; }
 .result-table .num { text-align: right; }
 .result-foot {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
