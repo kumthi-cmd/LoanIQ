@@ -1,6 +1,25 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Brand update, the house-and-coin flask (2026-11-23)
+- Built: a new LoanIQ Labs symbol. The flask stays; inside it a house with a gold $
+  coin stands in blue liquid, replacing the brain. It is in the header logo, the
+  About page logo, the browser-tab favicon and the app icons.
+- Desk problem it solves: the logo now points to home loans, the asset the whole
+  app is about.
+- My key decisions: a lab flask close to the old symbol with a house and coin
+  inside; the On-navy version; no hand; only the files the site uses for now (the
+  light, mono and PNG logos later); I review, test, commit and push myself.
+- What Claude Code did: nothing this time. Claude in Cowork drew four symbol
+  concepts in three styles on a Claude Design canvas, then the flask version,
+  swapped the symbol into the two site logos (lettering untouched), generated the
+  icons and updated brand/README.txt and docs/decisions.md.
+- What I changed after review: asked for the flask to stay close to the previous
+  symbol with the house-and-coin icon inside; had the hand removed because it did
+  not look like a hand; picked the On-navy version.
+- Tests and coverage: file names are unchanged, so no new tests.
+- My take:
+
 ## Step 1f, About and How it was built (2026-11-23)
 - Built: the two Showcase pages, now live in the sidebar. About shows the stacked
   LoanIQ Labs logo above `content/about.md`. How it was built shows
