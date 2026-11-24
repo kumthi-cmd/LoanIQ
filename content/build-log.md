@@ -1,6 +1,44 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 1g, closing Step 1: the Loan Tape at 1440 px (2026-11-23)
+- Built: the Step 1d layout follow-ups, checked against the "1 · Loan Tape" board,
+  which is drawn at 1440 px. The 12 default grid columns now start at widths fitted
+  to their content, not 130 px each, so all 12 show at 1440 px with nothing cut off.
+  The explanation panel starts closed and opens with one click. The note-rate panel
+  has the board's caption, "UPB by 0.5% bucket", and its title stays on one line. Its
+  axis reads 2.0% / 4.0% / 6.0% / 8.0% / 9%+, with the ticks centred on their bucket
+  edges and the last label at the right end. The "Desk questions" label sits above
+  the chips, so all six chips fit on one row. The logo update (house-and-coin flask)
+  was committed on its own first.
+- Desk problem it solves: on a 1440 px laptop a trader sees the whole default tape
+  (who sold it, what it is, coupon, balance, credit, status, occupancy) without
+  scrolling sideways, and the panels and chips read cleanly.
+- My key decisions: the explanation closed by default; the "Desk questions" label on
+  its own line instead of smaller chips or a narrower sidebar; about 8 columns
+  visible when the explanation is open. Reasons: docs/decisions.md.
+- What Claude Code did: proposed the plan; measured the screen in Chromium at 1440 px
+  before and after each change; read the board from the design canvas and measured
+  the board's own table (about 1,100 px for 12 columns, so it too scrolls beside the
+  explanation); tuned the column widths until nothing was cut off; wrote the tests.
+  Along the way: the three files I expected to need converting to LF were already
+  LF, so the logo commit needed no conversion; the first axis fix (right-aligning
+  "9%+") still overlapped "8.0%" with the explanation open, so the middle ticks are
+  centred on their bucket edges instead; a CSS rule for the axis columns also
+  matched the new label text inside them, until it was limited to direct children;
+  the first run of the new browser test read headers in upper case (innerText
+  applies CSS), so it reads textContent instead.
+- What I changed after review: asked for the explanation panel to be off by default.
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 232 tests (no
+  change), coverage 98.8%. Front end: 124 Vitest tests (7 new: the default column
+  widths and their 1440 px budget, the bucket width, the short open-ended label, the
+  panel caption and the axis label placement; 2 updated: the explanation now starts
+  closed, and the axis reads "9%+"). End to end: 18 Playwright tests (2 new, at
+  1440 px with the explanation closed and open: columns that fit, a one-line title,
+  chips on one row, the axis labels apart; 1 updated: the explain test opens the panel
+  first).
+- My take:
+
 ## Brand update, the house-and-coin flask (2026-11-23)
 - Built: a new LoanIQ Labs symbol. The flask stays; inside it a house with a gold $
   coin stands in blue liquid, replacing the brain. It is in the header logo, the

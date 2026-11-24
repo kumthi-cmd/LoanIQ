@@ -41,14 +41,25 @@ export function bucketDescription(b: RateBucket): string {
 }
 
 /**
+ * The width of one bucket, in percentage points (0.5 for half-point buckets).
+ * BUSINESS: the panel caption says it ("UPB by 0.5% bucket"), so a visitor knows
+ *   each bar is half a point of note rate.
+ * TECH: high - low of the first closed bucket, rounded to 6 decimals so 6.5 - 6.0
+ *   floating-point noise never shows; null if no bucket has both edges.
+ */
+export function bucketWidth(buckets: RateBucket[]): number | null {
+  const closed = buckets.find((b) => b.low !== null && b.high !== null);
+  return closed ? Math.round((closed.high! - closed.low!) * 1e6) / 1e6 : null;
+}
+
+/**
  * The lower edge of each bucket, filling in the open first one from the bucket width.
  * BUSINESS: the first bar of 2.0-9.0+ in half points starts at 2.0%.
- * TECH: width = high - low of the first closed bucket; the first bucket's edge is its
- *   high minus that width. Returns null for a bucket whose edge cannot be known.
+ * TECH: the first bucket's edge is its high minus bucketWidth. Returns null for a
+ *   bucket whose edge cannot be known.
  */
 export function bucketLows(buckets: RateBucket[]): (number | null)[] {
-  const closed = buckets.find((b) => b.low !== null && b.high !== null);
-  const width = closed ? closed.high! - closed.low! : null;
+  const width = bucketWidth(buckets);
   return buckets.map((b) => {
     if (b.low !== null) return b.low;
     return b.high !== null && width !== null ? Math.round((b.high - width) * 1e6) / 1e6 : null;
@@ -57,14 +68,18 @@ export function bucketLows(buckets: RateBucket[]): (number | null)[] {
 
 /**
  * The axis label under each bar, or "" for none.
- * BUSINESS: "2.0%", "4.0%", "6.0%", "8.0%" and "9.0%+" under the right bars.
+ * BUSINESS: "2.0%", "4.0%", "6.0%", "8.0%" and "9%+" under the right bars, as on the
+ *   "1 · Loan Tape" design board.
  * TECH: a bar gets a label if its lower edge is a whole multiple of AXIS_TICK_EVERY
- *   (to within rounding), and the last, open-ended bar always gets its "N%+" label.
+ *   (to within rounding), and the last, open-ended bar always gets its "N%+" label,
+ *   written short ("9%+", or "9.5%+" for a half point) because it sits at the right
+ *   end of the axis, close to the tick before it (NoteRatePanel right-aligns it).
+ *   The bar's hover text keeps the full "9.0%+" (bucketLabel).
  */
 export function axisLabels(buckets: RateBucket[]): string[] {
   const lows = bucketLows(buckets);
   return buckets.map((b, i) => {
-    if (b.high === null && b.low !== null) return pct(b.low) + "+";
+    if (b.high === null && b.low !== null) return `${Number(b.low.toFixed(1))}%+`;
     const low = lows[i];
     if (low === null) return "";
     const ratio = low / AXIS_TICK_EVERY;

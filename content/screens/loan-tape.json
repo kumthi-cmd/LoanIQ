@@ -4,7 +4,7 @@
   "tapeLine": "Seller tape · {fields} fields · {sellers} fictional sellers",
   "captions": {
     "programMix": "Current UPB, $M",
-    "noteRate": "Current UPB by note-rate bucket",
+    "noteRate": "UPB by {width}% bucket",
     "noteRateNote": "WAC alone hides this shape: two clusters of coupons can average to a rate no loan has.",
     "delinquency": "Loans",
     "panelsScope": "Panels and chip counts cover the whole tape. The grid follows the chip and your column filters.",

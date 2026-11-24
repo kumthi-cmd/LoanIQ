@@ -1,17 +1,18 @@
 # Roadmap
-Current step: Step 1 (In Progress). Hosting is done: LoanIQ is live at
-https://www.loaniqlabs.com, deployed from `main` after CI passes. Step 1 done so far:
-1a synthetic loan tape generator, 1b loan API, 1c SPA and loan grid, 1d Loan Tape
-screen to the design board (panels, desk questions, explain tabs), 1e LoanIQ Labs
-brand, 1f About and How it was built pages (with "By the numbers" from
-content/build-facts.json). Left in Step 1: "My take" entries and the Loan Tape polish
-follow-ups below.
+Current step: Step 1 done (2026-11-23). Next: Step 2, tape upload and parser.
+Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
+after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
+1c SPA and loan grid, 1d Loan Tape screen to the design board (panels, desk
+questions, explain tabs), 1e LoanIQ Labs brand (house-and-coin flask from
+2026-11-23), 1f About and How it was built pages (with "By the numbers" from
+content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups).
+"My take" entries in content/build-log.md are still to write.
 
 | Step | Status | Estimate (active hours) | Actual (active hours) |
 | --- | --- | --- | --- |
 | 0 Setup | Done | 0.5 | 1 |
 | Hosting: live site, deploy on every push | Done | 4-6 | 1 |
-| 1 Loan tape, fast grid, About page | In Progress | 10-11 | 9 so far |
+| 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
 | 4 Ask the Tape agent | Not started | 5-7 | |
@@ -48,13 +49,6 @@ including design and review.
 
 ## Open follow-ups
 Small items noted at the end of a step, to come back to.
-
-From Step 1d (Loan Tape screen to the design board, 2026-11-19):
-- Grid width: at 1440 px with the explanation open, only about 6 of the 12 default
-  columns fit before the grid scrolls sideways.
-- Note-rate axis: the "8.0%" and "9.0%+" labels sit very close together.
-- Wrapping: the "Note rate distribution" title wraps to two lines, and the
-  Forbearance chip drops to a second row. The design shows each on one line.
 
 From Hosting (2026-11-20):
 - Timing tests fail on battery power (the Surface slows its CPU). Run `test.ps1`
