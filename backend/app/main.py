@@ -40,8 +40,8 @@ TECH:
       (app.state.ask) and its routes (POST /api/ask, GET /api/ask/queries/{id}) are
       added from app/agent/api.py with include_router. Its summarize_tape tool uses
       tape_summary() below, so the agent quotes the same numbers as the screen.
-    Limits (page sizes) and panel settings (note-rate buckets, status order) live in
-    app/config/api.toml; column labels in content/loan-columns.json; chip labels in
+    Limits (page sizes), panel settings (note-rate buckets, status order) and the
+    default columns both screens show live in app/config/api.toml; column labels in content/loan-columns.json; chip labels in
     content/desk-questions.json; the agent's models and limits in app/config/llm.toml.
 """
 
@@ -105,6 +105,24 @@ MAX_LIMIT: int = API_CONFIG["paging"]["max_limit"]
 #   fails at start-up, not on the first request.
 RATE_BUCKETS = bucket_spec(API_CONFIG["breakdowns"])
 DQ_STATUS_ORDER: list[str] = API_CONFIG["breakdowns"]["dq_status_order"]
+# BUSINESS: the fields a trader reads first, shown by default on the Loan Tape and in
+#   every loan-level Ask the Tape result (illustrative display choice, api.toml
+#   [columns]). TECH: filtered to the tape's real columns, in tape order, by
+#   default_columns().
+DEFAULT_VISIBLE_COLUMNS: list[str] = API_CONFIG["columns"]["default_visible"]
+
+
+def default_columns(columns: ColumnTypes, wanted: list[str] = DEFAULT_VISIBLE_COLUMNS) -> list[str]:
+    """The default columns this tape actually has, in TAPE order.
+
+    BUSINESS: one list for both screens, so the Loan Tape and an Ask the Tape answer
+      open on the same fields in the same left-to-right order.
+    TECH: walks the tape's columns (DESCRIBE order, loan_id first) and keeps those
+      named in the config, so the config's own order does not matter and a repeated
+      name cannot appear twice. A configured name the tape does not have is
+      dropped, not an error, so a test tape with fewer columns still works.
+    """
+    return [n for n in columns if n in wanted]
 
 
 # =============================================================================
@@ -136,11 +154,18 @@ class Health(BaseModel):
 
 
 class ColumnInfo(BaseModel):
-    """One tape column. TECH: type is the DuckDB type; kind is what the grid filters on."""
+    """One tape column.
+
+    BUSINESS: default_visible marks the fields a trader reads first; the Loan Tape
+      opens with only those showing (api.toml [columns]).
+    TECH: type is the DuckDB type; kind is what the grid filters on. The API always
+      sends default_visible, so the generated TypeScript type makes it required.
+    """
     name: str
     type: str
     kind: str
     label: str
+    default_visible: bool = False
 
 
 class LoansPage(BaseModel):
@@ -381,7 +406,8 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
         app.state.ask = build_ask_service(
             data_dir / TAPE_FILE, store.columns, app.state.labels,
             {qid: q.where for qid, q in store.questions.items()},
-            lambda: tape_summary(store), agent_config, ask_providers)
+            lambda: tape_summary(store), agent_config, ask_providers,
+            base_columns=default_columns(store.columns))
         yield
         close_ask_service(app.state.ask)
         store.con.close()
@@ -402,9 +428,14 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
 
     @app.get("/api/loans/columns", response_model=list[ColumnInfo])
     def columns(store: Store, request: Request) -> list[ColumnInfo]:
-        """BUSINESS: the grid's column headers. TECH: tape order; label falls back to name."""
+        """BUSINESS: the grid's column headers, and which ones show at first.
+
+        TECH: tape order; label falls back to name; default_visible from api.toml.
+        """
         labels: dict[str, str] = request.app.state.labels
-        return [ColumnInfo(name=n, type=t, kind=column_kind(t), label=labels.get(n, n))
+        shown = set(default_columns(store.columns))
+        return [ColumnInfo(name=n, type=t, kind=column_kind(t), label=labels.get(n, n),
+                           default_visible=n in shown)
                 for n, t in store.columns.items()]
 
     @app.get("/api/loans", response_model=LoansPage)

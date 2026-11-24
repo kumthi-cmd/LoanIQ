@@ -1,6 +1,33 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-24: One default-column list for both screens, added to loan-level answers
+Decision (Step 4c): the 12 columns a trader reads first (loan ID, seller, program,
+product, state, note rate, current UPB, FICO, LTV, DTI, DQ status, occupancy) live
+once, in `backend/app/config/api.toml` `[columns] default_visible`. Before, they were
+in the front end's `gridConfig.ts`. `GET /api/loans/columns` marks each column
+`default_visible`, and the Loan Tape opens with those columns showing. The same list
+is used for Ask the Tape: when a `query_tape` result has one row per loan (a
+`loan_id` column, no ID repeated, unique column names), the server fetches the
+missing default columns for those loan IDs with one parameterised query and joins
+them on. Columns run loan ID first, then the defaults in tape order (as the Loan Tape
+grid shows them), then the agent's other columns. Rows keep the agent's order.
+The model still reads only the columns its SQL selected. The stored SQL and the
+"Open in Loan Tape" link are the agent's own query. `added_columns` on the stored
+result says which columns were joined on. Grouped results are left as written.
+The result table is packed to its data (CSS `width: auto`, tighter padding, headers
+that may wrap).
+Why: an answer about specific loans often came back as two or three columns
+stretched across the panel. A trader wants the same fields beside every loan, in the
+same order as the Loan Tape. Keeping the list in one place stops the two screens
+drifting apart. Hiding the added columns from the model keeps its token cost and its
+answers unchanged.
+Alternatives considered: telling the model in its prompt to select these columns
+(not guaranteed, and it costs tokens); a list of 10 that left out DQ status and
+occupancy (rejected so both screens match); having the front end fetch the extra
+columns (one more request per table, and saved-query reruns would need it too).
+Illustrative display choice, not an industry rule.
+
 ## 2026-11-24: "Open in Loan Tape" turns the answer's WHERE into the grid's own filters
 Decision (Step 4b): the back end reads each `query_tape` result's WHERE and ORDER BY
 with sqlglot (`backend/app/agent/loan_tape_link.py`) and writes them as AG Grid's

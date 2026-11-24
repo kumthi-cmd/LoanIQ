@@ -35,7 +35,10 @@ class StoredQuery(BaseModel):
       is rows returned (at most max_rows); total_rows counts every row that
       matched; truncated is True when total_rows > row_count. loan_tape is how to
       open the result in the Loan Tape with the same filter (loan_tape_link.py,
-      Step 4b); None only for results stored before it existed.
+      Step 4b); None only for results stored before it existed. added_columns
+      names the default tape columns the server joined on for display (Step 4c,
+      tools.add_base_columns); the model never sees them and the SQL does not
+      select them.
     """
     query_id: str
     title: str
@@ -46,6 +49,7 @@ class StoredQuery(BaseModel):
     total_rows: int
     truncated: bool
     loan_tape: LoanTapeLink | None = None
+    added_columns: list[str] = []
 
 
 class QueryStore:

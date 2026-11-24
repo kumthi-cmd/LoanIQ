@@ -9,9 +9,9 @@ import { describe, expect, it, vi } from "vitest";
 import { ColumnPicker } from "./ColumnPicker";
 
 const COLUMNS = [
-  { name: "loan_id", type: "VARCHAR", kind: "text", label: "Loan ID" },
-  { name: "state", type: "VARCHAR", kind: "text", label: "State" },
-  { name: "servicer", type: "VARCHAR", kind: "text", label: "Servicer" },
+  { name: "loan_id", type: "VARCHAR", kind: "text", label: "Loan ID", default_visible: false },
+  { name: "state", type: "VARCHAR", kind: "text", label: "State", default_visible: false },
+  { name: "servicer", type: "VARCHAR", kind: "text", label: "Servicer", default_visible: false },
 ];
 
 describe("ColumnPicker", () => {

@@ -1,6 +1,42 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 4c, Ask the Tape answers show the default loan columns (2026-11-24)
+- Built: every Ask the Tape answer about specific loans now shows the 12 columns the
+  Loan Tape opens with (loan ID, seller, program, product, note rate, current UPB,
+  FICO, LTV, DTI, state, occupancy, DQ status), in tape order, then whatever the
+  agent worked out for the question. The table is packed to its data: each column as
+  wide as its widest value, tighter rows, and headers that may wrap. The list of 12
+  moved from the front end to `backend/app/config/api.toml`, and both screens now
+  read it from there.
+- Desk problem it solves: "the largest New York loans" often came back as just loan
+  ID and balance, stretched across the panel. A trader needs the seller, the coupon
+  and the credit beside each loan to judge it, without opening the Loan Tape.
+- My key decisions: use the same 12 columns as the Loan Tape (not a separate 10), so
+  the two screens match; keep that list in one place.
+- What Claude Code did: proposed two options (10 columns, or the Loan Tape's 12 moved
+  to the back end). Built the server-side join for loan-level results; kept the
+  model's view, the stored SQL and the Open in Loan Tape link exactly as the agent
+  wrote them; added the `default_visible` flag to the columns API; and packed the
+  table with CSS. Tests caught two issues on the way. First, the configured list was
+  not in tape order (state sits after note rate on the tape), although the old
+  comment said it was. Both screens now follow tape order. Second, the committed
+  OpenAPI spec had to be regenerated after the column model changed.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 461 tests (8
+  new: the default columns are joined on in tape order with the agent's row order
+  kept and the tape's values; the model and the SQL are unchanged; grouped,
+  repeated-loan, repeated-column and empty results are left alone; nothing is
+  duplicated when the agent already chose the columns; the API marks the configured
+  defaults; unknown and repeated names in the config are dropped; 1 updated, the
+  column JSON now includes `default_visible`), coverage 99.1%. Front end: 174 Vitest
+  tests (1 new: the result table shows the 12 columns and the agent's own in order,
+  in tape formats; 1 updated, the width check now reads the list from `api.toml`;
+  test fixtures gained the new field). End to end: 25 Playwright tests (1 new: a
+  loan-level answer shows the 12 default columns, and FICO and State stay narrower
+  than 70 px at 1440 px).
+- My take:
+
 ## Step 4b, the Ask the Tape screen (2026-11-24)
 - Built: the Ask the Tape screen, built to the "Ask the Tape" design board. A trader
   types a question, or picks an example. The answer streams in with a chip for each

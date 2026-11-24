@@ -188,7 +188,9 @@ export interface paths {
         };
         /**
          * Columns
-         * @description BUSINESS: the grid's column headers. TECH: tape order; label falls back to name.
+         * @description BUSINESS: the grid's column headers, and which ones show at first.
+         *
+         *     TECH: tape order; label falls back to name; default_visible from api.toml.
          */
         get: operations["columns_api_loans_columns_get"];
         put?: never;
@@ -321,9 +323,19 @@ export interface components {
         };
         /**
          * ColumnInfo
-         * @description One tape column. TECH: type is the DuckDB type; kind is what the grid filters on.
+         * @description One tape column.
+         *
+         *     BUSINESS: default_visible marks the fields a trader reads first; the Loan Tape
+         *       opens with only those showing (api.toml [columns]).
+         *     TECH: type is the DuckDB type; kind is what the grid filters on. The API always
+         *       sends default_visible, so the generated TypeScript type makes it required.
          */
         ColumnInfo: {
+            /**
+             * Default Visible
+             * @default false
+             */
+            default_visible: boolean;
             /** Kind */
             kind: string;
             /** Label */
@@ -491,9 +503,17 @@ export interface components {
          *       is rows returned (at most max_rows); total_rows counts every row that
          *       matched; truncated is True when total_rows > row_count. loan_tape is how to
          *       open the result in the Loan Tape with the same filter (loan_tape_link.py,
-         *       Step 4b); None only for results stored before it existed.
+         *       Step 4b); None only for results stored before it existed. added_columns
+         *       names the default tape columns the server joined on for display (Step 4c,
+         *       tools.add_base_columns); the model never sees them and the SQL does not
+         *       select them.
          */
         StoredQuery: {
+            /**
+             * Added Columns
+             * @default []
+             */
+            added_columns: string[];
             /** Columns */
             columns: string[];
             loan_tape?: components["schemas"]["LoanTapeLink"] | null;

@@ -38,6 +38,15 @@ def tools(ro_tape: ReadOnlyTape, loan_store: main.LoanStore, agent_cfg: Any) -> 
                      lambda: main.tape_summary(loan_store), store, agent_cfg.limits)
 
 
+@pytest.fixture()
+def wide_tools(ro_tape: ReadOnlyTape, loan_store: main.LoanStore, agent_cfg: Any) -> TapeTools:  # noqa: F811
+    """TapeTools with the default display columns, exactly as main.py builds them (Step 4c)."""
+    store = QueryStore(agent_cfg.limits.query_store_size, agent_cfg.limits.query_store_ttl_s)
+    return TapeTools(ro_tape.con, loan_store.columns, main.load_labels(), [],
+                     lambda: main.tape_summary(loan_store), store, agent_cfg.limits,
+                     main.default_columns(loan_store.columns))
+
+
 def call(tools: TapeTools, name: str, **args: Any) -> Any:
     """Run one tool call the way the orchestrator does."""
     return tools.run(ToolCall(id="t1", name=name, input=args))
@@ -99,6 +108,86 @@ def test_query_tape_caps_at_500_rows_and_reports_the_full_count(tools: TapeTools
     assert out.event["row_count"] == 500 and out.event["truncated"] is True
     assert out.event["total_rows"] == 2000
     assert "capped; 2000 rows match" in out.result.content
+
+
+# =============================================================================
+# Default columns on loan-level results (Step 4c)
+# =============================================================================
+
+def test_loan_level_result_shows_the_default_columns(wide_tools: TapeTools,
+                                                     loan_store: main.LoanStore) -> None:  # noqa: F811
+    """BUSINESS: "largest NY loans" shows the trader's 12 default fields beside the
+    agent's answer, in the Loan Tape grid's (tape) order, with the agent's computed column last.
+
+    TECH: loan_id + the 11 other defaults + the alias "age"; the agent's ORDER BY
+      (largest balance first) is kept, and the added values are the tape's.
+    """
+    sql = ("SELECT loan_id, current_upb, loan_age AS age FROM loans WHERE state = 'NY' "
+           "ORDER BY current_upb DESC LIMIT 5")
+    out = call(wide_tools, "query_tape", title="Largest NY", sql=sql)
+    stored = wide_tools.store.get(out.event["query_id"])
+    assert stored is not None
+    defaults = main.default_columns(loan_store.columns)
+    assert stored.columns == [*defaults, "age"]
+    assert stored.added_columns == [c for c in defaults if c not in ("loan_id", "current_upb")]
+    upb = [r[stored.columns.index("current_upb")] for r in stored.rows]
+    assert upb == sorted(upb, reverse=True) and len(upb) == 5
+    first = dict(zip(stored.columns, stored.rows[0]))
+    tape_row = loan_store.con.execute(
+        "SELECT seller, fico, state, CAST(current_upb AS DOUBLE) FROM loans WHERE loan_id = ?",
+        [first["loan_id"]]).fetchone()
+    assert (first["seller"], first["fico"], first["state"], first["current_upb"]) == tape_row
+
+
+def test_the_model_and_the_sql_do_not_change(wide_tools: TapeTools) -> None:
+    """BUSINESS: the added columns are for the trader's eyes only. The model answers
+    from what its own SQL selected, and "Open in Loan Tape" uses that same SQL.
+
+    TECH: CSV header and preview rows have only loan_id and current_upb; the stored
+      and event SQL is the agent's query (pretty-printed by sql_guard), with none of
+      the added columns in it.
+    """
+    sql = "SELECT loan_id, current_upb FROM loans WHERE state = 'NY'"
+    out = call(wide_tools, "query_tape", title="NY", sql=sql)
+    assert out.result.content.split("csv:\n")[1].splitlines()[0] == "loan_id,current_upb"
+    assert set(out.result.data["rows"][0]) == {"loan_id", "current_upb"}
+    stored = wide_tools.store.get(out.event["query_id"])
+    assert stored is not None and stored.sql == out.event["sql"]
+    assert " ".join(stored.sql.split()) == "SELECT loan_id, current_upb FROM loans WHERE state = 'NY'"
+    assert len(stored.columns) == 12
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT state, SUM(current_upb) AS upb FROM loans GROUP BY state",   # grouped: no loan_id
+    "SELECT loan_id FROM loans, (SELECT 1 UNION ALL SELECT 2) LIMIT 4",  # loan_id repeats
+    "SELECT loan_id, fico AS x, ltv AS x FROM loans LIMIT 3",             # repeated column name
+    "SELECT loan_id FROM loans WHERE ltv > 1000",                         # no rows
+])
+def test_other_results_are_left_as_the_agent_wrote_them(wide_tools: TapeTools, sql: str) -> None:
+    """BUSINESS: only a one-row-per-loan result can carry loan fields. A grouped
+    result ("UPB by state") or a result with a loan listed twice stays as written.
+
+    TECH: no columns added; the query still runs (or is refused for UNION, which is
+      fine: either way nothing is widened).
+    """
+    out = call(wide_tools, "query_tape", title="t", sql=sql)
+    if out.event["status"] != "ok":
+        return
+    stored = wide_tools.store.get(out.event["query_id"])
+    assert stored is not None and stored.added_columns == []
+    assert len(stored.columns) < 12
+
+
+def test_a_result_with_every_default_column_adds_nothing(wide_tools: TapeTools) -> None:
+    """BUSINESS: when the agent already selected the default fields, nothing is
+    duplicated. TECH: added_columns empty; a computed base-named column keeps the
+    agent's value (ROUND(ltv) AS ltv)."""
+    cols = ", ".join(c for c in main.DEFAULT_VISIBLE_COLUMNS if c != "ltv")
+    out = call(wide_tools, "query_tape", title="All", sql=f"SELECT {cols}, ROUND(ltv) AS ltv FROM loans LIMIT 3")
+    stored = wide_tools.store.get(out.event["query_id"])
+    assert stored is not None and stored.added_columns == []
+    ltv = [r[stored.columns.index("ltv")] for r in stored.rows]
+    assert all(v == round(v) for v in ltv)
 
 
 def test_query_tape_refusal_is_a_guardrail_failure(tools: TapeTools) -> None:

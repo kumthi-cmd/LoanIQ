@@ -9,6 +9,9 @@
  *   (up to the 500-row cap). "Open in Loan Tape" opens the full grid with the same
  *   filter; when the filter cannot be shown as column filters, the button is
  *   disabled and says why. "Send to Slotting" waits for Step 5 and is not shown.
+ *   A loan-level result also carries the Loan Tape's 12 default columns, added by
+ *   the server (Step 4c), so the table is drawn as stored, column for column. It is
+ *   packed to its data by CSS (styles.css .result-table), not stretched.
  * TECH:
  *   - The model saw only 20 rows; the screen fetches every row by query id. A rerun
  *     already holds its rows (initial), so it does not fetch.

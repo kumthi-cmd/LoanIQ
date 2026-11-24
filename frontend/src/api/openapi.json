@@ -96,8 +96,13 @@
         "type": "object"
       },
       "ColumnInfo": {
-        "description": "One tape column. TECH: type is the DuckDB type; kind is what the grid filters on.",
+        "description": "One tape column.\n\nBUSINESS: default_visible marks the fields a trader reads first; the Loan Tape\n  opens with only those showing (api.toml [columns]).\nTECH: type is the DuckDB type; kind is what the grid filters on. The API always\n  sends default_visible, so the generated TypeScript type makes it required.",
         "properties": {
+          "default_visible": {
+            "default": false,
+            "title": "Default Visible",
+            "type": "boolean"
+          },
           "kind": {
             "title": "Kind",
             "type": "string"
@@ -381,8 +386,16 @@
         "type": "object"
       },
       "StoredQuery": {
-        "description": "One query_tape result, as the screen gets it.\n\nBUSINESS: \"Loans over 125 LTV: 20 rows\" plus the SQL that produced them.\nTECH: rows are lists in `columns` order (smaller JSON than dicts). row_count\n  is rows returned (at most max_rows); total_rows counts every row that\n  matched; truncated is True when total_rows > row_count. loan_tape is how to\n  open the result in the Loan Tape with the same filter (loan_tape_link.py,\n  Step 4b); None only for results stored before it existed.",
+        "description": "One query_tape result, as the screen gets it.\n\nBUSINESS: \"Loans over 125 LTV: 20 rows\" plus the SQL that produced them.\nTECH: rows are lists in `columns` order (smaller JSON than dicts). row_count\n  is rows returned (at most max_rows); total_rows counts every row that\n  matched; truncated is True when total_rows > row_count. loan_tape is how to\n  open the result in the Loan Tape with the same filter (loan_tape_link.py,\n  Step 4b); None only for results stored before it existed. added_columns\n  names the default tape columns the server joined on for display (Step 4c,\n  tools.add_base_columns); the model never sees them and the SQL does not\n  select them.",
         "properties": {
+          "added_columns": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Added Columns",
+            "type": "array"
+          },
           "columns": {
             "items": {
               "type": "string"
@@ -922,7 +935,7 @@
     },
     "/api/loans/columns": {
       "get": {
-        "description": "BUSINESS: the grid's column headers. TECH: tape order; label falls back to name.",
+        "description": "BUSINESS: the grid's column headers, and which ones show at first.\n\nTECH: tape order; label falls back to name; default_visible from api.toml.",
         "operationId": "columns_api_loans_columns_get",
         "responses": {
           "200": {

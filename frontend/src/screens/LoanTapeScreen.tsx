@@ -46,16 +46,19 @@ import { ProgramMixPanel } from "../components/ProgramMixPanel";
 import { columnsInUse, readLoanTapeParams } from "../ask/loanTapeUrl";
 import { deskQuestionLabels, fillCaption, loanTapeContent } from "../content/content";
 import { formatNumber } from "../grid/columnFormats";
-import { DEFAULT_VISIBLE_COLUMNS, gridConfig } from "../grid/gridConfig";
+import { gridConfig } from "../grid/gridConfig";
 import type { LayoutContext } from "../App";
 
 /**
  * The hidden-column set for a freshly loaded column list.
- * BUSINESS: the grid opens on the fields a trader reads first (gridConfig.ts).
- * TECH: every column not in DEFAULT_VISIBLE_COLUMNS starts hidden.
+ * BUSINESS: the grid opens on the fields a trader reads first. The list lives once,
+ *   in backend/app/config/api.toml [columns], and Ask the Tape shows the same fields
+ *   beside every loan-level answer (Step 4c).
+ * TECH: the API marks each column default_visible; every other column starts hidden.
+ *   A missing flag counts as hidden.
  */
 function defaultHidden(columns: ColumnInfo[]): Set<string> {
-  return new Set(columns.map((c) => c.name).filter((n) => !DEFAULT_VISIBLE_COLUMNS.includes(n)));
+  return new Set(columns.filter((c) => !c.default_visible).map((c) => c.name));
 }
 
 /** TECH: the desk-question ids a URL may name (content/desk-questions.json). */

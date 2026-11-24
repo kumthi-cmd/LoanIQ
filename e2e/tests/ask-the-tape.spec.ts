@@ -127,3 +127,24 @@ test("a saved query survives a reload and reruns without the model", async ({ pa
   await expect(page.getByRole("table").last()).toBeVisible();
   expect(modelCalls).toEqual([]);
 });
+
+test("a loan-level answer shows the 12 default columns, packed to the data (Step 4c)", async ({ page, request }) => {
+  // BUSINESS: the same fields the Loan Tape opens with (api.toml [columns]), read from
+  //   the API so this test follows the config.
+  const columns: { label: string; default_visible: boolean }[] = await (await request.get("/api/loans/columns")).json();
+  const defaults = columns.filter((c) => c.default_visible).map((c) => c.label);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/ask");
+  await ask(page, "Which loans have an LTV over 125?");
+  const table = page.getByRole("table").last();
+  const headers = await table.getByRole("columnheader").allTextContents();
+  // TECH: headers are shown upper-case by CSS only; their text is the label as written.
+  expect(headers.slice(0, defaults.length)).toEqual(defaults);
+  // BUSINESS: each column is as wide as its data, not stretched: 3-digit FICO and a
+  //   2-letter state fit in well under 70 px (a stretched 12-column table gives each
+  //   about 75 px or more at 1440 px).
+  for (const name of ["FICO", "State"]) {
+    const box = await table.getByRole("columnheader", { name, exact: true }).boundingBox();
+    expect(box!.width).toBeLessThan(70);
+  }
+});
