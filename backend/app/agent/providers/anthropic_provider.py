@@ -33,7 +33,11 @@ from typing import Any
 
 from app.agent.providers.base import (AssistantTurn, ChatOptions, ChatTurn, LLMProvider, Message,
                                       ProviderError, ProviderUnavailable, ToolCall, ToolResults,
-                                      ToolSpec, Usage, UserText)
+                                      ToolSpec, Usage, UserText, sdk_error, sdk_reason)
+
+# TECH: sdk_reason lives in base.py since Step 4b; re-exported here for callers
+#   that imported it from this module.
+__all__ = ["AnthropicProvider", "sdk_reason"]
 
 
 def anthropic_tools(tools: list[ToolSpec]) -> list[dict[str, Any]]:
@@ -142,22 +146,6 @@ class AnthropicProvider(LLMProvider):
         try:
             resp = client.messages.create(**params)
         except Exception as exc:  # TECH: SDK errors (HTTP, network, timeout) of any kind
-            raise ProviderError(sdk_reason(exc), f"Claude call failed: {exc}") from exc
+            raise sdk_error(exc, "Claude") from exc
         return parse_response(resp)
 
-
-def sdk_reason(exc: Exception) -> str:
-    """A short reason code for an SDK exception: rate_limit, timeout, network, http_<code>.
-
-    TECH: reads the class name and status_code rather than importing the SDK's
-      classes, so the same function serves real and fake clients.
-    """
-    name = type(exc).__name__
-    if "Timeout" in name:
-        return "timeout"
-    if "RateLimit" in name:
-        return "rate_limit"
-    if "Connection" in name:
-        return "network"
-    status = getattr(exc, "status_code", None)
-    return f"http_{status}" if status else "error"

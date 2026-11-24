@@ -56,14 +56,14 @@ test("planned screens and features are shown but cannot be used", async ({ page 
   const nav = page.getByRole("navigation", { name: "Screens" });
   // TECH: each sidebar entry is a list item; find it by role and its visible label
   //   (.claude/rules/e2e.md). About and How it was built are live since Step 1f
-  //   (showcase.spec.ts).
-  for (const label of ["Tape Upload", "Ask the Tape", "Slotting", "Best Execution", "Optimizer"]) {
+  //   (showcase.spec.ts); Ask the Tape and the header's "Ask the tape" box since
+  //   Step 4b (ask-the-tape.spec.ts).
+  for (const label of ["Tape Upload", "Explorer", "Slotting", "Best Execution", "Optimizer"]) {
     const item = nav.getByRole("listitem").filter({ hasText: label });
     await expect(item).toHaveCount(1);
     await expect(item).toContainText("Planned");
     await expect(nav.getByRole("link", { name: label })).toHaveCount(0);
   }
-  await expect(page.getByRole("searchbox", { name: /Ask the tape/ })).toBeDisabled();
   await expect(page.getByRole("button", { name: /Export CSV/ })).toBeDisabled();
 });
 

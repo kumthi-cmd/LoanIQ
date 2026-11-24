@@ -1,8 +1,9 @@
 /**
  * Tests for App.tsx with its header, sidebar and Loan Tape screen together.
  * BUSINESS: a visitor opening LoanIQ sees the synthetic-data warning, the whole
- *   workflow in the sidebar (Loan Tape, About and How it was built live, the rest
- *   marked Planned), the
+ *   workflow in the sidebar (Loan Tape, Ask the Tape, About and How it was built
+ *   live, the rest marked Planned), an "Ask the tape" box and Ctrl K that open Ask
+ *   the Tape with the question filled in (Step 4b), the
  *   tape's headline numbers and panels from the API, desk-question chips that filter
  *   the grid, the explanation one click away (closed by default since Step 1g), and a
  *   header count that follows the
@@ -21,16 +22,20 @@ import { routes } from "./App";
 //   reports a filtered count when its button is clicked, like the real grid does
 //   when a block arrives.
 vi.mock("./components/LoanGrid", () => ({
-  LoanGrid: ({ columns, onRowCount, question, hiddenColumns }: {
+  LoanGrid: ({ columns, onRowCount, question, hiddenColumns, initialFilter, initialSort }: {
     columns: unknown[];
     onRowCount: (n: number) => void;
     question: string | null;
     hiddenColumns: ReadonlySet<string>;
+    initialFilter?: Record<string, unknown> | null;
+    initialSort?: { colId: string; sort: string }[];
   }) => (
     <div>
       <span>grid with {columns.length} columns</span>
       <span>grid question: {question ?? "none"}</span>
       <span>grid hidden: {[...hiddenColumns].join(",") || "none"}</span>
+      <span>grid filter: {initialFilter ? JSON.stringify(initialFilter) : "none"}</span>
+      <span>grid sort: {initialSort?.map((x) => x.colId + ":" + x.sort).join(",") || "none"}</span>
       <button onClick={() => onRowCount(1234)}>apply filter</button>
       <button onClick={() => onRowCount(1)}>narrow filter</button>
     </div>
@@ -79,7 +84,15 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const renderApp = () => render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ["/"] })} />);
+const renderApp = (path = "/") => {
+  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  render(<RouterProvider router={router} />);
+  return router;
+};
+
+/** TECH: true if any fetch call was a POST to /api/ask (a model call). */
+const askedTheModel = () =>
+  vi.mocked(fetch).mock.calls.some(([url, init]) => String(url) === "/api/ask" && init?.method === "POST");
 
 describe("App", () => {
   it("shows the LoanIQ Labs logo, what it is and the synthetic data badge", async () => {
@@ -95,14 +108,14 @@ describe("App", () => {
     expect(screen.getByText("Synthetic data · demonstration only")).toBeInTheDocument();
   });
 
-  it("lists the workflow in groups, with Loan Tape and the Showcase pages live and the rest Planned", () => {
+  it("lists the workflow in groups, with Loan Tape, Ask the Tape and the Showcase pages live and the rest Planned", () => {
     renderApp();
     const nav = within(screen.getByRole("navigation", { name: "Screens" }));
     expect(nav.getByRole("link", { name: "Loan Tape" })).toHaveAttribute("aria-current", "page");
-    // BUSINESS: Loan Tape, then About and How it was built (Step 1f, no step number);
-    //   the last link is the repo in the footer, not a screen.
+    // BUSINESS: Loan Tape, Ask the Tape (Step 4b), then About and How it was built
+    //   (Step 1f, no step number); the last link is the repo in the footer, not a screen.
     expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual(
-      ["1Loan Tape", "About", "How it was built", "kumthi-cmd/LoanIQ"],
+      ["1Loan Tape", "4Ask the Tape", "About", "How it was built", "kumthi-cmd/LoanIQ"],
     );
     const slotting = nav.getByText("Slotting").closest("[aria-disabled]");
     expect(slotting).toHaveAttribute("aria-disabled", "true");
@@ -112,10 +125,62 @@ describe("App", () => {
     }
   });
 
-  it("shows the Ask the tape box disabled and marked Planned", () => {
-    renderApp();
+  // BUSINESS: the header box hands the question to Ask the Tape, filled in but NOT
+  //   sent, so no AI model call is made until the visitor presses Send.
+  it("opens Ask the Tape from the header box with the question filled in, not sent", async () => {
+    const router = renderApp();
     const box = screen.getByRole("searchbox", { name: /Ask the tape/ });
-    expect(box).toBeDisabled();
+    expect(box).toBeEnabled();
+    await userEvent.type(box, "NY loans under $150K?{Enter}");
+    expect(router.state.location.pathname).toBe("/ask");
+    const question = await screen.findByRole("textbox", { name: "Ask the tape" });
+    expect(question).toHaveValue("NY loans under $150K?");
+    expect(question).toHaveFocus();
+    expect(box).toHaveValue("");
+    expect(askedTheModel()).toBe(false);
+  });
+
+  it("opens Ask the Tape with Ctrl K from any screen, carrying the header box's text", async () => {
+    const router = renderApp("/about");
+    await userEvent.type(screen.getByRole("searchbox", { name: /Ask the tape/ }), "WAC by program");
+    await userEvent.keyboard("{Control>}k{/Control}");
+    expect(router.state.location.pathname).toBe("/ask");
+    const question = await screen.findByRole("textbox", { name: "Ask the tape" });
+    expect(question).toHaveValue("WAC by program");
+    expect(question).toHaveFocus();
+    expect(askedTheModel()).toBe(false);
+  });
+
+  it("opens Ask the Tape with Ctrl K and an empty box, ready to type", async () => {
+    const router = renderApp();
+    await userEvent.keyboard("{Control>}k{/Control}");
+    expect(router.state.location.pathname).toBe("/ask");
+    expect(router.state.location.search).toBe("");
+    expect(await screen.findByRole("textbox", { name: "Ask the tape" })).toHaveFocus();
+  });
+
+  // BUSINESS: "Open in Loan Tape" from an answer: the grid opens on the answer's own
+  //   filter and sort, the filtered column is shown, and Clear returns to the whole tape.
+  it("opens the Loan Tape on a filter and sort from the URL, and clears it", async () => {
+    const filter = { servicer: { filterType: "text", type: "equals", filter: "Acme" } };
+    const params = new URLSearchParams({ filter: JSON.stringify(filter), sort: "state:desc,nope:asc" });
+    renderApp("/?" + params.toString());
+    expect(await screen.findByText("grid filter: " + JSON.stringify(filter))).toBeInTheDocument();
+    // TECH: a sort on an unknown column is dropped, never guessed at.
+    expect(await screen.findByText("grid sort: state:desc")).toBeInTheDocument();
+    // BUSINESS: servicer is hidden by default, but shown when it is filtering the grid.
+    expect(await screen.findByText("grid hidden: none")).toBeInTheDocument();
+    expect(screen.getByTestId("linked-filter")).toHaveTextContent("Filtered from Ask the Tape");
+    await userEvent.click(screen.getByRole("button", { name: "Show the whole tape" }));
+    expect(await screen.findByText("grid filter: none")).toBeInTheDocument();
+    expect(screen.queryByTestId("linked-filter")).not.toBeInTheDocument();
+  });
+
+  it("turns on a desk question named in the URL, and ignores a bad filter", async () => {
+    renderApp("/?question=ltv_over_125&filter=%5B1%5D");
+    expect(await screen.findByText("grid question: ltv_over_125")).toBeInTheDocument();
+    expect(screen.getByText("grid filter: none")).toBeInTheDocument();
+    expect(screen.queryByTestId("linked-filter")).not.toBeInTheDocument();
   });
 
   it("loads the tiles, the panels, the chips, the tape line and the grid from the API", async () => {

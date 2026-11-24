@@ -24,7 +24,8 @@ TECH:
     Every problem raises QueryError; main.py turns it into HTTP 400.
     Supported AG Grid filters (anything else is a 400):
       text   (string columns):  contains, equals    (case-insensitive, like AG Grid)
-      number (numeric columns): equals, greaterThan, lessThan, inRange
+      number (numeric columns): equals, notEqual, greaterThan, greaterThanOrEqual,
+                                lessThan, lessThanOrEqual, inRange
       plus AG Grid's combined form: {"operator": "AND"|"OR", "conditions": [...]}.
 """
 
@@ -47,7 +48,10 @@ TIEBREAK_COLUMN = "loan_id"
 NUMBER_TYPE_PREFIXES = ("DECIMAL", "INTEGER", "BIGINT", "SMALLINT", "TINYINT",
                         "DOUBLE", "FLOAT", "REAL", "HUGEINT", "UBIGINT", "UINTEGER")
 # TECH: AG Grid number filter type -> SQL comparison. inRange is handled separately.
-NUMBER_OPERATORS = {"equals": "=", "greaterThan": ">", "lessThan": "<"}
+#   The "or equal" and "not equal" forms were added in Step 4b, so a filter from Ask
+#   the Tape such as fico >= 700 opens in the Loan Tape exactly as written.
+NUMBER_OPERATORS = {"equals": "=", "notEqual": "<>", "greaterThan": ">",
+                    "greaterThanOrEqual": ">=", "lessThan": "<", "lessThanOrEqual": "<="}
 TEXT_TYPES = ("contains", "equals")
 COMBINE_OPERATORS = ("AND", "OR")
 
@@ -176,7 +180,9 @@ def number_condition(col: str, cond: dict[str, Any]) -> SqlPart:
 
     BUSINESS: "LTV greater than 125" is the classic high-LTV screen; "current UPB in
       range 100,000 to 200,000" finds the loan-balance tiers.
-    TECH: equals/greaterThan/lessThan -> =, >, <. inRange -> BETWEEN filter AND
+    TECH: equals/notEqual/greaterThan/greaterThanOrEqual/lessThan/lessThanOrEqual
+      -> =, <>, >, >=, <, <=. A loan with no value (NULL) never passes any of them,
+      "not equal" included, as in SQL. inRange -> BETWEEN filter AND
       filterTo, inclusive at both ends (AG Grid's default). Values are parameters.
     """
     kind = cond.get("type")

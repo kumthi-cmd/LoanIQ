@@ -32,3 +32,20 @@ export type StatusCount = components["schemas"]["StatusCount"];
 export type QuestionCount = components["schemas"]["QuestionCount"];
 /** The tape line under the title: loans, fields, sellers. */
 export type TapeInfo = components["schemas"]["TapeInfo"];
+
+// ---------------------------------------------------------------------------
+// Ask the Tape (Step 4b)
+// ---------------------------------------------------------------------------
+
+/** BUSINESS: is the AI model answering, or built-in rules? TECH: GET /api/ask/status. */
+export type AskStatus = components["schemas"]["AskStatus"];
+/** One loan, every field, for the loan drawer. TECH: GET /api/ask/loans/{loan_id}. */
+export type LoanRecord = components["schemas"]["LoanRecord"];
+/** Every row behind one answer, with its SQL and Loan Tape link. TECH: GET /api/ask/queries/{id}. */
+export type StoredQuery = components["schemas"]["StoredQuery"];
+/** How to open a result in the Loan Tape: AG Grid filter model and sort, or a reason. */
+export type LoanTapeLink = components["schemas"]["LoanTapeLink"];
+/** POST /api/ask body: a typed question or a desk question id. */
+export type AskRequest = components["schemas"]["AskRequest"];
+/** POST /api/ask/rerun body: a saved query's SQL and tag. */
+export type RerunRequest = components["schemas"]["RerunRequest"];

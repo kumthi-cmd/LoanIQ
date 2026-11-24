@@ -47,6 +47,7 @@ class AskService:
     store: QueryStore
     meter: SpendMeter
     tape: ReadOnlyTape
+    tools: TapeTools
 
 
 def build_ask_service(parquet_path: Path, columns: ColumnTypes, labels: dict[str, str],
@@ -70,7 +71,8 @@ def build_ask_service(parquet_path: Path, columns: ColumnTypes, labels: dict[str
     meter = SpendMeter(cfg.budget)
     all_providers = {**build_providers(cfg, offline), **(providers or {}), "offline": offline}
     orchestrator = Orchestrator(cfg, all_providers, offline, tools, meter, words["notices"])
-    return AskService(cfg=cfg, orchestrator=orchestrator, store=store, meter=meter, tape=tape)
+    return AskService(cfg=cfg, orchestrator=orchestrator, store=store, meter=meter, tape=tape,
+                      tools=tools)
 
 
 def close_ask_service(service: AskService) -> None:

@@ -26,6 +26,42 @@
         "title": "AskRequest",
         "type": "object"
       },
+      "AskStatus": {
+        "description": "Who answers this visitor's next typed question.\n\nBUSINESS: the screen shows a small banner when built-in rules (\"Offline\") are\n  answering because the model is switched off or a daily limit is reached.\nTECH: mode \"model\" or \"offline\"; reason is the orchestrator's fallback code\n  (unavailable, daily_budget, visitor_limit); notice is its visitor-facing words\n  from content/ask-the-tape.json.",
+        "properties": {
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "AskStatus",
+        "type": "object"
+      },
       "Breakdowns": {
         "description": "GET /api/loans/breakdowns: the three summary panels, whole tape.\n\nTECH: programs largest balance first; note_rates in rate order, every bucket\n  present (0 when empty); dq_status in the config order, then any status the\n  config does not list.",
         "properties": {
@@ -118,6 +154,70 @@
           "loans"
         ],
         "title": "Health",
+        "type": "object"
+      },
+      "LoanRecord": {
+        "description": "One loan, every field. TECH: field name -> value (dates as ISO text).",
+        "properties": {
+          "loan": {
+            "additionalProperties": true,
+            "title": "Loan",
+            "type": "object"
+          },
+          "loan_id": {
+            "title": "Loan Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loan_id",
+          "loan"
+        ],
+        "title": "LoanRecord",
+        "type": "object"
+      },
+      "LoanTapeLink": {
+        "description": "How to open one answer in the Loan Tape.\n\nBUSINESS: filter is None when the answer's filter cannot be shown as column\n  filters; reason then says why, for the button's tooltip.\nTECH: filter is AG Grid's filter model ({} = the whole tape); sort is the\n  /api/loans sort string (\"col:dir,col:dir\") or None.",
+        "properties": {
+          "filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AG Grid filter model, or None",
+            "title": "Filter"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the filter cannot be shown",
+            "title": "Reason"
+          },
+          "sort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Grid sort, e.g. current_upb:desc",
+            "title": "Sort"
+          }
+        },
+        "title": "LoanTapeLink",
         "type": "object"
       },
       "LoansPage": {
@@ -234,6 +334,28 @@
         "title": "RateBucket",
         "type": "object"
       },
+      "RerunRequest": {
+        "description": "POST /api/ask/rerun body: a saved query's SQL and its tag.\n\nTECH: the SQL's length is checked by sql_guard (llm.toml max_sql_chars).",
+        "properties": {
+          "sql": {
+            "description": "The saved query's SQL, as the agent ran it",
+            "title": "Sql",
+            "type": "string"
+          },
+          "title": {
+            "default": "Saved query",
+            "description": "The saved query's tag",
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "title": "RerunRequest",
+        "type": "object"
+      },
       "StatusCount": {
         "description": "One line of the MBA delinquency panel.\n\nBUSINESS: \"60 days past due: 21 loans\". TECH: current_upb in dollars.",
         "properties": {
@@ -259,7 +381,7 @@
         "type": "object"
       },
       "StoredQuery": {
-        "description": "One query_tape result, as the screen gets it.\n\nBUSINESS: \"Loans over 125 LTV: 20 rows\" plus the SQL that produced them.\nTECH: rows are lists in `columns` order (smaller JSON than dicts). row_count\n  is rows returned (at most max_rows); total_rows counts every row that\n  matched; truncated is True when total_rows > row_count.",
+        "description": "One query_tape result, as the screen gets it.\n\nBUSINESS: \"Loans over 125 LTV: 20 rows\" plus the SQL that produced them.\nTECH: rows are lists in `columns` order (smaller JSON than dicts). row_count\n  is rows returned (at most max_rows); total_rows counts every row that\n  matched; truncated is True when total_rows > row_count. loan_tape is how to\n  open the result in the Loan Tape with the same filter (loan_tape_link.py,\n  Step 4b); None only for results stored before it existed.",
         "properties": {
           "columns": {
             "items": {
@@ -267,6 +389,16 @@
             },
             "title": "Columns",
             "type": "array"
+          },
+          "loan_tape": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoanTapeLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "query_id": {
             "title": "Query Id",
@@ -501,6 +633,46 @@
         "summary": "Ask"
       }
     },
+    "/api/ask/loans/{loan_id}": {
+      "get": {
+        "description": "BUSINESS: the loan drawer: click a loan id in an answer, see the whole loan.\n\nTECH: runs the agent's own get_loan tool (bound parameter, LN + 8 digits).\n  400 for a malformed id, 404 for an id not on this tape.",
+        "operationId": "loan_record_api_ask_loans__loan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loan_id",
+            "required": true,
+            "schema": {
+              "title": "Loan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Loan Record"
+      }
+    },
     "/api/ask/queries/{query_id}": {
       "get": {
         "description": "BUSINESS: every row behind one answer. TECH: 404 if unknown or expired (1 hour).",
@@ -539,6 +711,64 @@
           }
         },
         "summary": "Query Result"
+      }
+    },
+    "/api/ask/rerun": {
+      "post": {
+        "description": "BUSINESS: rerun a saved query on the tape without asking the model again.\n\nTECH: the SQL goes through the same sql_guard gate as the model's query_tape\n  call (one SELECT, the loans table, known columns, bound values, row cap,\n  timeout) and runs on the read-only tape. A refused query is a 400 with the\n  guard's reason. No model call, so no cost and no visitor limit.",
+        "operationId": "rerun_api_ask_rerun_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RerunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredQuery"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rerun"
+      }
+    },
+    "/api/ask/status": {
+      "get": {
+        "description": "BUSINESS: is the AI model answering right now? TECH: no model call, no cost.",
+        "operationId": "ask_status_api_ask_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ask Status"
       }
     },
     "/api/health": {

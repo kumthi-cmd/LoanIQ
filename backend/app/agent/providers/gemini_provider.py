@@ -24,10 +24,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from app.agent.providers.anthropic_provider import sdk_reason
 from app.agent.providers.base import (AssistantTurn, ChatOptions, ChatTurn, LLMProvider, Message,
                                       ProviderError, ProviderUnavailable, ToolCall, ToolResults,
-                                      ToolSpec, Usage, UserText)
+                                      ToolSpec, Usage, UserText, sdk_error)
 
 # TECH: Gemini finish reasons that mean "declined" or "cut short".
 REFUSAL_REASONS = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"}
@@ -132,5 +131,5 @@ class GeminiProvider(LLMProvider):
         try:
             resp = client.models.generate_content(model=model, contents=contents, config=config)
         except Exception as exc:
-            raise ProviderError(sdk_reason(exc), f"Gemini call failed: {exc}") from exc
+            raise sdk_error(exc, "Gemini") from exc
         return parse_generation(resp)

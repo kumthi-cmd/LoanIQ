@@ -31,9 +31,10 @@ const renderAt = (path: string) =>
 describe("live routes", () => {
   const live = NAV_ITEMS.filter((item) => item.live);
 
-  // BUSINESS: Step 1f makes three screens live; fewer would mean a page was lost.
-  it("has Loan Tape, About and How it was built live", () => {
-    expect(live.map((i) => i.path)).toEqual(["/", "/about", "/how-it-was-built"]);
+  // BUSINESS: Step 1f made three screens live and Step 4b adds Ask the Tape; fewer
+  //   would mean a page was lost.
+  it("has Loan Tape, Ask the Tape, About and How it was built live", () => {
+    expect(live.map((i) => i.path)).toEqual(["/", "/ask", "/about", "/how-it-was-built"]);
   });
 
   it.each(live.map((i) => [i.label, i.path]))("%s (%s) renders its own screen", (label, path) => {

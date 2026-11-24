@@ -209,6 +209,22 @@ def test_less_than_and_equals(client: TestClient, duck: duckdb.DuckDBPyConnectio
     assert eq.json()["total"] == count(duck, "orig_term = 360")
 
 
+@pytest.mark.parametrize(("kind", "value", "sql"), [
+    ("greaterThanOrEqual", 700, "fico >= 700"),
+    ("lessThanOrEqual", 680, "fico <= 680"),
+    ("notEqual", 740, "fico <> 740"),
+])
+def test_or_equal_and_not_equal(client: TestClient, duck: duckdb.DuckDBPyConnection,
+                                kind: str, value: int, sql: str) -> None:
+    """BUSINESS: "FICO 700 and up" includes the 700s, as an agent's fico >= 700 does
+      (Step 4b: Ask the Tape opens its filter in the Loan Tape, so the grid must
+      speak the same comparisons). "Not equal" excludes loans with no value, as SQL does.
+    """
+    resp = get_loans(client, filter={"fico": {"filterType": "number", "type": kind, "filter": value}})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == count(duck, sql)
+
+
 def test_in_range_is_inclusive_on_money(client: TestClient, duck: duckdb.DuckDBPyConnection) -> None:
     """BUSINESS: a loan-balance tier like "$100k to $200k" includes both ends."""
     resp = get_loans(client, filter={"current_upb": {"filterType": "number", "type": "inRange",
@@ -284,7 +300,7 @@ def test_unknown_column_is_400(client: TestClient, params: dict[str, Any]) -> No
     {"filter": {"ltv": {"filterType": "text", "type": "contains", "filter": "1"}}},
     {"filter": {"state": {"filterType": "number", "type": "equals", "filter": 1}}},
     {"filter": {"orig_date": {"filterType": "date", "type": "equals", "dateFrom": "2024-01-01"}}},
-    {"filter": {"ltv": {"filterType": "number", "type": "notEqual", "filter": 80}}},
+    {"filter": {"ltv": {"filterType": "number", "type": "notBlank", "filter": 80}}},
     {"filter": {"state": {"filterType": "text", "type": "startsWith", "filter": "N"}}},
     {"filter": {"ltv": {"filterType": "number", "type": "equals", "filter": "80"}}},
     {"filter": {"ltv": {"filterType": "number", "type": "equals", "filter": True}}},

@@ -1,8 +1,11 @@
-"""The Ask the Tape routes: POST /api/ask (streamed) and GET /api/ask/queries/{id}.
+"""The Ask the Tape routes: the question stream and what the screen needs around it.
 
 Where it sits:
     screen (Step 4b) -> [POST /api/ask] -> orchestrator events -> SSE stream
     screen -> [GET /api/ask/queries/{id}] -> QueryStore -> every row of one result
+    screen -> [GET /api/ask/status] -> is the model answering, or built-in rules?
+    loan drawer -> [GET /api/ask/loans/{loan_id}] -> the agent's get_loan tool
+    saved query -> [POST /api/ask/rerun] -> the agent's query_tape gate, no model
 
 BUSINESS: the visitor sees the agent work step by step: each tool call with its
   SQL, then the answer, then what it cost. Then the screen fetches the full rows
@@ -15,6 +18,9 @@ TECH:
     fallback, answer, done.
   - The body is checked in a dependency (ask_input) before streaming starts, so a
     bad request is a normal HTTP 400, not an error halfway through a stream.
+  - Step 4b's routes reuse the agent's own tools (TapeTools), so the loan drawer
+    and a saved-query rerun pass exactly the checks the model's calls pass, and
+    never call a model or count against the AI budget.
   - An APIRouter is a group of routes that main.py adds to the app with
     include_router, keeping the agent's routes out of main.py.
 """
@@ -23,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
@@ -32,6 +38,7 @@ from pydantic import BaseModel, Field
 from app.agent.budget import visitor_key
 from app.agent.query_store import StoredQuery
 from app.agent.service import AskService
+from app.agent.tools import ToolFailure
 
 router = APIRouter()
 
@@ -77,10 +84,15 @@ def ask_input(body: AskRequest, request: Request, service: Service) -> AskInput:
         raise HTTPException(400, "Ask a question about the loan tape.")
     if len(question) > limit:
         raise HTTPException(400, f"Questions are limited to {limit} characters.")
+    return AskInput(question=question, desk_question=body.desk_question,
+                    visitor=visitor_of(request, service))
+
+
+def visitor_of(request: Request, service: AskService) -> str:
+    """The visitor's salted key (budget.visitor_key): never the raw address."""
     host = request.client.host if request.client else None
-    visitor = visitor_key(request.headers.get("x-forwarded-for"), host,
-                          service.cfg.budget.trust_forwarded_for, service.meter.salt)
-    return AskInput(question=question, desk_question=body.desk_question, visitor=visitor)
+    return visitor_key(request.headers.get("x-forwarded-for"), host,
+                       service.cfg.budget.trust_forwarded_for, service.meter.salt)
 
 
 @router.post("/api/ask", response_class=EventSourceResponse)
@@ -101,3 +113,74 @@ def query_result(query_id: str, service: Service) -> StoredQuery:
     if stored is None:
         raise HTTPException(404, "Unknown or expired query id")
     return stored
+
+
+# =============================================================================
+# Step 4b: status, the loan drawer and saved-query reruns
+# =============================================================================
+
+class AskStatus(BaseModel):
+    """Who answers this visitor's next typed question.
+
+    BUSINESS: the screen shows a small banner when built-in rules ("Offline") are
+      answering because the model is switched off or a daily limit is reached.
+    TECH: mode "model" or "offline"; reason is the orchestrator's fallback code
+      (unavailable, daily_budget, visitor_limit); notice is its visitor-facing words
+      from content/ask-the-tape.json.
+    """
+    mode: str
+    reason: str | None = None
+    notice: str | None = None
+
+
+@router.get("/api/ask/status", response_model=AskStatus)
+def ask_status(request: Request, service: Service) -> AskStatus:
+    """BUSINESS: is the AI model answering right now? TECH: no model call, no cost."""
+    reason = service.orchestrator.status(visitor_of(request, service))
+    if reason is None:
+        return AskStatus(mode="model")
+    return AskStatus(mode="offline", reason=reason, notice=service.orchestrator.notice(reason))
+
+
+class LoanRecord(BaseModel):
+    """One loan, every field. TECH: field name -> value (dates as ISO text)."""
+    loan_id: str
+    loan: dict[str, Any]
+
+
+@router.get("/api/ask/loans/{loan_id}", response_model=LoanRecord)
+def loan_record(loan_id: str, service: Service) -> LoanRecord:
+    """BUSINESS: the loan drawer: click a loan id in an answer, see the whole loan.
+
+    TECH: runs the agent's own get_loan tool (bound parameter, LN + 8 digits).
+      400 for a malformed id, 404 for an id not on this tape.
+    """
+    try:
+        _, data, extra = service.tools.get_loan({"loan_id": loan_id})
+    except ToolFailure as exc:
+        raise HTTPException(400 if exc.rejected else 404, str(exc)) from exc
+    return LoanRecord(loan_id=extra["loan_id"], loan=data["loan"])
+
+
+class RerunRequest(BaseModel):
+    """POST /api/ask/rerun body: a saved query's SQL and its tag.
+
+    TECH: the SQL's length is checked by sql_guard (llm.toml max_sql_chars).
+    """
+    sql: str = Field(..., description="The saved query's SQL, as the agent ran it")
+    title: str = Field("Saved query", max_length=120, description="The saved query's tag")
+
+
+@router.post("/api/ask/rerun", response_model=StoredQuery)
+def rerun(body: RerunRequest, service: Service) -> StoredQuery:
+    """BUSINESS: rerun a saved query on the tape without asking the model again.
+
+    TECH: the SQL goes through the same sql_guard gate as the model's query_tape
+      call (one SELECT, the loans table, known columns, bound values, row cap,
+      timeout) and runs on the read-only tape. A refused query is a 400 with the
+      guard's reason. No model call, so no cost and no visitor limit.
+    """
+    try:
+        return service.tools.run_query(body.sql, body.title)
+    except ToolFailure as exc:
+        raise HTTPException(400, str(exc)) from exc

@@ -43,6 +43,7 @@ import duckdb
 from app.agent.config import Limits
 from app.agent.providers.base import ToolCall, ToolResult, ToolSpec
 from app.agent.query_store import QueryStore, StoredQuery
+from app.agent.loan_tape_link import loan_tape_link
 from app.agent.sql_guard import GuardrailError, check_query
 from app.loan_query import ColumnTypes, column_kind, select_list
 
@@ -224,25 +225,42 @@ class TapeTools:
         TECH: guard -> run capped query -> count the full match only if capped ->
           store every row -> totals + first rows as CSV for the model.
         """
+        stored = self.run_query(args["sql"], args["title"])
+        content = query_text(stored, self.limits.rows_to_model)
+        preview = [dict(zip(stored.columns, r)) for r in stored.rows[:self.limits.rows_to_model]]
+        data = {"query_id": stored.query_id, "row_count": stored.row_count,
+                "total_rows": stored.total_rows, "rows": preview}
+        # TECH: loan_tape rides on the event so the screen's "Open in Loan Tape"
+        #   button is ready as soon as the tool chip appears (Step 4b).
+        extra = {"sql": stored.sql, "title": stored.title, "query_id": stored.query_id,
+                 "row_count": stored.row_count, "total_rows": stored.total_rows,
+                 "truncated": stored.truncated,
+                 "loan_tape": stored.loan_tape.model_dump() if stored.loan_tape else None}
+        return content, data, extra
+
+    def run_query(self, sql: str, title: str) -> StoredQuery:
+        """Check, run and store one SELECT. Shared by query_tape and saved-query reruns.
+
+        BUSINESS: a saved query reruns through exactly the gate the model's SQL
+          passes, so a rerun can do nothing the agent could not (Step 4b).
+        TECH: guard -> run capped query -> count the full match only if capped ->
+          store every row with its Loan Tape link. Raises ToolFailure.
+        """
         lim = self.limits
         try:
-            q = check_query(args["sql"], self.columns, lim.max_rows, lim.max_sql_chars)
+            q = check_query(sql, self.columns, lim.max_rows, lim.max_sql_chars)
         except GuardrailError as exc:
             raise ToolFailure(str(exc)) from exc
         names, rows = run_sql(self.con, q.sql, q.params, lim.query_timeout_ms)
         truncated = len(rows) > lim.max_rows
         rows = rows[:lim.max_rows]
         total = run_sql(self.con, q.count_sql, q.params, lim.query_timeout_ms)[1][0][0] if truncated else len(rows)
-        stored = StoredQuery(query_id=QueryStore.new_id(), title=str(args["title"])[:120],
+        stored = StoredQuery(query_id=QueryStore.new_id(), title=str(title)[:120],
                              sql=q.display_sql, columns=names, rows=rows, row_count=len(rows),
-                             total_rows=total, truncated=truncated)
+                             total_rows=total, truncated=truncated,
+                             loan_tape=loan_tape_link(q.display_sql, self.columns))
         self.store.put(stored)
-        content = query_text(stored, lim.rows_to_model)
-        preview = [dict(zip(names, r)) for r in rows[:lim.rows_to_model]]
-        data = {"query_id": stored.query_id, "row_count": len(rows), "total_rows": total, "rows": preview}
-        extra = {"sql": q.display_sql, "title": stored.title, "query_id": stored.query_id,
-                 "row_count": len(rows), "total_rows": total, "truncated": truncated}
-        return content, data, extra
+        return stored
 
     def summarize_tape(self, _: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
         """BUSINESS: what a trader quotes first about a tape. TECH: the screen's own SQL."""

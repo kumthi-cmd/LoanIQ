@@ -21,22 +21,41 @@ TECH:
 
 from __future__ import annotations
 
+import os
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Union
+
+# TECH: the longest provider error message kept for the log (characters).
+MAX_DETAIL_CHARS = 300
+# BUSINESS: an API key must never reach a log, even inside a provider's message.
+# TECH: Anthropic and OpenAI keys start "sk-", Google keys "AIza"; "x-api-key: ..."
+#   and "Bearer ..." cover headers echoed back. Values of every *_API_KEY variable
+#   in the environment are removed too (redact()).
+SECRET_PATTERNS = (re.compile(r"sk-[A-Za-z0-9_\-]{8,}"), re.compile(r"AIza[0-9A-Za-z_\-]{20,}"),
+                   re.compile(r"(?i)\b(x-api-key|api[_-]?key|authorization)\b[\s:=\"']*(bearer\s+)?[^\s,;\"'}]+"),
+                   re.compile(r"(?i)\bbearer\s+[^\s,;\"'}]+"))
 
 
 class ProviderError(RuntimeError):
     """A provider could not answer: network, HTTP error, timeout, bad response.
 
     BUSINESS: the orchestrator answers with built-in rules instead and says why.
-    TECH: adapters wrap their SDK's exceptions in this, so the orchestrator catches
-      one class. `reason` is a short machine-readable code for the log and screen.
+    TECH: adapters wrap their SDK's exceptions in this (sdk_error), so the
+      orchestrator catches one class. `reason` is a short machine-readable code for
+      the log and screen. status is the provider's HTTP status, if any; detail is
+      the provider's own error message, already cut to length and with anything
+      like an API key removed (Step 4b), so the server log says WHY a call failed,
+      not just "http_400".
     """
 
-    def __init__(self, reason: str, message: str) -> None:
+    def __init__(self, reason: str, message: str, status: int | None = None,
+                 detail: str | None = None) -> None:
         super().__init__(message)
         self.reason = reason
+        self.status = status
+        self.detail = detail
 
 
 class ProviderUnavailable(ProviderError):
@@ -187,3 +206,68 @@ class LLMProvider(ABC):
           first; tools every tool the model may call; model the vendor's model id;
           max_tokens the output cap for this call (tokens). Raises ProviderError.
         """
+
+
+# ------------------------------------------------------------------ SDK errors
+
+def sdk_reason(exc: Exception) -> str:
+    """A short reason code for an SDK exception: rate_limit, timeout, network, http_<code>.
+
+    TECH: reads the class name and status code rather than importing the SDKs'
+      classes, so the same function serves every vendor and fake clients.
+    """
+    name = type(exc).__name__
+    if "Timeout" in name:
+        return "timeout"
+    if "RateLimit" in name:
+        return "rate_limit"
+    if "Connection" in name:
+        return "network"
+    status = sdk_status(exc)
+    return f"http_{status}" if status else "error"
+
+
+def sdk_status(exc: Exception) -> int | None:
+    """The HTTP status of an SDK exception. TECH: status_code (Anthropic, OpenAI), code (Gemini)."""
+    for attr in ("status_code", "code"):
+        value = getattr(exc, attr, None)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    return None
+
+
+def sdk_detail(exc: Exception) -> str:
+    """The provider's own error message, redacted and cut to MAX_DETAIL_CHARS.
+
+    BUSINESS: "credit balance is too low" or "model not found" is what the
+      operator needs to fix a failing model, so it goes to the log.
+    TECH: the SDKs keep the parsed JSON error body on .body: Anthropic as
+      {"error": {"type", "message"}}, OpenAI often as {"message", ...}. Without
+      a body, .message, then str(exc).
+    """
+    body = getattr(exc, "body", None)
+    text = None
+    if isinstance(body, dict):
+        inner = body.get("error")
+        text = inner.get("message") if isinstance(inner, dict) else body.get("message")
+    if not isinstance(text, str) or not text:
+        message = getattr(exc, "message", None)
+        text = message if isinstance(message, str) and message else str(exc)
+    return redact(text)[:MAX_DETAIL_CHARS]
+
+
+def redact(text: str) -> str:
+    """Remove API keys: known key shapes and the values of *_API_KEY environment variables."""
+    for name, value in os.environ.items():
+        if name.endswith("_API_KEY") and len(value) >= 8:
+            text = text.replace(value, "[redacted]")
+    for pattern in SECRET_PATTERNS:
+        text = pattern.sub("[redacted]", text)
+    return text
+
+
+def sdk_error(exc: Exception, vendor: str) -> ProviderError:
+    """Wrap any SDK exception in ProviderError with its reason, status and detail."""
+    detail = sdk_detail(exc)
+    return ProviderError(sdk_reason(exc), f"{vendor} call failed: {detail}",
+                         status=sdk_status(exc), detail=detail)

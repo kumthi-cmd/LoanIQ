@@ -59,7 +59,7 @@ describe("createLoanDatasource", () => {
   });
 
   it("reports a refused filter with the server's message", async () => {
-    mockFetch(400, { detail: "Unsupported number filter type: 'notEqual'" });
+    mockFetch(400, { detail: "Unsupported number filter type: 'notBlank'" });
     const onError = vi.fn();
     const params = gridParams();
 
@@ -69,7 +69,7 @@ describe("createLoanDatasource", () => {
 
     expect(params.failCallback).toHaveBeenCalled();
     expect(params.successCallback).not.toHaveBeenCalled();
-    expect(onError.mock.calls[0][0].message).toContain("notEqual");
+    expect(onError.mock.calls[0][0].message).toContain("notBlank");
   });
 });
 

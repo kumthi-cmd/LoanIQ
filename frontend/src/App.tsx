@@ -20,6 +20,7 @@ import { Outlet, type RouteObject } from "react-router";
 import { AppHeader } from "./components/AppHeader";
 import { Sidebar } from "./components/Sidebar";
 import { AboutScreen } from "./screens/AboutScreen";
+import { AskTheTapeScreen } from "./screens/AskTheTapeScreen";
 import { HowItWasBuiltScreen } from "./screens/HowItWasBuiltScreen";
 import { LoanTapeScreen } from "./screens/LoanTapeScreen";
 import { NotFoundScreen } from "./screens/NotFoundScreen";
@@ -63,6 +64,8 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     children: [
       { index: true, element: <LoanTapeScreen /> },
+      // BUSINESS: Ask the Tape, live from Step 4b.
+      { path: "ask", element: <AskTheTapeScreen /> },
       // BUSINESS: the Showcase pages, live from Step 1f.
       { path: "about", element: <AboutScreen /> },
       { path: "how-it-was-built", element: <HowItWasBuiltScreen /> },

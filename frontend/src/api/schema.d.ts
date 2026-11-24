@@ -27,6 +27,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ask/loans/{loan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loan Record
+         * @description BUSINESS: the loan drawer: click a loan id in an answer, see the whole loan.
+         *
+         *     TECH: runs the agent's own get_loan tool (bound parameter, LN + 8 digits).
+         *       400 for a malformed id, 404 for an id not on this tape.
+         */
+        get: operations["loan_record_api_ask_loans__loan_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ask/queries/{query_id}": {
         parameters: {
             query?: never;
@@ -39,6 +62,51 @@ export interface paths {
          * @description BUSINESS: every row behind one answer. TECH: 404 if unknown or expired (1 hour).
          */
         get: operations["query_result_api_ask_queries__query_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rerun
+         * @description BUSINESS: rerun a saved query on the tape without asking the model again.
+         *
+         *     TECH: the SQL goes through the same sql_guard gate as the model's query_tape
+         *       call (one SELECT, the loans table, known columns, bound values, row cap,
+         *       timeout) and runs on the read-only tape. A refused query is a 400 with the
+         *       guard's reason. No model call, so no cost and no visitor limit.
+         */
+        post: operations["rerun_api_ask_rerun_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ask Status
+         * @description BUSINESS: is the AI model answering right now? TECH: no model call, no cost.
+         */
+        get: operations["ask_status_api_ask_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -218,6 +286,24 @@ export interface components {
             question: string;
         };
         /**
+         * AskStatus
+         * @description Who answers this visitor's next typed question.
+         *
+         *     BUSINESS: the screen shows a small banner when built-in rules ("Offline") are
+         *       answering because the model is switched off or a daily limit is reached.
+         *     TECH: mode "model" or "offline"; reason is the orchestrator's fallback code
+         *       (unavailable, daily_budget, visitor_limit); notice is its visitor-facing words
+         *       from content/ask-the-tape.json.
+         */
+        AskStatus: {
+            /** Mode */
+            mode: string;
+            /** Notice */
+            notice?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
          * Breakdowns
          * @description GET /api/loans/breakdowns: the three summary panels, whole tape.
          *
@@ -261,6 +347,46 @@ export interface components {
             loans: number;
             /** Status */
             status: string;
+        };
+        /**
+         * LoanRecord
+         * @description One loan, every field. TECH: field name -> value (dates as ISO text).
+         */
+        LoanRecord: {
+            /** Loan */
+            loan: {
+                [key: string]: unknown;
+            };
+            /** Loan Id */
+            loan_id: string;
+        };
+        /**
+         * LoanTapeLink
+         * @description How to open one answer in the Loan Tape.
+         *
+         *     BUSINESS: filter is None when the answer's filter cannot be shown as column
+         *       filters; reason then says why, for the button's tooltip.
+         *     TECH: filter is AG Grid's filter model ({} = the whole tape); sort is the
+         *       /api/loans sort string ("col:dir,col:dir") or None.
+         */
+        LoanTapeLink: {
+            /**
+             * Filter
+             * @description AG Grid filter model, or None
+             */
+            filter?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Reason
+             * @description Why the filter cannot be shown
+             */
+            reason?: string | null;
+            /**
+             * Sort
+             * @description Grid sort, e.g. current_upb:desc
+             */
+            sort?: string | null;
         };
         /**
          * LoansPage
@@ -324,6 +450,25 @@ export interface components {
             low: number | null;
         };
         /**
+         * RerunRequest
+         * @description POST /api/ask/rerun body: a saved query's SQL and its tag.
+         *
+         *     TECH: the SQL's length is checked by sql_guard (llm.toml max_sql_chars).
+         */
+        RerunRequest: {
+            /**
+             * Sql
+             * @description The saved query's SQL, as the agent ran it
+             */
+            sql: string;
+            /**
+             * Title
+             * @description The saved query's tag
+             * @default Saved query
+             */
+            title: string;
+        };
+        /**
          * StatusCount
          * @description One line of the MBA delinquency panel.
          *
@@ -344,11 +489,14 @@ export interface components {
          *     BUSINESS: "Loans over 125 LTV: 20 rows" plus the SQL that produced them.
          *     TECH: rows are lists in `columns` order (smaller JSON than dicts). row_count
          *       is rows returned (at most max_rows); total_rows counts every row that
-         *       matched; truncated is True when total_rows > row_count.
+         *       matched; truncated is True when total_rows > row_count. loan_tape is how to
+         *       open the result in the Loan Tape with the same filter (loan_tape_link.py,
+         *       Step 4b); None only for results stored before it existed.
          */
         StoredQuery: {
             /** Columns */
             columns: string[];
+            loan_tape?: components["schemas"]["LoanTapeLink"] | null;
             /** Query Id */
             query_id: string;
             /** Row Count */
@@ -456,6 +604,37 @@ export interface operations {
             };
         };
     };
+    loan_record_api_ask_loans__loan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     query_result_api_ask_queries__query_id__get: {
         parameters: {
             query?: never;
@@ -483,6 +662,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rerun_api_ask_rerun_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RerunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredQuery"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_status_api_ask_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskStatus"];
                 };
             };
         };

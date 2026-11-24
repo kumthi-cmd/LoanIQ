@@ -1,6 +1,74 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-24: "Open in Loan Tape" turns the answer's WHERE into the grid's own filters
+Decision (Step 4b): the back end reads each `query_tape` result's WHERE and ORDER BY
+with sqlglot (`backend/app/agent/loan_tape_link.py`) and writes them as AG Grid's
+filter model and the grid's sort string. The Loan Tape reads them from its URL
+(`/?filter=…&sort=…`). Only an AND of simple conditions translates: `=`, `<>`, `>`,
+`>=`, `<`, `<=`, `BETWEEN`, `IN` with up to two values, `LIKE '%text%'`, with at most
+two conditions per column (AG Grid's limit). Anything else (OR across columns, a
+longer list, a function, HAVING, a subquery, a date column) gets a reason instead,
+and the button is disabled with that reason. To fit what agents write, the grid's
+number filter gains "greater/less than or equal" and "not equal", in
+`loan_query.py` and `loanColumns.ts` alike. LIMIT is ignored: the grid shows every
+matching loan.
+Why: the trader sees the answer's filter as ordinary column filters they can read
+and change, and the link stays short enough to bookmark or send. A test checks that
+for every translatable query the grid's API counts exactly the loans DuckDB finds
+with the agent's own WHERE. The link is data, never SQL; `/api/loans` checks it like
+any filter a trader types.
+Known differences: the grid's text "equals" and "contains" ignore case, while SQL's
+`=` and `LIKE` do not. The tape's codes are upper case, so the counts agree on this
+tape.
+Alternatives considered: a list of loan IDs (works for every query, but isn't "the
+same filter" and breaks past a few hundred loans); the query id (expires after an
+hour, and the grid would need a second, hidden filter path).
+
+## 2026-11-24: Saved queries live in the browser and rerun through the agent's own gate
+Decision (Step 4b): "Save query" keeps an answer's SQL (as the screen showed it)
+with a short tag in the visitor's localStorage, the last five. Clicking one sends
+the SQL to `POST /api/ask/rerun`. That route runs it through `TapeTools.run_query`,
+the same `sql_guard` check, row cap, timeout and read-only tape as the model's
+`query_tape`, and never calls a model.
+Why: a per-visitor convenience needs no server state and no accounts. Rerunning
+costs nothing and follows the same rule each time. The route accepts SQL from the
+browser, but only what the agent itself may run, so it opens no new kind of access
+to the synthetic tape. Storage is wrapped in try/catch, so a blocked or full
+localStorage just means saved queries don't survive a reload.
+Alternatives considered: saving on the server (needs visitor identity and cleanup);
+rerunning the question through the model (costs money and may write different SQL).
+
+## 2026-11-24: Ask the Tape answers show plain tables; the header and Ctrl K fill, never send
+Decision (Step 4b): every result shows as a table formatted like the Loan Tape. The
+first 8 rows show, as on the design board, with "Show all" for the rest. The
+board's bar chart for "90+ by seller" is not drawn per answer type yet. Loan IDs
+open a drawer through the agent's `get_loan` tool (`GET /api/ask/loans/{id}`). The
+header's "Ask the tape" box and Ctrl K open `/ask?q=…` with the question filled in
+but not sent. "Send to Slotting" is hidden until Step 5. A small Offline banner
+shows while built-in rules answer for a lasting reason (no key, daily budget,
+visitor limit), from a new `GET /api/ask/status`. A one-off fallback, such as a
+timeout, stays a notice under that answer.
+Why: one table component covers every answer shape and keeps numbers exact.
+Filling without sending means a stray Ctrl K never spends a model call. A banner
+before the first question sets expectations.
+Alternatives considered: a chart chosen per answer shape (later, if answers need
+it); sending the header question at once (faster, but spends money on half-typed
+questions).
+
+## 2026-11-24: A failed model call logs the provider's own message, never the key or question
+Decision (Step 4b): adapters wrap SDK errors with `sdk_error`, which keeps the HTTP
+status and the provider's own error message: Anthropic's `error.message`, OpenAI's
+`message`, else the exception text. The message is cut to 300 characters and
+anything shaped like a key is redacted: `sk-…`, `AIza…`, `x-api-key`, `Bearer`, and
+the value of every `*_API_KEY` variable. The orchestrator logs one warning line,
+`provider_error`, with provider, model, reason, status and message. If the provider
+echoed the visitor's question back, it is replaced with `[question]`. The
+Playwright server now starts with `ANTHROPIC_API_KEY` blank, so e2e runs on the
+built-in rules whatever key is set in the shell.
+Why: Render's logs said only `http_400`; the operator needs "credit balance too
+low" or "model not found" to fix it. Keys and visitors' questions stay out of logs.
+
 ## 2026-11-23: Ask the Tape runs LoanIQ's own loop behind one provider interface
 Decision (Step 4a): the agent loop is LoanIQ code (`backend/app/agent/orchestrator.py`)
 calling the Messages API one round at a time, not Anthropic's Managed Agents or the
