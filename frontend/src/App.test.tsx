@@ -2,7 +2,8 @@
  * Tests for App.tsx with its header, sidebar and Loan Tape screen together.
  * BUSINESS: a visitor opening LoanIQ sees the synthetic-data warning, the whole
  *   workflow in the sidebar (Loan Tape, Ask the Tape, About and How it was built
- *   live, the rest marked Planned), an "Ask the tape" box and Ctrl K that open Ask
+ *   live, the rest marked Planned, with Tape Upload and Explorer last in Trade since
+ *   Step 4d), the Agent mark beside Ask the Tape only (Step 4d), an "Ask the tape" box and Ctrl K that open Ask
  *   the Tape with the question filled in (Step 4b), the
  *   tape's headline numbers and panels from the API, desk-question chips that filter
  *   the grid, the explanation one click away (closed by default since Step 1g), and a
@@ -12,11 +13,12 @@
  *   mocked per URL. LoanGrid is replaced by a stub (vi.mock) because AG Grid needs
  *   real layout that jsdom does not have; the real grid is covered by Playwright (e2e/).
  */
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "./App";
+import { lookupTerm } from "./content/content";
 
 // TECH: the stub shows what the screen passed it (desk question, hidden columns) and
 //   reports a filtered count when its button is clicked, like the real grid does
@@ -125,6 +127,79 @@ describe("App", () => {
     for (const group of ["Tape", "Price", "Trade", "Showcase"]) {
       expect(nav.getByRole("list", { name: group })).toBeInTheDocument();
     }
+    // BUSINESS: Tape Upload and Explorer are later development, so since Step 4d they
+    //   sit at the end of Trade, after Optimizer; Tape holds only the live screens.
+    const trade = within(nav.getByRole("list", { name: "Trade" }));
+    expect(trade.getAllByRole("listitem").map((li) => li.textContent?.replace("Planned", ""))).toEqual(
+      ["7Blotter & Positions", "8Optimizer", "2Tape Upload", "3Explorer"],
+    );
+    const tape = within(nav.getByRole("list", { name: "Tape" }));
+    expect(tape.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  // BUSINESS: the Agent mark says which screen Claude answers, and only that one.
+  it("shows the Agent mark only beside agent screens, outside the link, which is named for it", () => {
+    renderApp();
+    const nav = within(screen.getByRole("navigation", { name: "Screens" }));
+    const marks = nav.getAllByRole("button", { name: /^Agent/ });
+    expect(marks).toHaveLength(1);
+    const link = nav.getByRole("link", { name: "Ask the Tape, agent" });
+    // TECH: a button inside a link is invalid HTML and would navigate on click.
+    expect(link).not.toContainElement(marks[0]);
+    expect(link.parentElement).toContainElement(marks[0]);
+    expect(marks[0]).toHaveTextContent("Agent");
+    // BUSINESS: the flask is decoration; the word "Agent" carries the meaning.
+    expect(marks[0].querySelector("img")).toHaveAttribute("src", "/icon/favicon.svg");
+    expect(marks[0].querySelector("img")).toHaveAttribute("aria-hidden", "true");
+    // TECH: every other live link keeps its plain name.
+    expect(nav.getByRole("link", { name: "Loan Tape" })).toBeInTheDocument();
+    expect(nav.getByRole("link", { name: "About" })).toBeInTheDocument();
+  });
+
+  // BUSINESS: hovering the mark says what an agent is, in the glossary's words.
+  it("shows the glossary's Agent definition on hover and on focus", async () => {
+    renderApp();
+    const mark = within(screen.getByRole("navigation", { name: "Screens" })).getByRole("button", { name: /^Agent/ });
+    const definition = lookupTerm("Agent")!.definition;
+    expect(mark).toHaveAccessibleDescription(definition);
+    await userEvent.hover(mark);
+    expect(screen.getByTestId("agent-tooltip")).toHaveTextContent(definition);
+    await userEvent.unhover(mark);
+    expect(screen.queryByTestId("agent-tooltip")).not.toBeInTheDocument();
+    mark.focus();
+    expect(await screen.findByTestId("agent-tooltip")).toHaveTextContent(definition);
+  });
+
+  // BUSINESS: clicking the mark explains the agent; it never leaves the current screen.
+  it("opens the agent explainer from the sidebar mark without navigating", async () => {
+    const router = renderApp();
+    const mark = within(screen.getByRole("navigation", { name: "Screens" })).getByRole("button", { name: /^Agent/ });
+    await userEvent.click(mark);
+    expect(router.state.location.pathname).toBe("/");
+    const dialog = screen.getByRole("dialog", { name: "The Ask the Tape agent" });
+    expect(mark).toHaveAttribute("aria-expanded", "true");
+    expect(within(dialog).getByText("Who does what")).toBeInTheDocument();
+    expect(within(dialog).getByRole("img", { name: /The Ask the Tape agent loop/ }))
+      .toHaveAttribute("src", expect.stringContaining("ask-the-tape-agent"));
+    // BUSINESS: a click anywhere else closes it, and the visitor stays on the Loan Tape.
+    await userEvent.click(screen.getByText("Synthetic data · demonstration only"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/");
+    // TECH: focus comes back once the click is fully handled (a 0 ms timer).
+    await waitFor(() => expect(mark).toHaveFocus());
+  });
+
+  // BUSINESS: clicking into another box closes the explainer but leaves the visitor
+  //   typing there; focus is never pulled back to the mark.
+  it("keeps focus on the box the visitor clicked when closing the explainer", async () => {
+    renderApp();
+    const mark = within(screen.getByRole("navigation", { name: "Screens" })).getByRole("button", { name: /^Agent/ });
+    await userEvent.click(mark);
+    const box = screen.getByRole("searchbox", { name: /Ask the tape/ });
+    await userEvent.click(box);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(box).toHaveFocus();
   });
 
   // BUSINESS: the header box hands the question to Ask the Tape, filled in but NOT

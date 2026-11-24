@@ -2,7 +2,8 @@
  * content/content.ts: the SPA's single door to the visitor-facing words in content/.
  *
  * Where it sits: repo content/ (glossary, screen explanations, column terms, desk
- * question labels, screen captions, the Showcase pages and build facts) ->
+ * question labels, screen captions, the Showcase pages, build facts, and the Ask the
+ * Tape agent's explainer and diagram) ->
  * [content.ts] -> Explain panel, glossary tooltips, grid header tooltips, panel
  * captions, desk-question chips, the About and How it was built pages.
  *
@@ -15,6 +16,11 @@
  *   and rendered later by react-markdown.
  */
 import aboutMd from "@content/about.md?raw";
+import agentMd from "@content/agent.md?raw";
+// TECH: an SVG import without "?raw" gives its URL, not its text: Vite copies the
+//   file into the build with a content hash in its name (or inlines a small one as
+//   a data: URL). The page shows it with <img src>, so its markup never enters the DOM.
+import agentDiagramSvgUrl from "@content/diagrams/ask-the-tape-agent.svg";
 import askTheTapeJson from "@content/ask-the-tape.json";
 import askTheTapeScreenJson from "@content/screens/ask-the-tape.json";
 import askTheTapeMd from "@content/screens/ask-the-tape.md?raw";
@@ -133,6 +139,24 @@ export const loanTapeContent = loanTapeJson;
  *   "offline" and "notices" sections are read by the back end, never here.
  */
 export const askTheTapeContent = askTheTapeJson.screen;
+
+// =============================================================================
+// The Agent mark's explainer (Step 4d)
+// =============================================================================
+
+/**
+ * How the Ask the Tape agent works, as one Markdown file, and the loop diagram.
+ * BUSINESS: the Agent mark (sidebar and screen title) opens these, so a visitor can
+ *   see what Claude does and what LoanIQ's code does, without leaving the screen.
+ * TECH: agentMd is the raw text of content/agent.md, rendered whole by
+ *   ShowcaseMarkdown. agentDiagramUrl is the URL of
+ *   content/diagrams/ask-the-tape-agent.svg, for an <img>; its alt text is
+ *   askTheTapeContent.agentMark.diagramAlt.
+ */
+export const agentExplainer = {
+  markdown: agentMd,
+  diagramUrl: agentDiagramSvgUrl,
+} as const;
 
 /**
  * Fill {name} placeholders in a caption.

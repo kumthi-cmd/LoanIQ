@@ -4,24 +4,35 @@
  * Where it sits: [nav] -> Sidebar (links) and App.tsx (routes).
  *
  * BUSINESS: the sidebar reads like the desk's day, in four groups:
- *   Tape      look at the tape, upload one, explore it, ask it questions
+ *   Tape      look at the tape, ask it questions
  *   Price     slot loans into pools, find the best execution
  *   Trade     watch the blotter and positions, optimize
  *   Showcase  what LoanIQ is and how it was built AI-first
  *   Screens not built yet are shown but disabled, marked "Planned", so a visitor sees
  *   the whole workflow from the first screen. The number is the roadmap step that
  *   builds the screen (docs/roadmap.md); Showcase pages have none.
+ *   Tape Upload (2) and Explorer (3) sit at the end of Trade, after Optimizer, since
+ *   Step 4d: they are later development, so the live Tape screens come first and
+ *   the planned ones wait at the bottom of the workflow (docs/decisions.md).
+ *   An item with agent: true is answered by an AI agent and carries the Agent mark
+ *   (components/AgentMark.tsx), so a visitor can see which screen uses Claude.
  * TECH: one list drives both the sidebar and the router. A screen becomes live by
  *   setting live: true and adding its route in App.tsx. React Router then swaps the
  *   screen in the page with no reload.
  */
 
-/** One sidebar entry. TECH: path is the URL; step is the roadmap step (null: none shown). */
+/**
+ * One sidebar entry.
+ * BUSINESS: agent marks a screen whose answers come from an AI agent (Ask the Tape).
+ * TECH: path is the URL; step is the roadmap step (null: none shown). agent is
+ *   optional, so every other item leaves it out and reads as false.
+ */
 export interface NavItem {
   label: string;
   path: string;
   step: number | null;
   live: boolean;
+  agent?: boolean;
 }
 
 /** One sidebar group. BUSINESS: a stage of the desk's workflow. */
@@ -35,10 +46,9 @@ export const NAV_GROUPS: NavGroup[] = [
     group: "Tape",
     items: [
       { label: "Loan Tape", path: "/", step: 1, live: true },
-      { label: "Tape Upload", path: "/upload", step: 2, live: false },
-      { label: "Explorer", path: "/explorer", step: 3, live: false },
-      // BUSINESS: live from Step 4b: plain-English questions answered from the tape.
-      { label: "Ask the Tape", path: "/ask", step: 4, live: true },
+      // BUSINESS: live from Step 4b: plain-English questions answered from the tape,
+      //   by a Claude agent (Step 4d shows the Agent mark beside it).
+      { label: "Ask the Tape", path: "/ask", step: 4, live: true, agent: true },
     ],
   },
   {
@@ -53,6 +63,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Blotter & Positions", path: "/positions", step: 7, live: false },
       { label: "Optimizer", path: "/optimizer", step: 8, live: false },
+      // BUSINESS: later development, moved here in Step 4d (see the header comment).
+      { label: "Tape Upload", path: "/upload", step: 2, live: false },
+      { label: "Explorer", path: "/explorer", step: 3, live: false },
     ],
   },
   {

@@ -1,6 +1,27 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-24: The Agent mark is a button beside the link, never inside it
+Decision (Step 4d): screens answered by an AI agent (`agent: true` in
+`frontend/src/nav.ts`, Ask the Tape only for now) carry a small gold "Agent" mark: the
+LoanIQ Labs flask and the word "Agent". In the sidebar it is its own button right
+after the link, in the same row, and the link is named "Ask the Tape, agent". It also
+sits beside the Ask the Tape title. Hover or focus shows the glossary's "Agent"
+definition in one line. A click opens a popover with `content/agent.md` and the loop
+diagram `content/diagrams/ask-the-tape-agent.svg`, shown as an `<img>`.
+Why: a button inside a link is invalid HTML, and a click on it would also navigate.
+An `<img>` keeps the SVG's markup out of the page. The popover is drawn at the end of
+the page with fixed position, so the scrolling sidebar cannot clip it.
+Alternative considered: a badge inside the link (invalid, and it navigates), or a
+separate About-the-agent page (takes the visitor away from the screen).
+
+## 2026-11-24: Planned Tape Upload and Explorer move to the end of Trade
+Decision (Step 4d): Tape Upload (Step 2) and Explorer (Step 3) now sit after
+Optimizer, at the end of the Trade group. They keep their step numbers and "Planned"
+tags. The Tape group holds only the live Loan Tape and Ask the Tape.
+Why: both are later development (Step 4 was built ahead of them), so the screens a
+visitor can use come first.
+
 ## 2026-11-24: One default-column list for both screens, added to loan-level answers
 Decision (Step 4c): the 12 columns a trader reads first (loan ID, seller, program,
 product, state, note rate, current UPB, FICO, LTV, DTI, DQ status, occupancy) live

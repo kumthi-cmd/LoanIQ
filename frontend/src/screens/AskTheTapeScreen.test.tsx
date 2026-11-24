@@ -7,7 +7,8 @@
  *   - click a loan ID to see the whole loan;
  *   - open the same filter in the Loan Tape, or see why it cannot open;
  *   - save a query and rerun it WITHOUT calling the model;
- *   - see the Offline banner when built-in rules answer, and a clear error.
+ *   - see the Offline banner when built-in rules answer, and a clear error;
+ *   - open the agent explainer from the Agent mark beside the title (Step 4d).
  * TECH: the real routes in a memory router; fetch is mocked per URL and method. The
  *   question stream is a real Response with an SSE body. LoanGrid is stubbed (AG Grid
  *   needs real layout); it prints the filter it was given.
@@ -216,5 +217,44 @@ describe("Ask the Tape", () => {
     await userEvent.click(screen.getByRole("button", { name: "Explain this screen" }));
     const panel = screen.getByRole("complementary", { name: "Screen explanation" });
     expect(panel).toHaveTextContent("A trader asks the tape");
+  });
+
+  // BUSINESS: the Agent mark beside the title explains the agent behind this screen:
+  //   content/agent.md and the loop diagram. Esc closes it and the keyboard user is
+  //   back on the mark, ready to carry on.
+  it("opens the agent explainer from the title's mark, and Esc closes it and returns focus", async () => {
+    renderAsk();
+    const heading = screen.getByRole("heading", { level: 2, name: "Ask the Tape" });
+    const mark = within(heading.parentElement!).getByRole("button", { name: /^Agent/ });
+    // TECH: Enter on a focused button clicks it, so the keyboard path is the real one.
+    mark.focus();
+    await userEvent.keyboard("{Enter}");
+    const dialog = screen.getByRole("dialog", { name: "The Ask the Tape agent" });
+    expect(dialog).toHaveFocus();
+    expect(within(dialog).getByText(/Ask the Tape uses one Claude agent/)).toBeInTheDocument();
+    const diagram = within(dialog).getByRole("img", { name: /The Ask the Tape agent loop/ });
+    expect(diagram.tagName).toBe("IMG");
+    expect(diagram).toHaveAttribute("src", expect.stringContaining("ask-the-tape-agent"));
+    // BUSINESS: no model call is made by opening the explainer.
+    expect(modelCalls()).toBe(0);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(mark).toHaveFocus();
+    expect(mark).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("closes the agent explainer with its Close button, and a second click on the mark toggles it", async () => {
+    renderAsk();
+    const heading = screen.getByRole("heading", { level: 2, name: "Ask the Tape" });
+    const mark = within(heading.parentElement!).getByRole("button", { name: /^Agent/ });
+    await userEvent.click(mark);
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(mark).toHaveFocus();
+    // TECH: a press on the mark is not an "outside click", so it opens, then closes.
+    await userEvent.click(mark);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await userEvent.click(mark);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
