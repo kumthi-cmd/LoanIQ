@@ -11,7 +11,8 @@
  *      (which coupons it fits), MBA delinquency (how much is late);
  *   4. desk-question chips (LTV over 125, New York, ...) that filter the grid in one click;
  *   5. the grid of every loan, sorted and filtered on the server.
- *   The "Explain this screen" panel on the right says what all of this means.
+ *   The "Explain this screen" button opens a panel on the right that says what all of
+ *   this means. It starts closed so the grid has room for every default column.
  *   Every number is computed by the API from the real (synthetic) tape.
  * TECH:
  *   - On first draw, five API calls start together (columns, summary, breakdowns,
@@ -68,7 +69,9 @@ export function LoanTapeScreen() {
   const [tape, setTape] = useState<TapeInfo | null>(null);
   const [question, setQuestion] = useState<string | null>(null);
   const [matching, setMatching] = useState<number | null>(null);
-  const [explainOpen, setExplainOpen] = useState(true);
+  // BUSINESS: the explanation starts closed, so the grid gets the full width and all
+  //   12 default columns show at 1440 px; "Explain this screen" opens it (Step 1g).
+  const [explainOpen, setExplainOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

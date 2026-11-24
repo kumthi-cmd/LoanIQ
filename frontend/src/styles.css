@@ -181,7 +181,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
   padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
 }
 .panel-head { display: flex; justify-content: space-between; gap: 8px; }
-.panel-title { font-weight: 600; }
+/* TECH: the title never wraps ("Note rate distribution" stays one line, as on the
+ *   board); the caption beside it may wrap instead. Step 1g. */
+.panel-title { font-weight: 600; white-space: nowrap; }
 .panel-caption { color: var(--muted); font-size: 11px; text-align: right; }
 .panel-note { margin: 0; font-size: 11.5px; color: var(--muted); }
 .bar-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -202,11 +204,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
 .histogram-col { flex: 1; display: flex; align-items: flex-end; min-width: 0; }
 .histogram-bar { width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; }
 .histogram-axis { display: flex; gap: 4px; font-size: 10.5px; color: var(--muted); }
-.histogram-axis span { flex: 1; min-width: 0; white-space: nowrap; overflow: visible; }
+/* TECH: ">" so only the per-bucket columns flex, not the label text inside them. */
+.histogram-axis > span { flex: 1; min-width: 0; white-space: nowrap; overflow: visible; }
+/* TECH: label placement (NoteRatePanel.tsx explains it). The open-ended "9%+" ends at
+ *   the axis's right edge, spilling left over its narrow column, as on the design
+ *   board; a middle tick's text is centred on its bucket's left edge (translateX
+ *   -50% moves the inner text by half its own width). Step 1g. */
+.histogram-axis .histogram-axis-end { display: flex; justify-content: flex-end; }
+.histogram-axis-tick > span { display: inline-block; transform: translateX(-50%); }
 
 /* ---- Desk-question chips ---- */
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.chips-label { margin-right: 4px; }
+/* TECH: the "Desk questions" label takes a line of its own above the chips
+ *   (flex-basis 100% in a wrapping row), which frees about 110 px so all six chips
+ *   fit on one row at 1440 px even with the explanation open. Step 1g. */
+.chips-label { flex-basis: 100%; font-size: 11.5px; }
 .chip {
   min-height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--border); background: var(--panel); color: var(--text);

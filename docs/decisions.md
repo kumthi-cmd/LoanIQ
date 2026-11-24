@@ -1,6 +1,32 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-23: Loan Tape at 1440 px: explanation closed by default, columns fitted to content
+Decision (Step 1g, closing the Step 1d layout follow-ups, checked against the
+"1 · Loan Tape" board at 1440 px and measured in Chromium):
+- The "Explain this screen" panel starts closed; one click opens it. This replaces
+  "the explanation open beside the grid" in the 2026-11-19 entry below.
+- The 12 default columns start at widths fitted to their content
+  (`DEFAULT_COLUMN_WIDTHS` in `frontend/src/grid/gridConfig.ts`, 1,135 px in all),
+  not AG Grid's 130 px each. At 1440 px all 12 show with the explanation closed;
+  with it open, the first 8 show and the grid scrolls sideways for the rest.
+- The "Desk questions" label sits on its own line above the chips, so all six chips
+  fit on one row at 1440 px, open or closed.
+- The note-rate panel caption is the board's "UPB by 0.5% bucket" (the width read
+  from the data), and panel titles never wrap.
+- Axis labels: the first at the left edge, middle ticks centred on their bucket's
+  edge, the open-ended last one written short ("9%+", as on the board) and
+  right-aligned at the axis end.
+Why: the board's own table needs about 1,100 px for 12 columns, more than the grid
+has beside a 300 px explanation at 1440 px, so no width setting fits all 12 with
+the panel open. Closing it by default gives a trader the whole default tape at
+once, and the explanation is still one click away on every screen. The chip label
+and the short caption keep the board's chip and title sizes instead of shrinking
+them.
+Alternatives considered: a narrower explanation panel (changes the board); smaller
+chips or a 200 px sidebar like the board (only just fits, and "Blotter & Positions
+Planned" gets tight); keeping the explanation open and accepting about 9 columns.
+
 ## 2026-11-23: The flask holds a house and a coin, not a brain
 Decision: the LoanIQ Labs symbol keeps the v1 flask, but the brain is replaced by a
 house standing in blue liquid with a gold $ coin on its front, drawn as a flat,

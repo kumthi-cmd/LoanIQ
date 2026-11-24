@@ -20,6 +20,7 @@ import type { CellClassParams, ColDef, ValueFormatterParams } from "ag-grid-comm
 import type { ColumnInfo, LoanRow } from "../api/types";
 import { columnTerms, termTooltip } from "../content/content";
 import { formatBoolean, formatDate, formatNumber, numberFormatFor } from "./columnFormats";
+import { DEFAULT_COLUMN_WIDTHS } from "./gridConfig";
 
 // BUSINESS: the loan key, pinned on the left.
 export const PINNED_COLUMN = "loan_id";
@@ -102,6 +103,14 @@ export function buildColumnDefs(columns: ColumnInfo[], hidden: ReadonlySet<strin
       hide: col.name !== PINNED_COLUMN && hidden.has(col.name),
       ...kindSettings(col),
     };
+    // BUSINESS: default columns start at a width fitted to their content, so all 12
+    //   fit at 1440 px (gridConfig.ts). TECH: minWidth drops with it, because the grid
+    //   default minWidth (90 px) would otherwise widen FICO, State, LTV and DTI again.
+    const width = DEFAULT_COLUMN_WIDTHS[col.name];
+    if (width !== undefined) {
+      def.width = width;
+      def.minWidth = width;
+    }
     if (col.name === PINNED_COLUMN) {
       def.pinned = "left";
       def.lockPinned = true;

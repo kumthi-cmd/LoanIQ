@@ -186,9 +186,12 @@ test("numbers are formatted for the desk", async ({ page, request }) => {
 });
 
 test("the explain panel shows the Business and Technical explanation", async ({ page }) => {
-  // BUSINESS: the explanation is open beside the grid on first visit, as in the design.
+  // BUSINESS: since Step 1g the explanation starts closed, so the grid gets the full
+  //   width; "Explain this screen" opens it beside the grid.
   await openTape(page);
   const panel = page.getByRole("complementary", { name: "Screen explanation" });
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "Explain this screen" }).click();
   await expect(panel.getByRole("tab", { name: "Business" })).toHaveAttribute("aria-selected", "true");
   await expect(panel.getByRole("tabpanel")).toContainText("first look at a pool of loans");
   await panel.getByRole("tab", { name: "Technical" }).click();

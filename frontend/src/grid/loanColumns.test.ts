@@ -7,6 +7,7 @@
 import type { CellClassParams, ColDef, ValueFormatterParams } from "ag-grid-community";
 import { describe, expect, it } from "vitest";
 import type { ColumnInfo, LoanRow } from "../api/types";
+import { DEFAULT_COLUMN_WIDTHS, DEFAULT_VISIBLE_COLUMNS } from "./gridConfig";
 import { buildColumnDefs, isDelinquent, NUMBER_FILTER_OPTIONS, TEXT_FILTER_OPTIONS } from "./loanColumns";
 
 const COLUMNS: ColumnInfo[] = [
@@ -105,5 +106,30 @@ describe("buildColumnDefs with hidden columns", () => {
   it("shows every column by default, and loan IDs in a monospace font", () => {
     expect(defs.every((d) => d.hide === false)).toBe(true);
     expect(byName("loan_id").cellClass).toBe("cell-mono");
+  });
+});
+
+describe("buildColumnDefs default widths (Step 1g)", () => {
+  // BUSINESS: the default columns start fitted to their content, so all 12 show at
+  //   1440 px with the explanation closed (e2e/tests/loan-tape-layout.spec.ts checks
+  //   that in a real browser).
+  it("starts each default column at its configured width, and no narrower", () => {
+    expect(byName("loan_id").width).toBe(DEFAULT_COLUMN_WIDTHS.loan_id);
+    expect(byName("note_rate").width).toBe(DEFAULT_COLUMN_WIDTHS.note_rate);
+    expect(byName("ltv").minWidth).toBe(DEFAULT_COLUMN_WIDTHS.ltv);
+  });
+
+  // TECH: a column with no configured width keeps the grid default (LoanGrid.tsx).
+  it("leaves other columns to the grid default", () => {
+    expect(byName("orig_date").width).toBeUndefined();
+    expect(byName("property_type").minWidth).toBeUndefined();
+  });
+
+  // BUSINESS: every default column has a width, and they add up to less than the
+  //   grid's width at 1440 px with the explanation closed (about 1,150 px).
+  it("sizes all 12 default columns within the 1440 px budget", () => {
+    expect(Object.keys(DEFAULT_COLUMN_WIDTHS).sort()).toEqual([...DEFAULT_VISIBLE_COLUMNS].sort());
+    const total = Object.values(DEFAULT_COLUMN_WIDTHS).reduce((a, b) => a + b, 0);
+    expect(total).toBeLessThanOrEqual(1150);
   });
 });

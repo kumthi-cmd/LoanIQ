@@ -59,6 +59,28 @@ describe("NoteRatePanel", () => {
     render(<NoteRatePanel buckets={buckets} />);
     expect(screen.getByText(/WAC alone hides this shape/)).toBeInTheDocument();
   });
+
+  // BUSINESS: the board's short caption, with the bucket width from the data (Step 1g).
+  it("captions the panel with the bucket width read from the data", () => {
+    render(<NoteRatePanel buckets={buckets} />);
+    expect(region("Note rate distribution").getByText("UPB by 0.5% bucket")).toBeInTheDocument();
+  });
+
+  // TECH: the first label starts at the axis edge, middle ticks are centred on their
+  //   bucket edge, and the open-ended last label is right-aligned (styles.css).
+  it("places the first, middle and open-ended axis labels", () => {
+    const four: RateBucket[] = [
+      { low: null, high: 2.5, loans: 1, current_upb: 1 }, { low: 2.5, high: 3, loans: 1, current_upb: 1 },
+      { low: 3, high: 3.5, loans: 1, current_upb: 1 }, { low: 3.5, high: 4, loans: 1, current_upb: 1 },
+      { low: 4, high: 4.5, loans: 1, current_upb: 1 }, { low: 4.5, high: null, loans: 1, current_upb: 1 },
+    ];
+    const { container } = render(<NoteRatePanel buckets={four} />);
+    const slots = [...container.querySelectorAll(".histogram-axis > span")];
+    expect(slots.map((s) => s.textContent)).toEqual(["2.0%", "", "", "", "4.0%", "4.5%+"]);
+    expect(slots[0]).not.toHaveClass("histogram-axis-tick");
+    expect(slots[4]).toHaveClass("histogram-axis-tick");
+    expect(slots[5]).toHaveClass("histogram-axis-end");
+  });
 });
 
 describe("DelinquencyPanel", () => {

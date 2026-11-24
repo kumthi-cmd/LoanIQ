@@ -4,7 +4,8 @@
  *   workflow in the sidebar (Loan Tape, About and How it was built live, the rest
  *   marked Planned), the
  *   tape's headline numbers and panels from the API, desk-question chips that filter
- *   the grid, the explanation open beside it, and a header count that follows the
+ *   the grid, the explanation one click away (closed by default since Step 1g), and a
+ *   header count that follows the
  *   grid's filter.
  * TECH: createMemoryRouter runs the real routes without a browser URL bar. fetch is
  *   mocked per URL. LoanGrid is replaced by a stub (vi.mock) because AG Grid needs
@@ -147,15 +148,17 @@ describe("App", () => {
     expect(screen.getByText("grid question: none")).toBeInTheDocument();
   });
 
-  it("shows the explanation open by default, and hides and reopens it", async () => {
+  // BUSINESS: since Step 1g the explanation starts closed, so the grid has room for
+  //   every default column; one click opens it and another hides it again.
+  it("shows the explanation closed by default, and opens and hides it", async () => {
     renderApp();
-    const toggle = screen.getByRole("button", { name: "Hide explanation" });
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("complementary", { name: "Screen explanation" })).toBeInTheDocument();
-    await userEvent.click(toggle);
+    const toggle = screen.getByRole("button", { name: "Explain this screen" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("complementary", { name: "Screen explanation" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Explain this screen" }));
+    await userEvent.click(toggle);
     expect(screen.getByRole("complementary", { name: "Screen explanation" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Hide explanation" }));
+    expect(screen.queryByRole("complementary", { name: "Screen explanation" })).not.toBeInTheDocument();
   });
 
   it("shows Export CSV disabled and marked Planned", () => {

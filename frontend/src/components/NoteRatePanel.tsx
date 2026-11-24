@@ -15,10 +15,10 @@
  *   labels come from rateBuckets.ts, from the data, never a copy of api.toml.
  */
 import type { RateBucket } from "../api/types";
-import { loanTapeContent } from "../content/content";
+import { fillCaption, loanTapeContent } from "../content/content";
 import { barPercent } from "./barScale";
 import { GlossaryTerm } from "./GlossaryTerm";
-import { axisLabels, bucketDescription, bucketLabel } from "./rateBuckets";
+import { axisLabels, bucketDescription, bucketLabel, bucketWidth } from "./rateBuckets";
 import { SummaryPanel } from "./SummaryPanel";
 
 interface NoteRatePanelProps {
@@ -36,8 +36,21 @@ export function NoteRatePanel({ buckets }: NoteRatePanelProps) {
   const max = Math.max(0, ...list.map((b) => b.current_upb));
   const labels = axisLabels(list);
   const { noteRate, noteRateNote } = loanTapeContent.captions;
+  // BUSINESS: "UPB by 0.5% bucket", the board's short caption, so the title keeps one
+  //   line. TECH: the width comes from the data (api.toml sets it); "…" while loading.
+  const width = bucketWidth(list);
+  const caption = fillCaption(noteRate, { width: width === null ? "…" : String(width) });
+  // TECH: where each axis label sits (Step 1g, measured at 1440 px):
+  //   - the first ("2.0%") starts at the axis's left edge, which is its bucket's edge;
+  //   - the open-ended last one ("9%+") ends at the axis's right edge, as on the board;
+  //   - every other tick ("4.0%", "6.0%", "8.0%") is centred on its bucket's lower
+  //     edge, the usual chart convention. Left-aligned, "8.0%" ran into "9%+" when the
+  //     explanation is open and the panel is narrow; centred, they keep about 9 px apart.
+  const lastOpen = list.length > 0 && list[list.length - 1].high === null;
+  const labelClass = (i: number) =>
+    lastOpen && i === labels.length - 1 ? "histogram-axis-end" : i === 0 ? undefined : "histogram-axis-tick";
   return (
-    <SummaryPanel name="Note rate distribution" loaded={buckets !== null} caption={noteRate}
+    <SummaryPanel name="Note rate distribution" loaded={buckets !== null} caption={caption}
       title={<><GlossaryTerm term="Note rate">Note rate</GlossaryTerm> distribution</>}>
       <ul className="histogram">
         {list.map((b) => (
@@ -49,7 +62,9 @@ export function NoteRatePanel({ buckets }: NoteRatePanelProps) {
       </ul>
       <div className="histogram-axis" aria-hidden="true">
         {labels.map((label, i) => (
-          <span key={i}>{label}</span>
+          <span key={i} className={labelClass(i)}>
+            {label && <span>{label}</span>}
+          </span>
         ))}
       </div>
       <span className="panel-note">{noteRateNote}</span>
