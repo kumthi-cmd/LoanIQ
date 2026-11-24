@@ -1,6 +1,31 @@
 {
   "components": {
     "schemas": {
+      "AskRequest": {
+        "description": "POST /api/ask body.\n\nBUSINESS: a typed question, or a desk-question chip's id (which skips the model).\nTECH: question length is checked against llm.toml max_question_chars in\n  ask_input, so the limit lives in config.",
+        "properties": {
+          "desk_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A desk question id, e.g. ltv_over_125",
+            "title": "Desk Question"
+          },
+          "question": {
+            "default": "",
+            "description": "The visitor's question, in plain English",
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "title": "AskRequest",
+        "type": "object"
+      },
       "Breakdowns": {
         "description": "GET /api/loans/breakdowns: the three summary panels, whole tape.\n\nTECH: programs largest balance first; note_rates in rate order, every bucket\n  present (0 when empty); dq_status in the config order, then any status the\n  config does not list.",
         "properties": {
@@ -233,6 +258,62 @@
         "title": "StatusCount",
         "type": "object"
       },
+      "StoredQuery": {
+        "description": "One query_tape result, as the screen gets it.\n\nBUSINESS: \"Loans over 125 LTV: 20 rows\" plus the SQL that produced them.\nTECH: rows are lists in `columns` order (smaller JSON than dicts). row_count\n  is rows returned (at most max_rows); total_rows counts every row that\n  matched; truncated is True when total_rows > row_count.",
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "query_id": {
+            "title": "Query Id",
+            "type": "string"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "sql": {
+            "title": "Sql",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_rows": {
+            "title": "Total Rows",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "query_id",
+          "title",
+          "sql",
+          "columns",
+          "rows",
+          "row_count",
+          "total_rows",
+          "truncated"
+        ],
+        "title": "StoredQuery",
+        "type": "object"
+      },
       "Summary": {
         "description": "GET /api/loans/summary: the pool's headline numbers.\n\nBUSINESS: weighted by current UPB, because a $900,000 loan matters more to the\n  pool's value than a $90,000 one. Null when the tape is empty.\nTECH: total_current_upb in dollars; wac and wa_ltv in percent; wa_fico in points.",
         "properties": {
@@ -366,6 +447,100 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/ask": {
+      "post": {
+        "description": "BUSINESS: answer one question, streaming each step.\n\nTECH: a plain (sync) generator; FastAPI runs it on a worker thread, so the\n  blocking model calls never stall other requests.",
+        "operationId": "ask_api_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask"
+      }
+    },
+    "/api/ask/queries/{query_id}": {
+      "get": {
+        "description": "BUSINESS: every row behind one answer. TECH: 404 if unknown or expired (1 hour).",
+        "operationId": "query_result_api_ask_queries__query_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "query_id",
+            "required": true,
+            "schema": {
+              "title": "Query Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredQuery"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Query Result"
+      }
+    },
     "/api/health": {
       "get": {
         "description": "BUSINESS: is the tape loaded. TECH: loan count from COUNT(*).",

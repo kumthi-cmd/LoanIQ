@@ -1,0 +1,156 @@
+# =============================================================================
+# llm.toml: which model answers Ask the Tape, and every limit around it.
+#
+# Where it sits: POST /api/ask -> orchestrator (app/agent/orchestrator.py) reads
+#   this file through app/agent/config.py when the API starts.
+#
+# BUSINESS: Ask the Tape lets a visitor ask plain-English questions of the loan
+#   tape. A model plans which data to fetch and explains it; LoanIQ's tools do every
+#   calculation. This file decides which model does that, what to fall back to, and
+#   how much it may cost. ALL LIMITS AND PRICES ARE ILLUSTRATIVE engineering and
+#   budgeting choices, not industry rules.
+# TECH: TOML, read with Python's built-in tomllib. Times in seconds unless the key
+#   ends in _ms; money in US dollars; token prices in dollars per million tokens.
+#   API keys are NEVER written here: each provider names the environment variable
+#   that holds its key (api_key_env). A provider with no key set is "unavailable",
+#   and its task falls back to its fallback provider.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Tasks: which provider and model run each kind of request.
+# -----------------------------------------------------------------------------
+[tasks.tape_query]
+# BUSINESS: a visitor's question about the tape. Claude Haiku 5.5 is the cheapest
+#   current Claude model and is enough here, because the model only plans and
+#   explains: the numbers come from tools.
+provider = "anthropic"
+model = "claude-haiku-5-5"
+# BUSINESS: a guardrail failure is a tool call LoanIQ refused (an unknown column, a
+#   second statement, a table that is not the tape). After this many in one
+#   question, the rest of the question runs on the stronger model below.
+escalate_after_guardrail_failures = 2
+escalation_model = "claude-sonnet-5-5"
+# BUSINESS: when the provider is unavailable (no key), fails, times out, or the
+#   daily budget is spent, built-in rules answer instead and say so.
+fallback_provider = "offline"
+
+# -----------------------------------------------------------------------------
+# Providers: how to reach each one. Only `anthropic` is on in production.
+# -----------------------------------------------------------------------------
+[providers.anthropic]
+api_key_env = "ANTHROPIC_API_KEY"
+
+[providers.openai]
+# TECH: off until OPENAI_API_KEY is set AND a task names this provider. Before
+#   using it, add the chosen model under [models.<id>] with its prices.
+api_key_env = "OPENAI_API_KEY"
+
+[providers.gemini]
+# TECH: off until GEMINI_API_KEY is set AND a task names this provider; same rule.
+api_key_env = "GEMINI_API_KEY"
+
+[providers.offline]
+# TECH: built-in rules, no network, no key. Always available.
+
+# -----------------------------------------------------------------------------
+# Models: request settings and prices. Prices are ILLUSTRATIVE, copied from the
+#   Anthropic price list on 2026-11-23 (prompts up to 100K tokens); check before
+#   budgeting. cache_write is the 5-minute cache write price (1.25x input).
+# -----------------------------------------------------------------------------
+[models.claude-haiku-5-5]
+# TECH: effort "low" means short thinking and terse tool use; the tools do the
+#   math, so deep reasoning is not needed. Adaptive thinking is the model default.
+effort = "low"
+input = 0.10
+output = 0.50
+cache_read = 0.01
+cache_write = 0.125
+
+[models.claude-sonnet-5-5]
+effort = "low"
+input = 2.00
+output = 10.00
+cache_read = 0.10
+cache_write = 2.50
+
+# -----------------------------------------------------------------------------
+# Limits on one question (orchestrator and tools).
+# -----------------------------------------------------------------------------
+[limits]
+# BUSINESS: a question gets at most this many model turns (plan, fetch, explain).
+max_rounds = 5
+# TECH: max_tokens on each model call: the answer plus any thinking, in tokens.
+max_output_tokens = 800
+# TECH: wall-clock limit for the whole question, model calls and tools together.
+question_timeout_s = 20
+# BUSINESS: a visitor question longer than this is refused (characters).
+max_question_chars = 500
+# TECH: query_tape returns at most this many rows. One more is fetched to tell
+#   "exactly 500" from "more than 500".
+max_rows = 500
+# TECH: one query_tape call is interrupted after this many milliseconds.
+query_timeout_ms = 2000
+# TECH: the longest SQL text the model may send, in characters.
+max_sql_chars = 4000
+# BUSINESS: the model sees totals and only this many rows; the screen gets all.
+rows_to_model = 20
+# TECH: full results are kept in memory for the screen: at most this many queries,
+#   each for at most this many seconds.
+query_store_size = 200
+query_store_ttl_s = 3600
+
+# -----------------------------------------------------------------------------
+# Budget: what the live model may spend.
+# -----------------------------------------------------------------------------
+[budget]
+# BUSINESS: past this many dollars of model use in one UTC day, built-in rules
+#   answer instead. About 2,000 Haiku questions at roughly $0.001 each.
+daily_cap_usd = 2.00
+# BUSINESS: questions one visitor may send to the model per UTC day; after that,
+#   built-in rules answer. Desk-question chips never count: they skip the model.
+questions_per_visitor_per_day = 30
+# TECH: on Render the visitor's address is the LAST entry of X-Forwarded-For
+#   (added by Render's proxy; earlier entries can be typed by anyone). Set false
+#   when running without a proxy in front.
+trust_forwarded_for = true
+
+# -----------------------------------------------------------------------------
+# Offline rules: how built-in rules recognise a question. Checked in order; the
+#   first rule with a keyword in the question answers it. Words in lower case.
+#   kind = "desk_question" runs that desk question (config/desk_questions.toml);
+#   kind = "summary" runs summarize_tape.
+# -----------------------------------------------------------------------------
+[[offline.rule]]
+kind = "desk_question"
+id = "ltv_over_125"
+keywords = ["125", "high ltv", "harp"]
+
+[[offline.rule]]
+kind = "desk_question"
+id = "seriously_delinquent"
+keywords = ["seriously", "90+", "90 day", "foreclos", "reo", "bankrupt"]
+
+[[offline.rule]]
+kind = "desk_question"
+id = "new_york"
+keywords = ["new york", " ny"]
+
+[[offline.rule]]
+kind = "desk_question"
+id = "puerto_rico"
+keywords = ["puerto rico", " pr "]
+
+[[offline.rule]]
+kind = "desk_question"
+id = "modified"
+keywords = ["modif"]
+
+[[offline.rule]]
+kind = "desk_question"
+id = "forbearance"
+keywords = ["forbear"]
+
+[[offline.rule]]
+kind = "summary"
+id = "summary"
+keywords = ["summar", "overview", "wac", "fico", "how many loans", "total", "balance", "upb"]

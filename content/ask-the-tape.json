@@ -1,0 +1,19 @@
+{
+  "_about": "Visitor-facing words for Ask the Tape that the back end sends: the built-in rules' answer templates and the notice shown when built-in rules answered instead of the model. Placeholders in {braces} are filled by backend/app/agent/providers/offline_provider.py with numbers from LoanIQ's tools. Which question a rule answers is set in backend/app/config/llm.toml [[offline.rule]]; chip labels come from content/desk-questions.json. All data is synthetic; all numbers come from the tape.",
+  "offline": {
+    "desk_question": "{label}: {loans} loans with {upb} of current UPB, at a WAC of {wac}. The loans are listed below, largest balance first.",
+    "desk_question_empty": "{label}: no loans on this tape answer this question.",
+    "summary": "The tape holds {loans} loans with {upb} of current UPB. WAC {wac}, WA FICO {fico}, WA LTV {ltv}. {delinquent} loans are delinquent (any MBA status other than Current).",
+    "no_match": "Built-in rules answer the desk questions (LTV over 125, New York, Puerto Rico, 90+ / FC / REO / BK, Modified, Forbearance) and a tape summary. Try asking about one of those."
+  },
+  "notices": {
+    "desk_question": "Answered by built-in rules: desk questions skip the model.",
+    "unavailable": "Answered by built-in rules: the AI model is switched off on this server.",
+    "daily_budget": "Answered by built-in rules: today's AI budget for LoanIQ is used up. The model is back tomorrow (UTC).",
+    "visitor_limit": "Answered by built-in rules: you have reached today's number of AI questions. The model is back tomorrow (UTC).",
+    "timeout": "Answered by built-in rules: the AI model took too long.",
+    "refusal": "Answered by built-in rules: the AI model declined this question.",
+    "round_limit": "Answered by built-in rules: the AI model needed more steps than LoanIQ allows for one question.",
+    "error": "Answered by built-in rules: the AI model could not be reached."
+  }
+}

@@ -12,9 +12,10 @@
 #     Later changes to this file are applied on the next sync.
 #   - Everything about the app itself lives in the Dockerfile, so moving to another
 #     host (DigitalOcean, Cloud Run, Lightsail) means replacing only this file.
-#   - No secret values here, ever: the file is in Git. Step 4's Claude API key goes
-#     in the Render dashboard (Environment), and is added below as an envVars entry
-#     with `sync: false`, which means "set in the dashboard, not in this file".
+#   - No secret values here, ever: the file is in Git. The Claude API key for Ask
+#     the Tape (Step 4a) is set in the Render dashboard (Environment); the envVars
+#     entry below only names it, and `sync: false` means "set in the dashboard, not
+#     in this file". Without it the site still runs: built-in rules answer.
 #   - Render sets $PORT (10000 by default); the Dockerfile's CMD reads it.
 # =============================================================================
 
@@ -42,3 +43,8 @@ services:
     # BUSINESS: deploy only after every GitHub check on the commit passed (the
     #   "tests" and "container" jobs in ci.yml). A red build never goes live.
     autoDeployTrigger: checksPass
+    # BUSINESS: the key that lets Claude answer Ask the Tape. Its value lives only in
+    #   the Render dashboard. TECH: read by app/agent/providers/anthropic_provider.py.
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false

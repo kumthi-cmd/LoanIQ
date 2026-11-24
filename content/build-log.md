@@ -1,6 +1,50 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 4a, the Ask the Tape engine (back end) (2026-11-23)
+- Built: the engine behind Ask the Tape, following the design in content/agent.md.
+  A visitor's question goes to Claude Haiku 5.5, which plans and explains; five
+  LoanIQ tools (list columns, query the tape, summarize it, look up a term, get one
+  loan) do every calculation in DuckDB. Every query the model writes is checked
+  first: one SELECT, known columns, the loans table only, values bound as
+  parameters, at most 500 rows and 2 seconds, on a read-only copy of the tape. A
+  refused query goes back to the model with the reason; after two refusals the
+  question moves to Claude Sonnet 5.5. A question gets at most 5 rounds and 20
+  seconds. Built-in rules answer when there is no key, when the model fails or
+  declines, when the day's budget or the visitor's limit is used up, and always for
+  desk-question chips; the answer says which. `POST /api/ask` streams each step with
+  its SQL, the answer and its cost; `GET /api/ask/queries/{id}` returns every row
+  behind an answer. Every question's tokens and dollars are logged. ChatGPT and
+  Gemini sit behind the same interface, off until a key is set. Golden questions
+  (21, each graded against the tape's true answer) pass in CI on a scripted model,
+  and `backend\scripts\eval_agent.py` runs them on live models with accuracy,
+  tokens and cost per model.
+- Desk problem it solves: a trader can ask the tape a question in plain English
+  ("WAC of the New York loans?") and get the tape's real number with the SQL behind
+  it, instead of writing the query or filtering the grid by hand.
+- My key decisions: Claude Haiku 5.5, escalating to Sonnet 5.5 after two refused
+  calls, built-in rules as the fallback; the model never does the math and sees only
+  totals plus 20 rows; limits of 5 rounds, 800 output tokens and 20 seconds; a daily
+  dollar cap and a per-visitor limit; one provider interface so the model can be
+  swapped; all three vendor SDKs pinned. Reasons: docs/decisions.md.
+- What Claude Code did: proposed the plan; checked the installed SDKs, FastAPI's
+  built-in SSE and DuckDB's read-only settings before writing code; built the
+  engine, the five adapters, the guardrails, the budget, the golden questions, the
+  eval script and 161 new tests. Along the way: the first guard tests showed that
+  sqlglot's tree walk does not follow the order the SQL is printed in, so positional
+  `?` values could bind to the wrong column; the guard now uses named parameters
+  ($p1, $p2) and a test checks each value sits next to its own column. A grading
+  test showed the first rounding rule let 6.5% pass for a true WAC of 6.41%; the
+  grader now requires a correct rounding at the precision written.
+- What I changed after review: asked for all three SDKs to be pinned.
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 393 tests
+  (161 new: guardrails and the read-only tape, tools, budget and config, the five
+  adapters against each SDK's real response types, the orchestrator's limits and
+  fallbacks, the streamed API, the golden questions on the Fake, the grader and the
+  eval script), coverage 99.2%. Front end: 124 Vitest tests (no change). End to end:
+  18 Playwright tests (no change). The screen comes in Step 4b.
+- My take:
+
 ## Step 1g, closing Step 1: the Loan Tape at 1440 px (2026-11-23)
 - Built: the Step 1d layout follow-ups, checked against the "1 · Loan Tape" board,
   which is drawn at 1440 px. The 12 default grid columns now start at widths fitted
