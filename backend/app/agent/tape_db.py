@@ -16,6 +16,9 @@ TECH:
     stops any SET statement from switching it back on.
   - The temporary folder is new for every start, so a stale copy can never be read;
     close_readonly_tape() deletes it at shutdown.
+  - The copy is the seller's tape only. Product slotting (Step 5a) runs later, on
+    demand, on the grid's store, so the agent does not see slot columns yet
+    (docs/roadmap.md lists it as a follow-up).
 """
 
 from __future__ import annotations

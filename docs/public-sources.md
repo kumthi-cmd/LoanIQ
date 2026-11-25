@@ -20,5 +20,15 @@ Every business rule in LoanIQ traces to a public source. Add a row when you add 
 | Balance bands, Puerto Rico and FICO stories | Markit, "Agency RMBS - Specified Pool Summary" (May 2016), https://cdn.ihs.com/www/blog/commentary/pdf/Markit-Agency-RMBS--Specified-Pool-Summary--May-2016.pdf | Balance bands from 85K to 175K (85K, 110K, 125K, 150K, 175K); "PR Geo" story (also the "Puerto Rico" desk question); "Low FICO" story defined as FICO below 700 |
 | Higher LLB tiers | Fannie Mae, "Low Balance Lending Economics: The Role of the Spec Pay-up" (December 2023), https://fanniemae.com/media/49786/display | $250K maximum balance widely traded; $275K newer. The $200K and $225K tiers are illustrative steps between published tiers |
 | New York story | MCT, "MBS Pool Optimization 101", https://mct-trading.com/mbs-pool-optimization/ | New York as a state spec story; such loans are less likely to pay off early. Also the "New York" desk question |
-| Agency loan eligibility | Fannie Mae Selling Guide | Slotting rules (Step 5) |
-| TBA trading and good delivery | SIFMA Uniform Practices for mortgage-backed securities | TBA products and settlement (Step 6) |
+| Agency loan eligibility | Fannie Mae Selling Guide | Slotting rules (Step 5a, `backend/app/config/slotting.toml`): Conventional and High-Balance loans go into UMBS; agency pools take current loans only; the 25 bps minimum servicing fee inside the coupon strip. Illustrative |
+| TBA trading and good delivery | SIFMA Uniform Practices for mortgage-backed securities | Slotting (Step 5a, `slotting.toml`): only 30-, 20- and 15-year fixed-rate loans trade as TBA coupons, so ARMs and interest-only loans are not slotted; half-point coupon steps; settlement (Step 6) |
+
+## Rules without a recorded source
+These rules are in use but no public source is recorded for them yet. Each is labelled
+illustrative in config and on screen.
+
+| Rule | Where | Note |
+| --- | --- | --- |
+| FHA, VA and USDA loans go into GNMA II pools | `slotting.toml` `[agencies]` | Industry practice; no public source recorded |
+| Non-QM loans have no agency pool | `slotting.toml` `[agencies]` `none` | Jumbo is covered by the FHFA conforming loan limits above; Non-QM is not |
+| One 0.50 minimum strip for every agency | `slotting.toml` `[coupons]` `min_strip_pct` | Only the 25 bps servicing part is sourced (Fannie Mae Selling Guide); real minimums differ by agency and deal |

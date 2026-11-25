@@ -1,6 +1,63 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-25: Slotting eligibility: three checks, first failure is the reason
+Decision (Step 5a): a loan is slotted when its program has an agency pool (Conventional
+and High-Balance to UMBS; FHA, VA and USDA to GNMA II; Jumbo and Non-QM to none), its
+product is a 30-, 20- or 15-year fixed (the TBA products), and it is current. The checks
+run in that order and the first one a loan fails is its reason, so each not-slotted loan
+is counted once (312 no agency pool, 85 ARMs, 136 delinquent on the seeded tape). Rules
+in `backend/app/config/slotting.toml`; every program the generator knows must be in
+exactly one agency list, or the app does not start.
+Known simplification: modified loans (29), loans in forbearance (6) and high-LTV
+refinances (17) on the seeded tape are slotted when current. A real desk would treat
+them separately; kept so the rules stay three plain checks and match the design board.
+Why: three checks a desk recognises, a single reason per loan, and totals that add up.
+Alternative considered: the earlier Step 5a design (whole-loan execution, not-deliverable
+reasons for modified and forbearance loans, per-product rules), replaced before merge by
+this simpler set.
+
+## 2026-11-25: The coupon rule: one minimum strip, round down, one step up
+Decision (Step 5a): down coupon = note rate minus the minimum strip (0.50, illustrative),
+rounded down to the coupon step (0.5); up coupon = down + one step. Both in
+`[coupons]` of `slotting.toml`. The SQL works in whole units of 0.0001% with integer
+rounding, so the answer is exact.
+Why: one rule for both agencies, easy to follow on screen, and two coupons per loan are
+what Best Execution needs to compare. Rounding down always leaves at least the minimum
+strip for servicing and the guarantee fee.
+Alternative considered: per-agency fees with maximum spreads and buy-downs (the earlier
+design): closer to the agencies' guides, but harder to explain and not needed until
+pricing.
+
+## 2026-11-25: One shared slotting result, in memory, one run at a time
+Decision (Step 5a): slotting runs on the whole tape when a visitor asks
+(`POST /api/slotting/run`), and the result is shared by every visitor: same tape, same
+rules, same answer. A `threading.Lock` lets one run go at a time (HTTP 409 for a
+second). The result lives in memory like the tape, in a `slots` table and a
+`loans_slotted` view the Loan Tape switches to; after a restart
+`GET /api/slotting/status` says not run. A run publishes in one transaction at its last
+step, so a run stopped early leaves the last result as it was. This changes one part of
+the Step 4e decision below: slotting covers the whole tape, not only the loans the
+trader has filtered or selected (the grid can still filter on the new columns).
+Ask the Tape keeps reading the seller's tape only (a follow-up).
+Why: a per-visitor result would mean storing one copy of the slots per visitor for no
+new answer, and a lock is the simplest way to keep two runs from overwriting each other.
+Alternative considered: slotting as the tape loads (the earlier design; no run for the
+visitor to watch) or per-visitor results (more memory, same numbers).
+
+## 2026-11-25: The server runs at full speed; the screen paces the commentary
+Decision (Step 5a): the run streams one server-sent event per step (13 on today's
+config: load, rules, three checks, eligible, coupons, one per story family, overlaps,
+write) with the step's name, percent and a commentary line filled with real counts,
+then a done event with the totals. The server never sleeps between steps; on 2,000
+loans a run takes about a tenth of a second, and 50,000 loans must finish within
+`slotting_run_budget_ms` (`api.toml`). Step 5b's screen spaces the lines out so a
+visitor can read them. Words, with placeholders, live in `content/slotting.json`.
+Why: honest timing (the commentary shows what the engine did, not a staged delay),
+fast tests, and pacing is a display choice that belongs to the screen.
+Alternative considered: sleeps on the server to make the run look busy (slower tests,
+and the counts would arrive late for no reason).
+
 ## 2026-11-25: Slotting and best execution are Loan Tape features, not screens
 Decision (Step 4e): product slotting and best execution run on the Loan Tape, on the
 loans the trader has filtered or selected, instead of on screens of their own. Step 5
@@ -14,6 +71,9 @@ would mean sending the same loans somewhere else first, and the Loan Tape alread
 the filters, the selection and the pool summary.
 Alternative considered: separate Slotting and Best Execution screens fed by "Send N
 loans to Slotting" (an extra hand-off, and a second grid of the same loans).
+Superseded in part (2026-11-25, Step 5a): slotting runs on the whole tape as one shared
+result, not only on the loans the trader has filtered or selected; see "One shared
+slotting result, in memory, one run at a time" above. The rest of this decision stands.
 
 ## 2026-11-24: The Agent mark is a button beside the link, never inside it
 Decision (Step 4d): screens answered by an AI agent (`agent: true` in

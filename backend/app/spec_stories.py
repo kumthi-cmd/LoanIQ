@@ -2,7 +2,7 @@
 
 Where it sits:
     config/spec_stories.toml -> [spec_stories] -> loan_tape_gen (coverage now)
-                                               -> slotting engine (Step 5, later)
+                                               -> slotting (app/slotting.py, Step 5a)
 
 BUSINESS:
     A spec story is a loan feature, such as a low balance, New York or a low FICO,

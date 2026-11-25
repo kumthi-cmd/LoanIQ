@@ -181,6 +181,126 @@
         "title": "LoanRecord",
         "type": "object"
       },
+      "LoanSlots": {
+        "description": "GET /api/loans/{loan_id}/slots: the hover card.\n\nBUSINESS: the loan's own facts, its pool and coupons (percent, as text, e.g.\n  \"2.5\"), every story it fits with the rule and the reason, and the generic TBA\n  slot that is always open; or, if it is not slotted, why.",
+        "properties": {
+          "agency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agency"
+          },
+          "down_coupon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Down Coupon"
+          },
+          "generic_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generic Note"
+          },
+          "generic_tba": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generic Tba"
+          },
+          "loan": {
+            "additionalProperties": true,
+            "title": "Loan",
+            "type": "object"
+          },
+          "loan_id": {
+            "title": "Loan Id",
+            "type": "string"
+          },
+          "not_slotted": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotSlotted"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_at": {
+            "format": "date-time",
+            "title": "Run At",
+            "type": "string"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "slotted": {
+            "title": "Slotted",
+            "type": "boolean"
+          },
+          "stories": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StoryFit"
+            },
+            "title": "Stories",
+            "type": "array"
+          },
+          "term": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term"
+          },
+          "up_coupon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Up Coupon"
+          }
+        },
+        "required": [
+          "loan_id",
+          "run_at",
+          "slotted",
+          "loan",
+          "slot"
+        ],
+        "title": "LoanSlots",
+        "type": "object"
+      },
       "LoanTapeLink": {
         "description": "How to open one answer in the Loan Tape.\n\nBUSINESS: filter is None when the answer's filter cannot be shown as column\n  filters; reason then says why, for the button's tooltip.\nTECH: filter is AG Grid's filter model ({} = the whole tape); sort is the\n  /api/loans sort string (\"col:dir,col:dir\") or None.",
         "properties": {
@@ -246,6 +366,30 @@
           "total"
         ],
         "title": "LoansPage",
+        "type": "object"
+      },
+      "NotSlotted": {
+        "description": "Why a loan is not slotted. TECH: reason is the code; short for the grid, text for the card.",
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "short": {
+            "title": "Short",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "short",
+          "text"
+        ],
+        "title": "NotSlotted",
         "type": "object"
       },
       "ProgramSlice": {
@@ -361,6 +505,136 @@
         "title": "RerunRequest",
         "type": "object"
       },
+      "SlottingStatus": {
+        "description": "GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes.",
+        "properties": {
+          "run": {
+            "title": "Run",
+            "type": "boolean"
+          },
+          "run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run At"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlottingTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "run",
+          "running"
+        ],
+        "title": "SlottingStatus",
+        "type": "object"
+      },
+      "SlottingTotals": {
+        "description": "The counts a finished run reports.\n\nBUSINESS: slotted + not_slotted = loans. by_agency: UMBS and GNMA II loans;\n  by_reason: not-slotted loans by the first check they failed (no_agency,\n  product, status); stories: slotted loans per story family (a loan can count in\n  several); tiers: per LLB tier, loans whose lowest fitting tier it is;\n  multi_story: loans with more than one story; generic_tba: slotted loans with\n  none. coupons: the down and up coupon range, percent, as text (\"1.5\").",
+        "properties": {
+          "by_agency": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Agency",
+            "type": "object"
+          },
+          "by_reason": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Reason",
+            "type": "object"
+          },
+          "coupons": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Coupons",
+            "type": "object"
+          },
+          "generic_tba": {
+            "title": "Generic Tba",
+            "type": "integer"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          },
+          "multi_story": {
+            "title": "Multi Story",
+            "type": "integer"
+          },
+          "not_slotted": {
+            "title": "Not Slotted",
+            "type": "integer"
+          },
+          "slotted": {
+            "title": "Slotted",
+            "type": "integer"
+          },
+          "stories": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Stories",
+            "type": "object"
+          },
+          "tiers": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Tiers",
+            "type": "object"
+          },
+          "with_story": {
+            "title": "With Story",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "loans",
+          "slotted",
+          "not_slotted",
+          "by_agency",
+          "by_reason",
+          "stories",
+          "tiers",
+          "with_story",
+          "generic_tba",
+          "multi_story",
+          "coupons"
+        ],
+        "title": "SlottingTotals",
+        "type": "object"
+      },
       "StatusCount": {
         "description": "One line of the MBA delinquency panel.\n\nBUSINESS: \"60 days past due: 21 loans\". TECH: current_upb in dollars.",
         "properties": {
@@ -457,6 +731,35 @@
           "truncated"
         ],
         "title": "StoredQuery",
+        "type": "object"
+      },
+      "StoryFit": {
+        "description": "One spec story a loan fits. BUSINESS: rule is the SQL test; why is plain English.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "rule",
+          "why"
+        ],
+        "title": "StoryFit",
         "type": "object"
       },
       "Summary": {
@@ -935,7 +1238,7 @@
     },
     "/api/loans/columns": {
       "get": {
-        "description": "BUSINESS: the grid's column headers, and which ones show at first.\n\nTECH: tape order; label falls back to name; default_visible from api.toml.",
+        "description": "BUSINESS: the grid's column headers, and which ones show at first. After a\nslotting run the list ends with Slot and Spec Stories.\n\nTECH: tape order; label falls back to name; default_visible from api.toml\n(the slot columns are not in it yet: Step 5b decides how they show).",
         "operationId": "columns_api_loans_columns_get",
         "responses": {
           "200": {
@@ -996,6 +1299,99 @@
           }
         },
         "summary": "Summary"
+      }
+    },
+    "/api/loans/{loan_id}/slots": {
+      "get": {
+        "description": "BUSINESS: the hover card for one loan ID on the Loan Tape.\n\nTECH: 400 for a malformed id (LN + 8 digits), 409 if slotting has not run, 404\n  for an id not on this tape. The id goes in as a bound parameter.",
+        "operationId": "loan_slots_api_loans__loan_id__slots_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loan_id",
+            "required": true,
+            "schema": {
+              "title": "Loan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanSlots"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Loan Slots"
+      }
+    },
+    "/api/slotting/run": {
+      "post": {
+        "description": "BUSINESS: slot the whole tape, streaming each step with its counts.\n\nTECH: a plain (sync) generator; FastAPI runs it on a worker thread. The server\n  does not pause between steps: on 2,000 loans the whole run takes a fraction\n  of a second, and the screen paces the commentary for the visitor.",
+        "operationId": "run_slotting_api_slotting_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run Slotting"
+      }
+    },
+    "/api/slotting/status": {
+      "get": {
+        "description": "BUSINESS: \"Last run 11:42 AM\" or \"Not run on this tape\". TECH: no query.",
+        "operationId": "slotting_status_api_slotting_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlottingStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Slotting Status"
       }
     },
     "/api/tape": {

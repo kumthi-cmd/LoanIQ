@@ -188,9 +188,11 @@ export interface paths {
         };
         /**
          * Columns
-         * @description BUSINESS: the grid's column headers, and which ones show at first.
+         * @description BUSINESS: the grid's column headers, and which ones show at first. After a
+         *     slotting run the list ends with Slot and Spec Stories.
          *
-         *     TECH: tape order; label falls back to name; default_visible from api.toml.
+         *     TECH: tape order; label falls back to name; default_visible from api.toml
+         *     (the slot columns are not in it yet: Step 5b decides how they show).
          */
         get: operations["columns_api_loans_columns_get"];
         put?: never;
@@ -234,6 +236,73 @@ export interface paths {
          * @description BUSINESS: the tape's headline numbers, weighted by current UPB.
          */
         get: operations["summary_api_loans_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loans/{loan_id}/slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loan Slots
+         * @description BUSINESS: the hover card for one loan ID on the Loan Tape.
+         *
+         *     TECH: 400 for a malformed id (LN + 8 digits), 409 if slotting has not run, 404
+         *       for an id not on this tape. The id goes in as a bound parameter.
+         */
+        get: operations["loan_slots_api_loans__loan_id__slots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/slotting/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Slotting
+         * @description BUSINESS: slot the whole tape, streaming each step with its counts.
+         *
+         *     TECH: a plain (sync) generator; FastAPI runs it on a worker thread. The server
+         *       does not pause between steps: on 2,000 loans the whole run takes a fraction
+         *       of a second, and the screen paces the commentary for the visitor.
+         */
+        post: operations["run_slotting_api_slotting_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/slotting/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Slotting Status
+         * @description BUSINESS: "Last run 11:42 AM" or "Not run on this tape". TECH: no query.
+         */
+        get: operations["slotting_status_api_slotting_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -373,6 +442,49 @@ export interface components {
             loan_id: string;
         };
         /**
+         * LoanSlots
+         * @description GET /api/loans/{loan_id}/slots: the hover card.
+         *
+         *     BUSINESS: the loan's own facts, its pool and coupons (percent, as text, e.g.
+         *       "2.5"), every story it fits with the rule and the reason, and the generic TBA
+         *       slot that is always open; or, if it is not slotted, why.
+         */
+        LoanSlots: {
+            /** Agency */
+            agency?: string | null;
+            /** Down Coupon */
+            down_coupon?: string | null;
+            /** Generic Note */
+            generic_note?: string | null;
+            /** Generic Tba */
+            generic_tba?: string | null;
+            /** Loan */
+            loan: {
+                [key: string]: unknown;
+            };
+            /** Loan Id */
+            loan_id: string;
+            not_slotted?: components["schemas"]["NotSlotted"] | null;
+            /**
+             * Run At
+             * Format: date-time
+             */
+            run_at: string;
+            /** Slot */
+            slot: string;
+            /** Slotted */
+            slotted: boolean;
+            /**
+             * Stories
+             * @default []
+             */
+            stories: components["schemas"]["StoryFit"][];
+            /** Term */
+            term?: string | null;
+            /** Up Coupon */
+            up_coupon?: string | null;
+        };
+        /**
          * LoanTapeLink
          * @description How to open one answer in the Loan Tape.
          *
@@ -411,6 +523,18 @@ export interface components {
             }[];
             /** Total */
             total: number;
+        };
+        /**
+         * NotSlotted
+         * @description Why a loan is not slotted. TECH: reason is the code; short for the grid, text for the card.
+         */
+        NotSlotted: {
+            /** Reason */
+            reason: string;
+            /** Short */
+            short: string;
+            /** Text */
+            text: string;
         };
         /**
          * ProgramSlice
@@ -481,6 +605,66 @@ export interface components {
             title: string;
         };
         /**
+         * SlottingStatus
+         * @description GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes.
+         */
+        SlottingStatus: {
+            /** Run */
+            run: boolean;
+            /** Run At */
+            run_at?: string | null;
+            /** Running */
+            running: boolean;
+            totals?: components["schemas"]["SlottingTotals"] | null;
+        };
+        /**
+         * SlottingTotals
+         * @description The counts a finished run reports.
+         *
+         *     BUSINESS: slotted + not_slotted = loans. by_agency: UMBS and GNMA II loans;
+         *       by_reason: not-slotted loans by the first check they failed (no_agency,
+         *       product, status); stories: slotted loans per story family (a loan can count in
+         *       several); tiers: per LLB tier, loans whose lowest fitting tier it is;
+         *       multi_story: loans with more than one story; generic_tba: slotted loans with
+         *       none. coupons: the down and up coupon range, percent, as text ("1.5").
+         */
+        SlottingTotals: {
+            /** By Agency */
+            by_agency: {
+                [key: string]: number;
+            };
+            /** By Reason */
+            by_reason: {
+                [key: string]: number;
+            };
+            /** Coupons */
+            coupons: {
+                [key: string]: string | null;
+            };
+            /** Generic Tba */
+            generic_tba: number;
+            /** Loans */
+            loans: number;
+            /** Multi Story */
+            multi_story: number;
+            /** Not Slotted */
+            not_slotted: number;
+            /** Slotted */
+            slotted: number;
+            /** Stories */
+            stories: {
+                [key: string]: number;
+            };
+            /** Tiers */
+            tiers: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            /** With Story */
+            with_story: number;
+        };
+        /**
          * StatusCount
          * @description One line of the MBA delinquency panel.
          *
@@ -531,6 +715,20 @@ export interface components {
             total_rows: number;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * StoryFit
+         * @description One spec story a loan fits. BUSINESS: rule is the SQL test; why is plain English.
+         */
+        StoryFit: {
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Rule */
+            rule: string;
+            /** Why */
+            why: string;
         };
         /**
          * Summary
@@ -875,6 +1073,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Summary"];
+                };
+            };
+        };
+    };
+    loan_slots_api_loans__loan_id__slots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanSlots"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_slotting_api_slotting_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+        };
+    };
+    slotting_status_api_slotting_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlottingStatus"];
                 };
             };
         };

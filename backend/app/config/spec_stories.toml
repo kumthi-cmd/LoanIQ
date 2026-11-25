@@ -4,9 +4,10 @@
 # BUSINESS: a spec story is a loan feature that makes a pool of loans prepay
 #   more slowly than generic TBA collateral, so investors pay more for it (the
 #   "pay-up"). Low loan balance, New York and Puerto Rico are classic stories.
-#   This file says which loans have each story. Step 5 slotting will use it to
-#   tag loans; for now the tape generator uses it to guarantee loans in each
-#   story (minimum counts live in loan_tape_gen.toml under [coverage.stories]).
+#   This file says which loans have each story. Product slotting (app/slotting.py,
+#   Step 5a) tags each TBA agency loan with its stories, and the tape generator
+#   uses it to guarantee loans in each story (minimum counts live in
+#   loan_tape_gen.toml under [coverage.stories]).
 #   ALL STORIES AND TIERS ARE ILLUSTRATIVE. Sources: docs/public-sources.md.
 #
 # TECH: one [[story]] table per story (TOML array of tables).

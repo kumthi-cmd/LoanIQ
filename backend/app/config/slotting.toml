@@ -1,0 +1,69 @@
+# =============================================================================
+# slotting.toml: the product slotting rules (Step 5a).
+#
+# BUSINESS: product slotting answers, for every loan on the tape, "which agency
+#   pool can this loan go into, and at which pass-through coupons?" A desk slots a
+#   tape before it prices it: Best Execution (Step 6) prices each slot.
+#   A loan is slotted when all three checks pass, in this order (the first one
+#   that fails is the reason it is not slotted):
+#     1. its program has an agency pool           [agencies]
+#     2. its product trades as a TBA coupon       [products]
+#     3. it is current                            [status]
+#   Then it gets a down and an up coupon from its note rate ([coupons]) and every
+#   spec story it fits. Spec stories are NOT repeated here: they live in
+#   spec_stories.toml, and slotting reads them from there.
+#   ALL RULES AND NUMBERS ARE ILLUSTRATIVE. Sources: docs/public-sources.md; the
+#   rules explained with worked examples: docs/domain/slotting-rules.md.
+#
+# TECH: TOML, read by app/slotting.py (load_slotting_rules) with Python's built-in
+#   tomllib, and checked when the app starts: an unknown key, a program in two
+#   agencies or a coupon step of 0 stops the app. Program and product names are
+#   checked against the tape generator's config, so a typo cannot silently
+#   leave loans unslotted. Rates in percent.
+# =============================================================================
+
+[agencies]
+# BUSINESS: which agency's pools each loan program goes into.
+#   UMBS (Uniform MBS, issued by Fannie Mae or Freddie Mac): conforming
+#   conventional loans, High-Balance included (Fannie Mae Selling Guide).
+#   GNMA II (Ginnie Mae II): government-insured FHA, VA and USDA loans.
+#   ILLUSTRATIVE, and no public source is recorded for the GNMA II mapping
+#   (docs/public-sources.md, "Rules without a recorded source").
+UMBS = ["Conventional", "High-Balance"]
+"GNMA II" = ["FHA", "VA", "USDA"]
+
+# BUSINESS: programs with no agency pool. Jumbo loans are above the conforming
+#   limit (FHFA conforming loan limit announcements); Non-QM loans fall outside
+#   the agencies' rules (no public source recorded). They are sold whole, which
+#   LoanIQ does not model yet. Listed here so every program is accounted for.
+none = ["Jumbo", "Non-QM"]
+
+[products]
+# BUSINESS: the products that trade as TBA coupons, and the term label each slot
+#   shows ("UMBS 30Y"). ARMs and interest-only loans do not trade TBA (SIFMA
+#   Uniform Practices), so they are not slotted; ARM pools are out of scope.
+"30Y Fixed" = "30Y"
+"20Y Fixed" = "20Y"
+"15Y Fixed" = "15Y"
+
+[status]
+# BUSINESS: agency pools take current loans only (Fannie Mae Selling Guide).
+#   KNOWN SIMPLIFICATION: modified loans, loans in forbearance and high-LTV
+#   (HARP-era) refinances are slotted if they are current; a real desk would treat
+#   them separately (docs/decisions.md, 2026-11-25).
+# TECH: an MBA delinquency status from the tape's dq_status column.
+eligible = "Current"
+
+[coupons]
+# BUSINESS: the coupon rule, in percent:
+#   down coupon = note rate - minimum strip, rounded DOWN to the coupon step
+#   up coupon   = down coupon + one coupon step
+#   e.g. note rate 3.125: 3.125 - 0.50 = 2.625, rounded down to 0.5 -> down 2.5,
+#   up 3.0. The strip is what comes out of the note rate before investors are
+#   paid: servicing (at least 25 bps on a UMBS loan, Fannie Mae Selling Guide) plus
+#   the agency's guarantee fee.
+#   ILLUSTRATIVE: the single 0.50 strip for both agencies has no public source;
+#   real minimums differ by agency and by deal.
+min_strip_pct = 0.50
+# BUSINESS: agency TBA coupons trade in half-point steps (2.5, 3.0, 3.5).
+coupon_step_pct = 0.5

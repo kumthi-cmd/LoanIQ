@@ -24,6 +24,11 @@ timing_tape_loans = 50000
 #   counts (/api/loans/questions) on the same 50,000-loan tape must each come back
 #   faster than this. Illustrative, like the page budget.
 panels_budget_ms = 300
+# TECH: a whole Product Slotting run (POST /api/slotting/run, every step to the
+#   done event) on the same 50,000-loan tape must finish faster than this. The
+#   server never pauses between steps; the screen paces the commentary.
+#   tests/test_slotting.py checks it. Illustrative.
+slotting_run_budget_ms = 3000
 
 [breakdowns]
 # BUSINESS: the "Note rate distribution" panel groups loans into note-rate buckets

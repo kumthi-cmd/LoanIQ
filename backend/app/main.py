@@ -36,6 +36,12 @@ TECH:
       `npm run build`) at "/", so the whole of LoanIQ runs on one port in production
       and in the Playwright tests. In dev mode Vite serves the SPA instead and
       proxies /api here. See serve_spa() and docs/decisions.md.
+    - Product slotting (Step 5a): the rules (config/slotting.toml and
+      spec_stories.toml) are checked at start-up, so a bad rule stops the app. A
+      run happens only on POST /api/slotting/run (app/slotting_api.py). When it
+      publishes, the grid switches from the `loans` table to the view
+      `loans_slotted`, which adds two columns, slot and spec_stories; until then
+      the Loan Tape is the seller's tape alone.
     - Ask the Tape (Step 4a): the agent in app/agent/ is built in the lifespan
       (app.state.ask) and its routes (POST /api/ask, GET /api/ask/queries/{id}) are
       added from app/agent/api.py with include_router. Its summarize_tape tool uses
@@ -67,6 +73,9 @@ from app.agent.providers.base import LLMProvider
 from app.agent.service import build_ask_service, close_ask_service
 from app.desk_questions import DESK_QUESTIONS_PATH, DeskQuestion, load_desk_questions
 from app.loan_query import ColumnTypes, QueryError, column_kind, parse_filter, parse_sort, select_list
+from app import slotting_api
+from app.slotting import GRID_COLUMNS, GRID_VIEW, SlottingRules, load_slotting_rules, load_slotting_words
+from app.slotting_api import SlottingService
 from app.tape_panels import (Breakdowns, QuestionCount, TapeInfo, bucket_spec, fetch_breakdowns,
                              fetch_question_counts, fetch_tape_info)
 
@@ -94,6 +103,15 @@ def load_labels(path: Path = LABELS_PATH) -> dict[str, str]:
     BUSINESS: grid headers say "Current UPB ($)", not current_upb.
     """
     return json.loads(path.read_text(encoding="utf-8"))["labels"]
+
+
+def all_labels() -> dict[str, str]:
+    """Headers for every grid column: the tape's own, then the two slotting adds.
+
+    TECH: slot labels live with the other slotting words in content/slotting.json,
+      so loan-columns.json stays exactly the tape's fields.
+    """
+    return {**load_labels(), **load_slotting_words()["labels"]}
 
 
 API_CONFIG = load_api_config()
@@ -202,11 +220,29 @@ class LoanStore:
     TECH: con is the in-memory DuckDB connection; columns maps name -> DuckDB type,
       in tape order, and is the allow-list for sort and filter column names.
       questions maps id -> validated rule, in config order (empty in tests that
-      build a store by hand).
+      build a store by hand). columns is always the seller's tape alone.
+      slotting is the validated slotting rules (None in hand-built stores).
+      grid is what the Loan Tape pages: None means the `loans` table and its
+      columns; after a slotting run, (view name, columns plus the slot columns).
+      It is one attribute, replaced in one assignment, so a request never sees a
+      view name with the old column list or the reverse.
     """
     con: duckdb.DuckDBPyConnection
     columns: ColumnTypes
     questions: dict[str, DeskQuestion] = field(default_factory=dict)
+    slotting: SlottingRules | None = None
+    grid: tuple[str, ColumnTypes] | None = None
+
+    def grid_source(self) -> tuple[str, ColumnTypes]:
+        """(table or view, columns) the Loan Tape grid reads. TECH: one attribute read."""
+        return self.grid or ("loans", self.columns)
+
+    def show_slots(self) -> None:
+        """BUSINESS: the Loan Tape gains Slot and Spec Stories once slotting publishes.
+
+        TECH: called by the slotting run right after its transaction commits.
+        """
+        self.grid = (GRID_VIEW, {**self.columns, **GRID_COLUMNS})
 
 
 def ensure_tape(data_dir: Path) -> Path:
@@ -223,12 +259,15 @@ def ensure_tape(data_dir: Path) -> Path:
 
 
 def open_store(data_dir: Path, questions_path: Path = DESK_QUESTIONS_PATH) -> LoanStore:
-    """Load the Parquet tape into an in-memory DuckDB table `loans`, plus the desk questions.
+    """Load the Parquet tape into an in-memory DuckDB table `loans`, plus the desk questions
+    and the slotting rules.
 
+    BUSINESS: the tape loads unslotted; slotting runs when a visitor asks (Step 5a).
     TECH: ":memory:" means nothing is written to disk. read_parquet(?) takes the
       path as a parameter. DESCRIBE gives the real column names and types, which
-      the desk-question rules are then checked against. A bad rule raises here, so
-      the API does not start (the connection is closed first).
+      the desk-question and slotting rules are then checked against; slotting's
+      program and product names are checked against the generator's config. A bad
+      rule raises here, so the API does not start (the connection is closed first).
     """
     path = ensure_tape(data_dir)
     con = duckdb.connect(":memory:")
@@ -236,10 +275,12 @@ def open_store(data_dir: Path, questions_path: Path = DESK_QUESTIONS_PATH) -> Lo
     columns = {row[0]: row[1] for row in con.execute("DESCRIBE loans").fetchall()}
     try:
         questions = load_desk_questions(list(columns), questions_path)
+        cfg = gen.load_config()
+        rules = load_slotting_rules(list(columns), list(cfg["programs"]), list(cfg["products"]))
     except ValueError:
         con.close()
         raise
-    return LoanStore(con=con, columns=columns, questions=questions)
+    return LoanStore(con=con, columns=columns, questions=questions, slotting=rules)
 
 
 def get_store(request: Request) -> LoanStore:
@@ -272,29 +313,44 @@ def question_where(store: LoanStore, question_id: str | None) -> str:
     return store.questions[question_id].where
 
 
+def grid_where(store: LoanStore, columns: ColumnTypes, grid_filter: str | None,
+               question: str | None) -> tuple[str, list[Any]]:
+    """The WHERE clause for the grid's filter and desk question, with its parameters.
+
+    BUSINESS: a desk question and the grid's column filters must all hold at once
+      ("New York" AND "FICO under 700"); after slotting, a filter on Slot or Spec
+      Stories works the same way.
+    TECH: columns is the allow-list for filter column names (the grid's columns).
+      Each part in brackets, joined with AND, so an OR inside one can never leak
+      into the other. The question rule has no `?` placeholders, so the parameter
+      list is the filter's alone. "" when there is nothing to filter. Raises
+      QueryError for a bad filter or question id.
+    """
+    where, params = parse_filter(grid_filter, columns)
+    parts = [f"({w})" for w in (where, question_where(store, question)) if w]
+    return (f"WHERE {' AND '.join(parts)}" if parts else ""), params
+
+
 def fetch_page(store: LoanStore, q: LoansQuery) -> LoansPage:
     """Run one grid page: filtered count plus the sorted, sliced rows.
 
-    BUSINESS: the grid shows "rows 101-200 of 1,234 matching loans". A desk question
-      and the grid's column filters must all hold at once ("New York" AND "FICO
-      under 700").
-    TECH: two queries with the same WHERE and parameters: COUNT(*) for the total,
-      then SELECT ... ORDER BY ... LIMIT ? OFFSET ?. The WHERE is the grid filter
-      and the question rule, each in brackets and joined with AND, so an OR inside
-      one can never leak into the other. The question rule has no `?` placeholders,
-      so the parameter list is the filter's alone. Money is cast to DOUBLE in the
-      SELECT (loan_query.select_list) so it reaches JSON as numbers.
-      Raises QueryError for a bad sort, filter or question id.
+    BUSINESS: the grid shows "rows 101-200 of 1,234 matching loans", with Slot and
+      Spec Stories once slotting has run.
+    TECH: the table (`loans`, or the view `loans_slotted` after a run) and its
+      columns come from one read of store.grid_source(). Two queries with the same
+      WHERE and parameters: COUNT(*) for the total, then SELECT ... ORDER BY ...
+      LIMIT ? OFFSET ?. Money is cast to DOUBLE in the SELECT
+      (loan_query.select_list) so it reaches JSON as numbers. Raises QueryError for
+      a bad sort, filter or question id.
     """
-    where, params = parse_filter(q.filter, store.columns)
-    order = parse_sort(q.sort, store.columns)
-    parts = [f"({w})" for w in (where, question_where(store, q.question)) if w]
-    where_sql = f"WHERE {' AND '.join(parts)}" if parts else ""
+    table, columns = store.grid_source()
+    where_sql, params = grid_where(store, columns, q.filter, q.question)
+    order = parse_sort(q.sort, columns)
     limit = min(q.limit, MAX_LIMIT)
     cur = store.con.cursor()  # TECH: a per-request cursor over the same database
     try:
-        total = cur.execute(f"SELECT COUNT(*) FROM loans {where_sql}", params).fetchone()[0]
-        sql = (f"SELECT {select_list(store.columns)} FROM loans {where_sql} "
+        total = cur.execute(f"SELECT COUNT(*) FROM {table} {where_sql}", params).fetchone()[0]
+        sql = (f"SELECT {select_list(columns)} FROM {table} {where_sql} "
                f"ORDER BY {order} LIMIT ? OFFSET ?")
         result = cur.execute(sql, [*params, limit, q.offset])
         names = [d[0] for d in result.description]
@@ -402,12 +458,15 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         store = open_store(data_dir, questions_path)
         app.state.store = store
-        app.state.labels = load_labels()
+        app.state.labels = all_labels()
         app.state.ask = build_ask_service(
             data_dir / TAPE_FILE, store.columns, app.state.labels,
             {qid: q.where for qid, q in store.questions.items()},
             lambda: tape_summary(store), agent_config, ask_providers,
             base_columns=default_columns(store.columns))
+        # BUSINESS: Product Slotting (Step 5a): one shared result for every visitor.
+        app.state.slotting = SlottingService(store.con, store.slotting, load_slotting_words(),
+                                             on_publish=store.show_slots)
         yield
         close_ask_service(app.state.ask)
         store.con.close()
@@ -428,15 +487,18 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
 
     @app.get("/api/loans/columns", response_model=list[ColumnInfo])
     def columns(store: Store, request: Request) -> list[ColumnInfo]:
-        """BUSINESS: the grid's column headers, and which ones show at first.
+        """BUSINESS: the grid's column headers, and which ones show at first. After a
+        slotting run the list ends with Slot and Spec Stories.
 
-        TECH: tape order; label falls back to name; default_visible from api.toml.
+        TECH: tape order; label falls back to name; default_visible from api.toml
+        (the slot columns are not in it yet: Step 5b decides how they show).
         """
         labels: dict[str, str] = request.app.state.labels
+        _, grid_columns = store.grid_source()
         shown = set(default_columns(store.columns))
         return [ColumnInfo(name=n, type=t, kind=column_kind(t), label=labels.get(n, n),
                            default_visible=n in shown)
-                for n, t in store.columns.items()]
+                for n, t in grid_columns.items()]
 
     @app.get("/api/loans", response_model=LoansPage)
     def loans(store: Store, q: Annotated[LoansQuery, Query()]) -> LoansPage:
@@ -472,8 +534,10 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
         """BUSINESS: "41 fields · 6 fictional sellers" under the screen title."""
         return fetch_tape_info(store.con, len(store.columns))
 
-    # BUSINESS: Ask the Tape (Step 4a). TECH: before the catch-all below.
+    # BUSINESS: Ask the Tape (Step 4a) and Product Slotting (Step 5a).
+    # TECH: before the catch-all below.
     app.include_router(ask_api.router)
+    app.include_router(slotting_api.router)
 
     # TECH: registered last, so every /api route above wins first. "{path:path}" is a
     #   FastAPI path parameter that matches the rest of the URL, slashes included.

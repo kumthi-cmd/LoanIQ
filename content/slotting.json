@@ -1,0 +1,63 @@
+{
+  "_about": "Visitor-facing words for product slotting (Step 5a). The server fills every {placeholder} with real counts from the run; no number is written here. labels: grid headers for the two columns slotting adds. slot: the Slot column's text. steps: the running commentary, one entry per step kind, in run order ('name' while the step runs, 'line' once it is done); spec-story steps repeat once per story family in spec_stories.toml. stories: each family's display label, optional step words, and the hover card's reason it fits. reasons: why a loan is not slotted (short for the grid, text for the hover card). card: the hover card's generic TBA line. Rules and their numbers live in backend/app/config/slotting.toml and spec_stories.toml; terms are defined in content/glossary.json. Everything is illustrative.",
+  "labels": {
+    "slot": "Slot",
+    "spec_stories": "Spec Stories"
+  },
+  "slot": {
+    "slotted": "{agency} {term} {down} / {up}",
+    "not_slotted": "Not slotted",
+    "generic": "Generic TBA",
+    "tier_label": "{label} {cap}"
+  },
+  "steps": {
+    "load_tape": {"name": "Loading the tape", "line": "Loaded {loans} loans from the tape"},
+    "load_rules": {"name": "Loading the rules", "line": "Loaded {rules} rules in {stories} spec stories from spec_stories.toml; all passed the SQL safety check"},
+    "agency": {"name": "Checking agency eligibility", "line": "{count} {programs} loans have no agency pool: not slotted"},
+    "product": {"name": "Checking products", "line": "{count} loans have no fixed-rate TBA coupon ({products}): not slotted"},
+    "status": {"name": "Checking delinquency", "line": "{count} delinquent loans: agency pools take current loans only"},
+    "eligible": {"name": "Counting eligible loans", "line": "{count} loans to slot: {by_agency}", "by_agency_item": "{count} into {agency}"},
+    "coupons": {"name": "Setting pool coupons", "line": "Down and up coupons set from each note rate: down {down_min} to {down_max}, up {up_min} to {up_max}"},
+    "story": {"name": "Matching {label}: {rule}", "line": "{label}: {count} loans ({rule})"},
+    "story_tiered": {"name": "Matching {label} tiers", "line": "{label}: {count} loans fit a {label} tier, {lowest_count} of them the ${lowest_cap} tier"},
+    "overlaps": {"name": "Checking overlaps", "line": "{count} loans fit more than one story; the hover lists them all"},
+    "write": {"name": "Writing to the Loan Tape", "line": "Wrote {slotted} slots to the Loan Tape; {generic} loans have no story and go generic TBA"}
+  },
+  "stories": {
+    "LLB": {
+      "label": "LLB",
+      "step_name": "Matching LLB tiers",
+      "step_line": "LLB: {count} loans fit a low-loan-balance tier, {lowest_count} of them the ${lowest_cap} tier",
+      "why": "Original balance ${orig_upb} fits the ${cap} tier, the lowest it fits"
+    },
+    "NY": {"label": "NY", "why": "Property in New York"},
+    "PR": {"label": "PR", "why": "Property in Puerto Rico"},
+    "LOW_FICO": {"label": "Low FICO", "why": "FICO {fico}, below the Low FICO cut-off in the rule"}
+  },
+  "reasons": {
+    "no_agency": {
+      "short": "No agency pool",
+      "text": "{program} loans have no agency pool.",
+      "by_program": {
+        "Jumbo": "Jumbo loans are above the conforming limit, so they have no agency pool.",
+        "Non-QM": "Non-QM loans fall outside the agencies' rules, so they have no agency pool."
+      }
+    },
+    "product": {
+      "short": "No TBA product",
+      "text": "A {product} has no fixed-rate TBA coupon. ARM pools are out of scope for now."
+    },
+    "status": {
+      "short": "Delinquent",
+      "text": "MBA status {dq_status}. Agency pools take current loans only."
+    }
+  },
+  "errors": {
+    "busy": "Product Slotting is already running on this tape. Wait for it to finish, then try again.",
+    "failed": "Product Slotting stopped before it finished. The Loan Tape still shows the last finished run."
+  },
+  "card": {
+    "generic_tba": "Generic TBA · {agency} {term} {down}",
+    "generic_note": "always open"
+  }
+}
