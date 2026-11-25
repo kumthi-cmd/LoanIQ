@@ -1,6 +1,45 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-25: Slotting runs once, as columns on the tape
+Decision (Step 5a): every loan is slotted when the tape loads, and the result is nine
+extra columns on the `loans` table (`slot_status`, `slot_reason`, `execution`,
+`slot_product`, `net_rate`, `base_coupon`, `down_coupon`, `up_coupon`,
+`spec_stories`). The rules are validated SQL tests in `backend/app/config/slotting.toml`,
+checked like the spec stories and desk questions. Ask the Tape's read-only copy is
+slotted by the same function from the same config. The columns' words (headers,
+glossary terms, one plain-English line per rule) live in `content/slotting.json`, so
+`content/loan-columns.json` stays exactly the seller's tape. "41 fields" still counts
+only the tape's own columns.
+Why: the grid's sorting, filtering, paging and desk questions, and Ask the Tape's
+queries, work on slot columns with no new code, and nothing is recomputed per request
+(the 50,000-loan timing test covers the summary). One function slots both copies, so
+the screen and the agent can never disagree.
+Alternative considered: slotting per request (repeated work on every page) or a
+separate slot table joined on loan ID (a second place to keep in step).
+
+## 2026-11-25: One coupon formula for UMBS and Ginnie Mae II
+Decision (Step 5a): each pass-through execution has a minimum spread (servicing plus
+guarantee fee), a maximum spread and a maximum buy-down, in bps. Net rate = note rate
+minus the minimum spread; the base coupon is the highest half point at or below it;
+the down and up coupons are one step each side, kept only inside the limits. Exact
+DECIMAL arithmetic, so a spread exactly on a limit counts. One step each way is fixed
+by the three coupon columns, so the config has no "steps each way" setting: a second
+step would be two more columns, a code change.
+Why: the same three numbers express both executions' rules (UMBS 75 to 250 bps with a
+25 bps buy-down; Ginnie Mae II 25 to 75 bps with none), and a setting that could not
+change the columns would mislead.
+Alternative considered: a coupon list column (the grid cannot filter a list) or a
+`steps_each_way` setting (agreed in planning, dropped for the reason above).
+
+## 2026-11-25: Spec stories show the tightest low-balance tier
+Decision (Step 5a): `spec_stories` lists every story a TBA agency loan carries, but for
+a tiered story (LLB) only the tightest tier the loan fits: an $80,000 loan shows
+LLB_85K, not all nine tiers. Stories are left empty for ARMs, high-LTV refinances, whole
+loans and not-deliverable loans.
+Why: the tightest tier is the one a desk quotes first, and nine tiers on one loan would
+bury the other stories. Choosing a looser tier to fill a pool is pooling (Step 8).
+
 ## 2026-11-25: Slotting and best execution are Loan Tape features, not screens
 Decision (Step 4e): product slotting and best execution run on the Loan Tape, on the
 loans the trader has filtered or selected, instead of on screens of their own. Step 5

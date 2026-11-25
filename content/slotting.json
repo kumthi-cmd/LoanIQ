@@ -1,0 +1,42 @@
+{
+  "_about": "Visitor-facing words for product slotting (Step 5). labels: grid headers for the slot columns, served by GET /api/loans/columns. terms: the glossary term behind each slot column's header tooltip. rules: one plain-English line per rule in backend/app/config/slotting.toml, keyed by the rule's name or reason, for the read-only Slotting rules popup. Definitions of terms live in content/glossary.json; the rules themselves, their numbers and sources live in slotting.toml and docs/public-sources.md. Everything is illustrative.",
+  "labels": {
+    "slot_status": "Slot Status",
+    "slot_reason": "Slot Reason",
+    "execution": "Execution",
+    "slot_product": "Slot Product",
+    "net_rate": "Net Rate (%)",
+    "base_coupon": "Base Coupon (%)",
+    "down_coupon": "Down Coupon (%)",
+    "up_coupon": "Up Coupon (%)",
+    "spec_stories": "Spec Stories"
+  },
+  "terms": {
+    "slot_status": "Product slotting",
+    "slot_reason": "Not deliverable",
+    "execution": "Execution",
+    "slot_product": "Product slotting",
+    "net_rate": "Net rate",
+    "base_coupon": "Pass-through coupon",
+    "down_coupon": "Buy-up and buy-down",
+    "up_coupon": "Buy-up and buy-down",
+    "spec_stories": "Spec story"
+  },
+  "rules": {
+    "Delinquent": "Behind on payments (any MBA status other than Current). Agency pools take only current loans.",
+    "Modified": "The loan's terms were changed after a hardship. Modified loans do not go into new agency pools.",
+    "Forbearance": "The borrower is in, or recently left, a payment pause. Such loans wait until they are current again.",
+    "UMBS": "Conventional and High-Balance loans go into Uniform MBS, issued by Fannie Mae or Freddie Mac.",
+    "Ginnie Mae II": "FHA, VA and USDA loans go into Ginnie Mae II pools, backed by the US government.",
+    "Whole loan": "Jumbo and Non-QM loans fall outside the agencies' rules and are sold whole to banks and investors.",
+    "UMBS High-LTV": "Refinances above 125 LTV go into their own specified pools, not TBA.",
+    "UMBS 30 High-Balance": "30-year High-Balance loans. A TBA pool may hold only a small share of them, so they get their own slot.",
+    "UMBS 15 High-Balance": "15-year High-Balance loans, kept apart for the same reason.",
+    "UMBS 30": "30-year fixed-rate conventional loans: the most traded TBA product.",
+    "UMBS 20": "20-year fixed-rate conventional loans.",
+    "UMBS 15": "15-year fixed-rate conventional loans.",
+    "UMBS ARM": "SOFR ARMs go into ARM pools, which do not trade TBA, so they get no coupon ladder.",
+    "G2 30": "30-year fixed-rate FHA, VA and USDA loans.",
+    "G2 15": "15-year fixed-rate FHA and VA loans."
+  }
+}

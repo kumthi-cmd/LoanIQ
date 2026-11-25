@@ -129,6 +129,72 @@
         "title": "ColumnInfo",
         "type": "object"
       },
+      "ExecutionOut": {
+        "description": "One execution and its fees. TECH: fees and spreads in bps (illustrative).",
+        "properties": {
+          "fee_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fee Source"
+          },
+          "guarantee_fee_bps": {
+            "title": "Guarantee Fee Bps",
+            "type": "number"
+          },
+          "max_buydown_bps": {
+            "title": "Max Buydown Bps",
+            "type": "number"
+          },
+          "max_spread_bps": {
+            "title": "Max Spread Bps",
+            "type": "number"
+          },
+          "min_spread_bps": {
+            "title": "Min Spread Bps",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pricing": {
+            "title": "Pricing",
+            "type": "string"
+          },
+          "servicing_min_bps": {
+            "title": "Servicing Min Bps",
+            "type": "number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "where": {
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "where",
+          "pricing",
+          "servicing_min_bps",
+          "guarantee_fee_bps",
+          "min_spread_bps",
+          "max_spread_bps",
+          "max_buydown_bps",
+          "source",
+          "fee_source"
+        ],
+        "title": "ExecutionOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -248,6 +314,64 @@
         "title": "LoansPage",
         "type": "object"
       },
+      "NotDeliverableOut": {
+        "description": "One not-deliverable rule. TECH: where is the validated SQL the engine runs.",
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "where": {
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "where",
+          "source"
+        ],
+        "title": "NotDeliverableOut",
+        "type": "object"
+      },
+      "ProductOut": {
+        "description": "One product rule. TECH: tba true = gets the coupon ladder.",
+        "properties": {
+          "execution": {
+            "title": "Execution",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "tba": {
+            "title": "Tba",
+            "type": "boolean"
+          },
+          "where": {
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "execution",
+          "where",
+          "tba",
+          "source"
+        ],
+        "title": "ProductOut",
+        "type": "object"
+      },
       "ProgramSlice": {
         "description": "One bar of the Program mix panel.\n\nBUSINESS: \"Conventional: 812 loans, $212.8M current UPB\".\nTECH: current_upb in dollars (sum over the program's loans).",
         "properties": {
@@ -361,6 +485,168 @@
         "title": "RerunRequest",
         "type": "object"
       },
+      "SlotGroup": {
+        "description": "One row of the slotting summary: loans with the same slot.\n\nBUSINESS: \"Agency \u00b7 UMBS \u00b7 UMBS 30 \u00b7 6.0: 212 loans, $68.4mm, WAC 6.912\".\n  Not-deliverable rows carry their reason and no execution or coupon.\nTECH: current_upb in dollars; base_coupon and wac in percent; None where a\n  slot has no such value (an ARM has no TBA coupon; a whole loan no product).",
+        "properties": {
+          "base_coupon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Coupon"
+          },
+          "current_upb": {
+            "title": "Current Upb",
+            "type": "number"
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          },
+          "slot_product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Product"
+          },
+          "slot_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Reason"
+          },
+          "slot_status": {
+            "title": "Slot Status",
+            "type": "string"
+          },
+          "wac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wac"
+          }
+        },
+        "required": [
+          "slot_status",
+          "slot_reason",
+          "execution",
+          "slot_product",
+          "base_coupon",
+          "loans",
+          "current_upb",
+          "wac"
+        ],
+        "title": "SlotGroup",
+        "type": "object"
+      },
+      "SlottingRulesOut": {
+        "description": "GET /api/slotting/rules: every rule slotting applies, in the order it applies them.\n\nBUSINESS: illustrative is always true: every rule, fee and limit is an\n  illustrative choice traced to a public source, not a real desk's rules.\nTECH: coupon_step_pct in percent.",
+        "properties": {
+          "coupon_step_pct": {
+            "title": "Coupon Step Pct",
+            "type": "number"
+          },
+          "executions": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionOut"
+            },
+            "title": "Executions",
+            "type": "array"
+          },
+          "illustrative": {
+            "title": "Illustrative",
+            "type": "boolean"
+          },
+          "not_deliverable": {
+            "items": {
+              "$ref": "#/components/schemas/NotDeliverableOut"
+            },
+            "title": "Not Deliverable",
+            "type": "array"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ProductOut"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "spec_stories": {
+            "items": {
+              "$ref": "#/components/schemas/StoryOut"
+            },
+            "title": "Spec Stories",
+            "type": "array"
+          }
+        },
+        "required": [
+          "illustrative",
+          "coupon_step_pct",
+          "not_deliverable",
+          "executions",
+          "products",
+          "spec_stories"
+        ],
+        "title": "SlottingRulesOut",
+        "type": "object"
+      },
+      "SlottingSummary": {
+        "description": "GET /api/loans/slotting. TECH: totals are over the filtered loans; groups sorted.",
+        "properties": {
+          "current_upb": {
+            "title": "Current Upb",
+            "type": "number"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SlotGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "loans": {
+            "title": "Loans",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "loans",
+          "current_upb",
+          "groups"
+        ],
+        "title": "SlottingSummary",
+        "type": "object"
+      },
       "StatusCount": {
         "description": "One line of the MBA delinquency panel.\n\nBUSINESS: \"60 days past due: 21 loans\". TECH: current_upb in dollars.",
         "properties": {
@@ -457,6 +743,38 @@
           "truncated"
         ],
         "title": "StoredQuery",
+        "type": "object"
+      },
+      "StoryOut": {
+        "description": "One spec story (from spec_stories.toml). TECH: tiers are expanded (LLB_85K, ...).",
+        "properties": {
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "where": {
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "family",
+          "products",
+          "where"
+        ],
+        "title": "StoryOut",
         "type": "object"
       },
       "Summary": {
@@ -979,6 +1297,73 @@
         "summary": "Questions"
       }
     },
+    "/api/loans/slotting": {
+      "get": {
+        "description": "BUSINESS: the slotting panel (Step 5b): loans and UPB by execution, product\nand base coupon, and the not-deliverable loans by reason, for the loans the\ngrid shows. TECH: same filter and question checks as /api/loans (400 if bad).",
+        "operationId": "slotting_api_loans_slotting_get",
+        "parameters": [
+          {
+            "description": "AG Grid filter model as JSON",
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AG Grid filter model as JSON",
+              "title": "Filter"
+            }
+          },
+          {
+            "description": "Desk question id, for example ltv_over_125",
+            "in": "query",
+            "name": "question",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Desk question id, for example ltv_over_125",
+              "title": "Question"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlottingSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Slotting"
+      }
+    },
     "/api/loans/summary": {
       "get": {
         "description": "BUSINESS: the tape's headline numbers, weighted by current UPB.",
@@ -996,6 +1381,25 @@
           }
         },
         "summary": "Summary"
+      }
+    },
+    "/api/slotting/rules": {
+      "get": {
+        "description": "BUSINESS: the slotting rules in force, read-only, for the rules popup\n(Step 5b). TECH: what the server loaded, so the popup cannot disagree\nwith the engine. Rules change only in config/slotting.toml.",
+        "operationId": "slotting_rules_api_slotting_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlottingRulesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Slotting Rules"
       }
     },
     "/api/tape": {

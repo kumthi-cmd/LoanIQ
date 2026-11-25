@@ -1,0 +1,183 @@
+# =============================================================================
+# slotting.toml: the product slotting rules (Step 5a).
+#
+# BUSINESS: product slotting answers, for every loan on the tape, "where can this
+#   loan be sold, and at what pass-through coupon?" A desk slots a tape before it
+#   prices it: the slot decides which price grid applies (Step 6, best execution).
+#   The rules run top to bottom inside each group, and the first match wins:
+#     1. [[not_deliverable]]  loans no agency pool will take, with the reason
+#     2. [[execution]]        where the loan can be sold (UMBS, Ginnie Mae II,
+#                             whole loan), with that execution's fees
+#     3. [[product]]          which product within that execution (UMBS 30, ...)
+#   Spec stories (low loan balance, New York, ...) are NOT repeated here: they
+#   live in spec_stories.toml and slotting reads them from there.
+#   ALL RULES, FEES AND LIMITS ARE ILLUSTRATIVE. Each rule names its public
+#   source; the sources themselves are listed in docs/public-sources.md. The
+#   plain-English line for each rule, shown on screen, is in content/slotting.json.
+#
+# TECH: TOML, read by app/slotting.py with Python's built-in tomllib.
+#   - `where` is a SQL true/false test over loan tape columns, checked when the
+#     file loads by the same allowlist as the spec stories and desk questions
+#     (spec_stories.validate_where): tape columns, comparisons, AND / OR / NOT,
+#     IN, BETWEEN, parentheses and literals only. A bad rule stops the app.
+#   - `source` must name a source listed in docs/public-sources.md (a test checks).
+#   - Rates in percent; fees and spreads in basis points (bps, 1 bp = 0.01%).
+#
+# The coupon formula (worked examples in docs/domain/slotting-rules.md):
+#   spread         = note rate - pass-through coupon                   (bps)
+#   min spread     = servicing_min_bps + guarantee_fee_bps             (bps)
+#   net rate       = note rate - min spread                            (percent)
+#   base coupon    = the highest coupon_step_pct step <= net rate       (percent)
+#   down / up      = base -/+ one step, kept only if its spread stays between
+#                    (min spread - max_buydown_bps) and max_spread_bps
+# =============================================================================
+
+[coupons]
+# BUSINESS: agency pass-through coupons trade in half-point steps (5.0, 5.5, 6.0).
+#   Each loan gets its base coupon and one step each way: a down coupon (the
+#   seller keeps more servicing, or buys up the guarantee fee for cash) and an up
+#   coupon (the seller buys down the guarantee fee). Step 6 prices all three and
+#   picks the best. One step each way is fixed by the slot columns
+#   (base_coupon, down_coupon, up_coupon); see docs/decisions.md, 2026-11-25.
+coupon_step_pct = 0.5
+
+# -----------------------------------------------------------------------------
+# 1. Not deliverable: checked first, on every loan. The first match is the reason.
+# BUSINESS: agency pools take only loans that are current and performing on their
+#   original terms. Everything else is sold as a whole loan ("scratch and dent").
+# -----------------------------------------------------------------------------
+[[not_deliverable]]
+reason = "Delinquent"
+where = "dq_status <> 'Current'"
+source = "Fannie Mae Selling Guide"
+
+[[not_deliverable]]
+reason = "Modified"
+where = "mod_flag = TRUE"
+source = "Fannie Mae Selling Guide"
+
+[[not_deliverable]]
+reason = "Forbearance"
+where = "forbearance_flag = TRUE"
+source = "Fannie Mae Selling Guide"
+
+# -----------------------------------------------------------------------------
+# 2. Execution: where a deliverable loan can be sold, and that execution's fees.
+# TECH: pricing = "pass_through" gives the loan a coupon ladder; "whole_loan"
+#   gives none (a whole loan trades on its own note rate, priced in Step 6).
+#   Fees in bps. max_buydown_bps is how far below the minimum spread an up coupon
+#   may reach by buying down the guarantee fee (0 = not allowed).
+# -----------------------------------------------------------------------------
+[[execution]]
+# BUSINESS: conforming conventional loans go into Uniform MBS (UMBS), issued by
+#   Fannie Mae or Freddie Mac. High-Balance loans are conforming too.
+name = "UMBS"
+where = "program IN ('Conventional', 'High-Balance')"
+pricing = "pass_through"
+# BUSINESS: the servicer keeps at least 25 bps a year to collect payments.
+servicing_min_bps = 25
+# BUSINESS: the agency's guarantee fee for insuring the pool's credit. 50 bps is
+#   an illustrative ongoing fee, of the size FHFA's guarantee-fee reports show.
+guarantee_fee_bps = 50
+# BUSINESS: note rates in a pool may sit at most this far above its coupon;
+#   anything above is excess servicing the seller keeps.
+max_spread_bps = 250
+max_buydown_bps = 25
+source = "Fannie Mae Selling Guide"
+fee_source = "FHFA, Fannie Mae and Freddie Mac Single-Family Guarantee Fees report"
+
+[[execution]]
+# BUSINESS: government-insured loans (FHA, VA, USDA) go into Ginnie Mae II pools.
+name = "Ginnie Mae II"
+where = "program IN ('FHA', 'VA', 'USDA')"
+pricing = "pass_through"
+# BUSINESS: in Ginnie Mae II a loan's note rate sits 25 to 75 bps above the pool
+#   coupon: at least 19 bps of servicing plus Ginnie Mae's 6 bps guaranty fee.
+servicing_min_bps = 19
+guarantee_fee_bps = 6
+max_spread_bps = 75
+max_buydown_bps = 0
+source = "Ginnie Mae MBS Guide (5500.3)"
+fee_source = "Ginnie Mae MBS Guide (5500.3)"
+
+[[execution]]
+# BUSINESS: loans above the conforming limit (Jumbo) or outside the agencies'
+#   rules (Non-QM) are sold whole to banks and private investors.
+name = "Whole loan"
+where = "program IN ('Jumbo', 'Non-QM')"
+pricing = "whole_loan"
+source = "FHFA conforming loan limit announcements"
+
+# -----------------------------------------------------------------------------
+# 3. Product: the agency product within the execution. First match wins.
+# TECH: tba = true means the product trades as a TBA coupon, so the loan gets
+#   the coupon ladder above; tba = false (ARMs, high-LTV refinances) means a
+#   specified, non-TBA pool with no ladder.
+# -----------------------------------------------------------------------------
+[[product]]
+# BUSINESS: refinances above 125 LTV (HARP-era) cannot be delivered into TBA
+#   pools; they go into their own specified pools.
+name = "UMBS High-LTV"
+execution = "UMBS"
+where = "ltv > 125"
+tba = false
+source = "FHFA Home Affordable Refinance Program (HARP) and High LTV Refinance Option"
+
+[[product]]
+# BUSINESS: High-Balance loans may make up only a small share of a TBA pool, so
+#   the desk keeps them in their own slot.
+name = "UMBS 30 High-Balance"
+execution = "UMBS"
+where = "program = 'High-Balance' AND product = '30Y Fixed'"
+tba = true
+source = "SIFMA Uniform Practices"
+
+[[product]]
+name = "UMBS 15 High-Balance"
+execution = "UMBS"
+where = "program = 'High-Balance' AND product = '15Y Fixed'"
+tba = true
+source = "SIFMA Uniform Practices"
+
+[[product]]
+name = "UMBS 30"
+execution = "UMBS"
+where = "product = '30Y Fixed'"
+tba = true
+source = "SIFMA Uniform Practices"
+
+[[product]]
+name = "UMBS 20"
+execution = "UMBS"
+where = "product = '20Y Fixed'"
+tba = true
+source = "SIFMA Uniform Practices"
+
+[[product]]
+name = "UMBS 15"
+execution = "UMBS"
+where = "product = '15Y Fixed'"
+tba = true
+source = "SIFMA Uniform Practices"
+
+[[product]]
+# BUSINESS: SOFR ARMs go into ARM pools, which do not trade TBA.
+name = "UMBS ARM"
+execution = "UMBS"
+where = "product IN ('5/6 ARM', '7/6 ARM', '10/6 ARM')"
+tba = false
+source = "Fannie Mae SOFR ARM plan descriptions"
+
+[[product]]
+name = "G2 30"
+execution = "Ginnie Mae II"
+where = "product = '30Y Fixed'"
+tba = true
+source = "Ginnie Mae MBS Guide (5500.3)"
+
+[[product]]
+name = "G2 15"
+execution = "Ginnie Mae II"
+where = "product = '15Y Fixed'"
+tba = true
+source = "Ginnie Mae MBS Guide (5500.3)"

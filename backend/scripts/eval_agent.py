@@ -147,7 +147,7 @@ def main_cli(argv: list[str] | None = None) -> int:
     try:
         for model in args.models or [base.tasks["tape_query"].model]:
             cfg = eval_config(base, model, args)
-            service = build_ask_service(args.data_dir / main.TAPE_FILE, store.columns, main.load_labels(),
+            service = build_ask_service(args.data_dir / main.TAPE_FILE, store.columns, main.all_labels(),
                                         {k: q.where for k, q in store.questions.items()},
                                         lambda: main.tape_summary(store), cfg)
             try:

@@ -1,6 +1,55 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 5a, the product slotting engine (back end) (2026-11-25)
+- Built: product slotting. Every loan is slotted once, as the tape loads, from the
+  rules in `backend/app/config/slotting.toml`. Agency pools take only current,
+  unmodified loans out of forbearance; the rest are Not deliverable, with the reason.
+  Conventional and High-Balance loans go to UMBS, FHA, VA and USDA to Ginnie Mae II,
+  Jumbo and Non-QM are sold whole. Each agency loan gets its product (UMBS 30, G2 30,
+  UMBS ARM, ...), and each TBA loan its net rate, base, down and up coupons and spec
+  stories. Nine slot columns on the tape, two new routes (`GET /api/loans/slotting`
+  and `GET /api/slotting/rules`), the rules explained in
+  `docs/domain/slotting-rules.md`, words in `content/slotting.json`, ten glossary
+  entries, and two new public sources (the Ginnie Mae MBS Guide and FHFA's
+  guarantee-fee report). On the default tape: 1,513 agency loans, 290 whole loans,
+  197 not deliverable, none unslotted.
+- Desk problem it solves: a tape cannot be priced until each loan is slotted.
+  Slotting says which loans an agency will take, which coupons each can make, and
+  which carry a spec story worth a pay-up, so Step 6 knows which price applies.
+- My key decisions: slotting is a Loan Tape feature, not a screen; rules in config
+  as validated SQL, shown read-only in a popup (Step 5b), never edited on screen; the
+  two new sources; one coupon step each way; the sidebar's "Slotting" item decided
+  in 5b; 5a back end first, 5b the Loan Tape action.
+- What Claude Code did: proposed the rule groups and the coupon formula, and
+  answered how the rules would be stored before building. Wrote the config, the
+  engine (`slotting.py`), the routes (`slotting_api.py`), the rules page, the
+  glossary entries, the sources and three decision records, and regenerated the
+  OpenAPI spec and front-end types. Design choices made while building, for review:
+  slotting runs once as columns on the tape, so the grid's filters, sorting and Ask
+  the Tape work on slots with no new code; Ask the Tape's read-only copy slots
+  itself from the same config; one formula with three limits covers UMBS and Ginnie
+  Mae II; the planned `steps_each_way` setting was dropped, because the three coupon
+  columns fix one step each way and the setting could not change them; spec stories
+  show the tightest low-balance tier; slot labels live in `content/slotting.json`, so
+  `loan-columns.json` stays exactly the seller's tape. The fee math runs as exact
+  DECIMAL with named SQL parameters. A test caught a mistake in another test, which
+  replaced text inside a comment instead of a rule line.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 517 tests (53
+  new. 52 in `test_slotting.py`: seven coupon worked examples, including each limit's
+  edge; spreads inside the limits on every loan; fourteen status, execution and
+  product cases; six spec-story cases; the default tape against an independent
+  pandas reading of the rules; the agent's copy equal to the grid's; eleven bad
+  configs refused; every source listed; content covering every column and rule; the
+  rules endpoint; the summary adding up to the grid, following its filter and
+  question, and refusing bad requests; the 503 path), coverage 99.0%. One timing
+  test added: the slotting summary on 50,000 loans within the panels budget. One test
+  updated: the column list is now the tape's columns plus exactly the nine slot
+  columns, none shown by default. Front end: 186 Vitest tests. End to end: 27
+  Playwright tests.
+- My take:
+
 ## Step 4e, closing Step 4: the live eval and the new build order (2026-11-25)
 - Built: the first live run of Ask the Tape's 21 golden questions, on Claude Haiku 5.5
   and Claude Sonnet 5.5, saved as `docs/evals/2026-11-25.json`. Both models got all 21

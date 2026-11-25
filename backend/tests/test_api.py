@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from app import loan_tape_gen as gen
 from app import main
 from app.loan_query import QueryError, column_kind, parse_filter, parse_sort
+from app.slotting import SLOT_COLUMNS
 
 GEN_CFG = gen.load_config()
 PERF = main.API_CONFIG["performance"]
@@ -104,9 +105,12 @@ def test_missing_tape_is_generated_with_defaults(client: TestClient, data_dir: P
 
 
 def test_columns_list_every_tape_column_with_type_and_label(client: TestClient) -> None:
-    """BUSINESS: the grid shows every published tape field with a readable header."""
+    """BUSINESS: the grid shows every published tape field with a readable header,
+    then the columns product slotting adds (Step 5a), never shown by default."""
     cols = client.get("/api/loans/columns").json()
-    assert [c["name"] for c in cols] == gen.COLUMNS
+    assert [c["name"] for c in cols] == gen.COLUMNS + SLOT_COLUMNS
+    assert all(not c["default_visible"] and c["label"] != c["name"]
+               for c in cols if c["name"] in SLOT_COLUMNS)
     by_name = {c["name"]: c for c in cols}
     assert by_name["current_upb"] == {"name": "current_upb", "type": "DECIMAL(14,2)",
                                       "kind": "number", "label": "Current UPB ($)",
@@ -466,11 +470,12 @@ def test_one_page_is_fast_on_50k_loans(big_client: TestClient, params: dict[str,
     assert elapsed_ms < PERF["page_budget_ms"], f"page took {elapsed_ms:.0f} ms"
 
 
-@pytest.mark.parametrize("url", ["/api/loans/breakdowns", "/api/loans/questions", "/api/tape"])
+@pytest.mark.parametrize("url", ["/api/loans/breakdowns", "/api/loans/questions", "/api/tape",
+                                 "/api/loans/slotting"])
 def test_panels_are_fast_on_50k_loans(big_client: TestClient, url: str) -> None:
-    """BUSINESS: the Loan Tape screen's three panels, chip counts and title line must
-      appear with the grid, not after it: each under panels_budget_ms (api.toml,
-      illustrative) on a 50,000-loan tape.
+    """BUSINESS: the Loan Tape screen's three panels, chip counts, title line and
+      slotting summary (Step 5a) must appear with the grid, not after it: each under
+      panels_budget_ms (api.toml, illustrative) on a 50,000-loan tape.
     TECH: same warm-up-then-time pattern as the page test above.
     """
     assert big_client.get(url).status_code == 200  # warm-up

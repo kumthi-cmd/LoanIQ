@@ -222,6 +222,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/loans/slotting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Slotting
+         * @description BUSINESS: the slotting panel (Step 5b): loans and UPB by execution, product
+         *     and base coupon, and the not-deliverable loans by reason, for the loans the
+         *     grid shows. TECH: same filter and question checks as /api/loans (400 if bad).
+         */
+        get: operations["slotting_api_loans_slotting_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loans/summary": {
         parameters: {
             query?: never;
@@ -234,6 +256,28 @@ export interface paths {
          * @description BUSINESS: the tape's headline numbers, weighted by current UPB.
          */
         get: operations["summary_api_loans_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/slotting/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Slotting Rules
+         * @description BUSINESS: the slotting rules in force, read-only, for the rules popup
+         *     (Step 5b). TECH: what the server loaded, so the popup cannot disagree
+         *     with the engine. Rules change only in config/slotting.toml.
+         */
+        get: operations["slotting_rules_api_slotting_rules_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -345,6 +389,32 @@ export interface components {
             /** Type */
             type: string;
         };
+        /**
+         * ExecutionOut
+         * @description One execution and its fees. TECH: fees and spreads in bps (illustrative).
+         */
+        ExecutionOut: {
+            /** Fee Source */
+            fee_source: string | null;
+            /** Guarantee Fee Bps */
+            guarantee_fee_bps: number;
+            /** Max Buydown Bps */
+            max_buydown_bps: number;
+            /** Max Spread Bps */
+            max_spread_bps: number;
+            /** Min Spread Bps */
+            min_spread_bps: number;
+            /** Name */
+            name: string;
+            /** Pricing */
+            pricing: string;
+            /** Servicing Min Bps */
+            servicing_min_bps: number;
+            /** Source */
+            source: string;
+            /** Where */
+            where: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -411,6 +481,34 @@ export interface components {
             }[];
             /** Total */
             total: number;
+        };
+        /**
+         * NotDeliverableOut
+         * @description One not-deliverable rule. TECH: where is the validated SQL the engine runs.
+         */
+        NotDeliverableOut: {
+            /** Reason */
+            reason: string;
+            /** Source */
+            source: string;
+            /** Where */
+            where: string;
+        };
+        /**
+         * ProductOut
+         * @description One product rule. TECH: tba true = gets the coupon ladder.
+         */
+        ProductOut: {
+            /** Execution */
+            execution: string;
+            /** Name */
+            name: string;
+            /** Source */
+            source: string;
+            /** Tba */
+            tba: boolean;
+            /** Where */
+            where: string;
         };
         /**
          * ProgramSlice
@@ -481,6 +579,67 @@ export interface components {
             title: string;
         };
         /**
+         * SlotGroup
+         * @description One row of the slotting summary: loans with the same slot.
+         *
+         *     BUSINESS: "Agency · UMBS · UMBS 30 · 6.0: 212 loans, $68.4mm, WAC 6.912".
+         *       Not-deliverable rows carry their reason and no execution or coupon.
+         *     TECH: current_upb in dollars; base_coupon and wac in percent; None where a
+         *       slot has no such value (an ARM has no TBA coupon; a whole loan no product).
+         */
+        SlotGroup: {
+            /** Base Coupon */
+            base_coupon: number | null;
+            /** Current Upb */
+            current_upb: number;
+            /** Execution */
+            execution: string | null;
+            /** Loans */
+            loans: number;
+            /** Slot Product */
+            slot_product: string | null;
+            /** Slot Reason */
+            slot_reason: string | null;
+            /** Slot Status */
+            slot_status: string;
+            /** Wac */
+            wac: number | null;
+        };
+        /**
+         * SlottingRulesOut
+         * @description GET /api/slotting/rules: every rule slotting applies, in the order it applies them.
+         *
+         *     BUSINESS: illustrative is always true: every rule, fee and limit is an
+         *       illustrative choice traced to a public source, not a real desk's rules.
+         *     TECH: coupon_step_pct in percent.
+         */
+        SlottingRulesOut: {
+            /** Coupon Step Pct */
+            coupon_step_pct: number;
+            /** Executions */
+            executions: components["schemas"]["ExecutionOut"][];
+            /** Illustrative */
+            illustrative: boolean;
+            /** Not Deliverable */
+            not_deliverable: components["schemas"]["NotDeliverableOut"][];
+            /** Products */
+            products: components["schemas"]["ProductOut"][];
+            /** Spec Stories */
+            spec_stories: components["schemas"]["StoryOut"][];
+        };
+        /**
+         * SlottingSummary
+         * @description GET /api/loans/slotting. TECH: totals are over the filtered loans; groups sorted.
+         */
+        SlottingSummary: {
+            /** Current Upb */
+            current_upb: number;
+            /** Groups */
+            groups: components["schemas"]["SlotGroup"][];
+            /** Loans */
+            loans: number;
+        };
+        /**
          * StatusCount
          * @description One line of the MBA delinquency panel.
          *
@@ -531,6 +690,20 @@ export interface components {
             total_rows: number;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * StoryOut
+         * @description One spec story (from spec_stories.toml). TECH: tiers are expanded (LLB_85K, ...).
+         */
+        StoryOut: {
+            /** Family */
+            family: string;
+            /** Name */
+            name: string;
+            /** Products */
+            products: string[];
+            /** Where */
+            where: string;
         };
         /**
          * Summary
@@ -859,6 +1032,40 @@ export interface operations {
             };
         };
     };
+    slotting_api_loans_slotting_get: {
+        parameters: {
+            query?: {
+                /** @description AG Grid filter model as JSON */
+                filter?: string | null;
+                /** @description Desk question id, for example ltv_over_125 */
+                question?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlottingSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     summary_api_loans_summary_get: {
         parameters: {
             query?: never;
@@ -875,6 +1082,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Summary"];
+                };
+            };
+        };
+    };
+    slotting_rules_api_slotting_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlottingRulesOut"];
                 };
             };
         };
