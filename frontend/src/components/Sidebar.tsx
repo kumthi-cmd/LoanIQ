@@ -16,11 +16,14 @@
  *   after the link, in the same row, never inside it: a button inside a link is
  *   invalid HTML, and a click on the mark would also navigate. The link's name then
  *   says so: "Ask the Tape, agent".
+ *   An action item (Step 5b: Product Slotting) is a button, drawn by
+ *   SlottingNavButton, that opens the run dialog instead of a screen.
  */
 import { NavLink } from "react-router";
 import { askTheTapeContent } from "../content/content";
 import { NAV_GROUPS, type NavItem } from "../nav";
 import { AgentMark } from "./AgentMark";
+import { SlottingNavButton } from "./SlottingNavButton";
 
 /**
  * The step number column; blank for Showcase pages, so labels still line up.
@@ -45,6 +48,7 @@ function StepNumber({ step }: { step: number | null }) {
  *   link and mark on one line and carries the hover and current-page background.
  */
 function NavEntry({ item }: { item: NavItem }) {
+  if (item.action === "product-slotting") return <SlottingNavButton step={item.step} />;
   if (item.live) {
     const link = (
       <NavLink to={item.path} end className="nav-link"

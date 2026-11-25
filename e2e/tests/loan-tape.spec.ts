@@ -58,13 +58,18 @@ test("planned screens and features are shown but cannot be used", async ({ page 
   //   (.claude/rules/e2e.md). About and How it was built are live since Step 1f
   //   (showcase.spec.ts); Ask the Tape and the header's "Ask the tape" box since
   //   Step 4b (ask-the-tape.spec.ts).
-  for (const label of ["Tape Upload", "Explorer", "Slotting", "Best Execution", "Optimizer"]) {
+  for (const label of ["Tape Upload", "Explorer", "Best Execution", "Optimizer"]) {
     const item = nav.getByRole("listitem").filter({ hasText: label });
     await expect(item).toHaveCount(1);
     await expect(item).toContainText("Planned");
     await expect(nav.getByRole("link", { name: label })).toHaveCount(0);
   }
   await expect(page.getByRole("button", { name: /Export CSV/ })).toBeDisabled();
+  // BUSINESS: since Step 5b Product Slotting is a working action, not a planned screen
+  //   (e2e/tests/product-slotting.spec.ts runs it).
+  const slotting = nav.getByRole("button", { name: /Product Slotting/ });
+  await expect(slotting).toBeEnabled();
+  await expect(slotting).not.toContainText("Planned");
 });
 
 test("the panels and the tape line match the API", async ({ page, request }) => {
@@ -81,8 +86,10 @@ test("the panels and the tape line match the API", async ({ page, request }) => 
 
   const current = b.dq_status.find((s: { status: string }) => s.status === "Current");
   await expect(page.getByRole("region", { name: "MBA delinquency" })).toContainText(fmt(current.loans));
-  await expect(page.getByRole("region", { name: "Note rate distribution" }).getByRole("listitem"))
-    .toHaveCount(b.note_rates.length);
+  // BUSINESS: since Step 5b the middle panel is Slotting; on an unslotted tape (this
+  //   spec runs before product-slotting.spec.ts) it offers to run it.
+  await expect(page.getByRole("region", { name: "Slotting" })
+    .getByRole("button", { name: "Run Product Slotting" })).toBeVisible();
 });
 
 test("a desk-question chip filters the grid to exactly its count, and clears", async ({ page, request }) => {

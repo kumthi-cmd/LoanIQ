@@ -1,12 +1,12 @@
 # Roadmap
-Current step: Step 5a done (2026-11-25): the product slotting engine (back end).
-POST /api/slotting/run slots the whole tape on demand (UMBS or GNMA II; down and up
-coupons; spec stories, LLB at the lowest tier) from backend/app/config/slotting.toml,
-streaming 13 steps with real counts, then the totals. One shared result, in memory,
-behind a lock; GET /api/slotting/status and GET /api/loans/{loan_id}/slots (hover
-card); /api/loans gains Slot and Spec Stories once a run exists. Rules explained in
-docs/domain/slotting-rules.md. Next: Step 5b, the Product Slotting action, run dialog
-and hover card on the Loan Tape. Step 4e (live eval, new build order) is in PR #8.
+Current step: Step 5 done (2026-11-25): Product Slotting on the Loan Tape. 5a, the
+engine: POST /api/slotting/run slots the whole tape (UMBS or GNMA II; down and up
+coupons; spec stories) from backend/app/config/slotting.toml and streams 13 steps with
+real counts; one shared result in memory behind a lock. 5b, the screen: the sidebar's
+Product Slotting button and run dialog, the paced commentary, the Slotting panel (in
+the note-rate panel's place), Slot and Spec Stories in the grid, and the loan hover
+card. Next: Step 6, the price file and best execution on the Loan Tape. Step 4e is in
+PR #8, 5a in PR #9 and 5b in a PR stacked on it.
 Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
 after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
 1c SPA and loan grid, 1d Loan Tape screen to the design board (panels, desk
@@ -21,7 +21,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | Hosting: live site, deploy on every push | Done | 4-6 | 1 |
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns, 4d Agent mark, 4e live eval | 5-7 | 10.5 (4a: 3, 4b: 4, 4c: 1, 4d: 1.5, 4e: 1) |
-| 5 Slotting rules engine on the Loan Tape | In progress: 5a engine done; 5b Loan Tape action next | 3-4 | 3 (5a: 3) |
+| 5 Slotting rules engine on the Loan Tape | Done: 5a engine, 5b Loan Tape action | 3-4 | 4 (5a: 3, 5b: 1) |
 | 6 Price file and best execution on the Loan Tape | Not started | 5-7 | |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
@@ -73,17 +73,24 @@ From Step 4a (Ask the Tape engine, 2026-11-23):
 - Stream the answer word by word if the whole-answer event feels slow on screen.
 
 From Step 5a (slotting engine, 2026-11-25):
-- Step 5b: decide the sidebar's planned "Slotting" item (remove it, or link to the
-  Loan Tape with slotting on), whether Slot and Spec Stories show by default
-  (api.toml default_visible, plus widths in gridConfig.ts), and their glossary
-  tooltips (the grid reads tooltips from content/loan-columns.json only).
-- Step 5b paces the commentary on screen; the server sends every step at once.
+- Done (Step 5b): the sidebar's "Slotting" item is the Product Slotting action; Slot
+  and Spec Stories show by default after a run; the screen paces the commentary.
+- Slot and Spec Stories have no glossary tooltips on their headers yet: the grid reads
+  tooltips from content/loan-columns.json only.
 - Ask the Tape does not see the slot columns: its read-only copy is built at start-up,
   before any run. Then a golden question about slots.
 - Not modelled: modified, forbearance and high-LTV loans treated separately; seasoning;
   per-agency fees; ARM pools; pool-level limits (pooling is Step 8).
 - Find public sources for the three rules listed under "Rules without a recorded
   source" in docs/public-sources.md.
+
+From Step 5b (Product Slotting on the Loan Tape, 2026-11-25):
+- The board's "NEW" badges on the Slot and Spec Stories headers are not drawn (they
+  need a custom AG Grid header component); the two columns are tinted instead.
+- components/NoteRatePanel.tsx and its tests are kept but no longer drawn; decide in
+  Step 6 whether the note-rate buckets come back (the API still sends them).
+- The confirm dialog shows loans and fields, not the board's as-of date and seed: the
+  generator could write them beside the tape if wanted.
 
 From Step 4b (Ask the Tape screen, 2026-11-24):
 - A chart for grouped answers (the board's "90+ by seller" bars); every result is a

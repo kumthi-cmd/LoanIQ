@@ -14,11 +14,16 @@
  *     "context", which screens read with useOutletContext().
  *   - routes is exported so tests can mount it in a memory router (no real URL bar).
  *   - New screens: add an entry here and set live: true in nav.ts.
+ *   - Product Slotting (Step 5b) is shared by the sidebar, its dialog and the Loan
+ *     Tape, so the layout wraps everything in SlottingProvider and draws the dialog
+ *     once, above whichever screen is showing.
  */
 import { useState } from "react";
 import { Outlet, type RouteObject } from "react-router";
 import { AppHeader } from "./components/AppHeader";
 import { Sidebar } from "./components/Sidebar";
+import { SlottingDialog } from "./components/SlottingDialog";
+import { SlottingProvider } from "./slotting/SlottingContext";
 import { AboutScreen } from "./screens/AboutScreen";
 import { AskTheTapeScreen } from "./screens/AskTheTapeScreen";
 import { HowItWasBuiltScreen } from "./screens/HowItWasBuiltScreen";
@@ -33,7 +38,7 @@ export interface LayoutContext {
 
 /**
  * The page frame around every screen.
- * BUSINESS: header, sidebar, then the screen.
+ * BUSINESS: header, sidebar, then the screen; the Product Slotting dialog over them.
  * TECH: setRowCount from useState is stable across redraws, so screens can list it
  *   as an effect dependency without re-running the effect.
  */
@@ -41,15 +46,18 @@ export function Layout() {
   const [rowCount, setRowCount] = useState<number | null>(null);
   const context: LayoutContext = { setRowCount };
   return (
-    <div className="app">
-      <AppHeader rowCount={rowCount} />
-      <div className="app-body">
-        <Sidebar />
-        <main className="app-main">
-          <Outlet context={context} />
-        </main>
+    <SlottingProvider>
+      <div className="app">
+        <AppHeader rowCount={rowCount} />
+        <div className="app-body">
+          <Sidebar />
+          <main className="app-main">
+            <Outlet context={context} />
+          </main>
+        </div>
+        <SlottingDialog />
       </div>
-    </div>
+    </SlottingProvider>
   );
 }
 

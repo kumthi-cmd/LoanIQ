@@ -16,6 +16,8 @@
  *   the planned ones wait at the bottom of the workflow (docs/decisions.md).
  *   An item with agent: true is answered by an AI agent and carries the Agent mark
  *   (components/AgentMark.tsx), so a visitor can see which screen uses Claude.
+ *   An item with an action (Step 5b: Product Slotting) is a button that does
+ *   something to the Loan Tape instead of opening a screen (docs/decisions.md).
  * TECH: one list drives both the sidebar and the router. A screen becomes live by
  *   setting live: true and adding its route in App.tsx. React Router then swaps the
  *   screen in the page with no reload.
@@ -25,7 +27,9 @@
  * One sidebar entry.
  * BUSINESS: agent marks a screen whose answers come from an AI agent (Ask the Tape).
  * TECH: path is the URL; step is the roadmap step (null: none shown). agent is
- *   optional, so every other item leaves it out and reads as false.
+ *   optional, so every other item leaves it out and reads as false. An action item
+ *   has no screen, so it is not live (no route, routes.test.tsx skips it) and its
+ *   path is only a unique key.
  */
 export interface NavItem {
   label: string;
@@ -33,6 +37,7 @@ export interface NavItem {
   step: number | null;
   live: boolean;
   agent?: boolean;
+  action?: "product-slotting";
 }
 
 /** One sidebar group. BUSINESS: a stage of the desk's workflow. */
@@ -54,7 +59,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     group: "Price",
     items: [
-      { label: "Slotting", path: "/slotting", step: 5, live: false },
+      // BUSINESS: from Step 5b an action on the Loan Tape, not a screen: it opens the
+      //   Product Slotting dialog from anywhere (components/SlottingNavButton.tsx).
+      { label: "Product Slotting", path: "#product-slotting", step: 5, live: false, action: "product-slotting" },
       { label: "Best Execution", path: "/best-ex", step: 6, live: false },
     ],
   },

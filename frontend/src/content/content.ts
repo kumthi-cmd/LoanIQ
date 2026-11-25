@@ -2,8 +2,8 @@
  * content/content.ts: the SPA's single door to the visitor-facing words in content/.
  *
  * Where it sits: repo content/ (glossary, screen explanations, column terms, desk
- * question labels, screen captions, the Showcase pages, build facts, and the Ask the
- * Tape agent's explainer and diagram) ->
+ * question labels, screen captions, the Showcase pages, build facts, the Ask the
+ * Tape agent's explainer and diagram, and Product Slotting's words) ->
  * [content.ts] -> Explain panel, glossary tooltips, grid header tooltips, panel
  * captions, desk-question chips, the About and How it was built pages.
  *
@@ -32,6 +32,9 @@ import glossaryJson from "@content/glossary.json";
 import loanColumnsJson from "@content/loan-columns.json";
 import loanTapeJson from "@content/screens/loan-tape.json";
 import loanTapeMd from "@content/screens/loan-tape.md?raw";
+import productSlottingJson from "@content/screens/product-slotting.json";
+import productSlottingMd from "@content/screens/product-slotting.md?raw";
+import slottingJson from "@content/slotting.json";
 
 /** One glossary entry. BUSINESS: the term, what it means and why the desk cares. */
 export interface GlossaryEntry {
@@ -88,6 +91,9 @@ export const deskQuestionLabels: DeskQuestionLabel[] = deskQuestionsJson.questio
 export const screenExplanations = {
   "loan-tape": loanTapeMd,
   "ask-the-tape": askTheTapeMd,
+  // BUSINESS: Product Slotting is a Loan Tape action, not a screen (Step 5b), but it
+  //   explains itself like one; the Loan Tape's Explain panel switches to it.
+  "product-slotting": productSlottingMd,
 } as const;
 
 export type ScreenId = keyof typeof screenExplanations;
@@ -100,6 +106,7 @@ export type ScreenId = keyof typeof screenExplanations;
 export const screenTerms: Record<ScreenId, string[]> = {
   "loan-tape": loanTapeJson.terms,
   "ask-the-tape": askTheTapeScreenJson.terms,
+  "product-slotting": productSlottingJson.terms,
 };
 
 /** A screen explanation split for the Explain panel's two tabs. */
@@ -139,6 +146,34 @@ export const loanTapeContent = loanTapeJson;
  *   "offline" and "notices" sections are read by the back end, never here.
  */
 export const askTheTapeContent = askTheTapeJson.screen;
+
+// =============================================================================
+// Product Slotting (Step 5b)
+// =============================================================================
+
+/**
+ * Product Slotting's words on screen: the sidebar action, the run dialog, the
+ * Slotting panel, the notice, the hover card and the Explain switch.
+ * BUSINESS: every word the screen shows that the back end does not send.
+ * TECH: the "screen" section of content/slotting.json. The same file's other
+ *   sections are the back end's (commentary templates, story labels, reasons); the
+ *   screen reads three of them too, so the grid can tell a story list from a
+ *   generic or not-slotted cell (slottingCellWords).
+ */
+export const slottingContent = slottingJson.screen;
+
+/**
+ * BUSINESS: the Slot and Spec Stories texts that are not a list of stories.
+ * TECH: notSlotted is the Slot text of a loan that is not slotted; generic is the
+ *   Spec Stories text of a slotted loan with no story; reasons are the short
+ *   not-slotted reasons shown in Spec Stories ("Delinquent").
+ */
+export const slottingCellWords = {
+  notSlotted: slottingJson.slot.not_slotted,
+  generic: slottingJson.slot.generic,
+  reasons: Object.values(slottingJson.reasons).map((r) => r.short),
+  reasonShort: Object.fromEntries(Object.entries(slottingJson.reasons).map(([k, r]) => [k, r.short])) as Record<string, string>,
+} as const;
 
 // =============================================================================
 // The Agent mark's explainer (Step 4d)

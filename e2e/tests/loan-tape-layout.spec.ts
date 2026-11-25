@@ -6,9 +6,11 @@
  * measures the real screen in Chromium. It closes the Step 1d follow-ups (Step 1g).
  *
  * BUSINESS: a trader on a 1440 px laptop sees the whole default tape (12 columns)
- *   without scrolling sideways, the panel titles and desk-question chips each on one
- *   line, and note-rate axis labels that never run into each other, whether or not
- *   the explanation is open.
+ *   without scrolling sideways, and the panel titles and desk-question chips each on
+ *   one line, whether or not the explanation is open. Since Step 5b the middle panel
+ *   is Slotting (it replaced the note-rate distribution and its axis), and these
+ *   checks run on an unslotted tape: the Product Slotting spec runs after this one
+ *   (playwright.config.ts), because slotted, the grid gains two columns that scroll.
  * TECH: elements are found by role and visible text (.claude/rules/e2e.md); sizes come
  *   from boundingBox() in CSS pixels. Measured on 2026-11-23: all 12 columns in
  *   1,156 px with the explanation closed, 8 with it open; "8.0%" and "9%+" 29 px apart
@@ -53,31 +55,32 @@ async function rowsUsed(items: Locator): Promise<number> {
 }
 
 /** Checks that hold with the explanation open or closed. */
-async function expectOneLineTitleChipsAndClearAxis(page: Page, minGapPx: number) {
-  // BUSINESS: "Note rate distribution" stays on one line, as on the board.
+async function expectOneLineTitlesAndChips(page: Page) {
+  // BUSINESS: each panel title stays on one line, as on the board.
   // TECH: the title's box can be taller than its text (it stretches to the height of
   //   a wrapped caption beside it), so count the lines of the text itself: a DOM Range
-  //   over the text gives one rectangle per line fragment; distinct tops = lines.
-  const panel = page.getByRole("region", { name: "Note rate distribution" });
-  const title = panel.getByText("distribution", { exact: false }).first();
-  const lines = await title.evaluate((el) => {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
-  });
-  expect(lines).toBe(1);
+  //   over the title's own text node gives one rectangle per line fragment; distinct
+  //   tops = lines. The text node is found by its words inside the panel (region),
+  //   because a glossary-linked title (MBA delinquency) also holds its hidden
+  //   definition, so the element's whole text is more than the title.
+  for (const name of ["Program mix", "Slotting", "MBA delinquency"]) {
+    const lines = await page.getByRole("region", { name }).evaluate((panel, title) => {
+      const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (node.textContent?.trim() !== title) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+      }
+      return 0; // TECH: title not found: fails the check below
+    }, name);
+    expect(lines, name).toBe(1);
+  }
 
   // BUSINESS: all six desk-question chips on one row, Forbearance included.
   const chips = page.getByRole("group", { name: "Desk questions" }).getByRole("button");
   await expect(chips).toHaveCount(6);
   expect(await rowsUsed(chips)).toBe(1);
-
-  // BUSINESS: the "8.0%" tick and the open-ended "9%+" label keep apart.
-  const eight = panel.getByText("8.0%", { exact: true });
-  const nine = panel.getByText("9%+", { exact: true });
-  const a = (await eight.boundingBox())!;
-  const b = (await nine.boundingBox())!;
-  expect(b.x - (a.x + a.width)).toBeGreaterThanOrEqual(minGapPx);
 }
 
 test("at 1440 px with the explanation closed, all 12 default columns fit and nothing wraps", async ({ page }) => {
@@ -87,7 +90,7 @@ test("at 1440 px with the explanation closed, all 12 default columns fit and not
   const columns = await fullyVisibleColumns(page);
   expect(columns).toHaveLength(12);
   expect(columns).toEqual(expect.arrayContaining(["Loan ID", "Seller", "Occupancy", "State", "DQ Status"]));
-  await expectOneLineTitleChipsAndClearAxis(page, 20);
+  await expectOneLineTitlesAndChips(page);
 });
 
 test("at 1440 px with the explanation open, the first 8 columns fit and nothing wraps", async ({ page }) => {
@@ -99,5 +102,5 @@ test("at 1440 px with the explanation open, the first 8 columns fit and nothing 
   expect(columns.slice(0, 8)).toEqual(
     ["Loan ID", "Seller", "Program", "Product", "Note Rate (%)", "Current UPB ($)", "FICO", "DTI (%)"],
   );
-  await expectOneLineTitleChipsAndClearAxis(page, 6);
+  await expectOneLineTitlesAndChips(page);
 });

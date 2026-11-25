@@ -38,7 +38,16 @@ export default defineConfig({
     baseURL: "http://localhost:8000",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 900 } } }],
+  // TECH: Product Slotting (Step 5b) changes the shared server's tape for every test
+  //   after it (two new columns, a shared result). So its spec is a project of its
+  //   own that depends on the main one: Playwright runs it only after every other
+  //   test has finished, on the same server.
+  projects: [
+    { name: "chromium", testIgnore: /product-slotting\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 900 } } },
+    { name: "slotting", testMatch: /product-slotting\.spec\.ts/, dependencies: ["chromium"],
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 900 } } },
+  ],
   webServer: {
     command: `${python} -m uvicorn app.main:app --port 8000`,
     cwd: "../backend",

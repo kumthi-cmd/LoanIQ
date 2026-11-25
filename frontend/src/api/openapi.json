@@ -505,9 +505,41 @@
         "title": "RerunRequest",
         "type": "object"
       },
-      "SlottingStatus": {
-        "description": "GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes.",
+      "RulesSummary": {
+        "description": "BUSINESS: what a run will check, for the confirm dialog (Step 5b): \"12 rules in 4\nspec stories: LLB tiers $85K to $275K, NY, PR, Low FICO\". TECH: from the loaded rules.",
         "properties": {
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/StoryFamily"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "rules": {
+            "title": "Rules",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rules",
+          "families"
+        ],
+        "title": "RulesSummary",
+        "type": "object"
+      },
+      "SlottingStatus": {
+        "description": "GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes;\nrules is always the rules in force (Step 5b).",
+        "properties": {
+          "rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RulesSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "run": {
             "title": "Run",
             "type": "boolean"
@@ -731,6 +763,33 @@
           "truncated"
         ],
         "title": "StoredQuery",
+        "type": "object"
+      },
+      "StoryFamily": {
+        "description": "One spec-story family in force. BUSINESS: tiers are its caps' labels, lowest first\n(\"85K\" ... \"275K\"); empty for a story with no tiers (NY).",
+        "properties": {
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "tiers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "family",
+          "label",
+          "tiers"
+        ],
+        "title": "StoryFamily",
         "type": "object"
       },
       "StoryFit": {
@@ -1238,7 +1297,7 @@
     },
     "/api/loans/columns": {
       "get": {
-        "description": "BUSINESS: the grid's column headers, and which ones show at first. After a\nslotting run the list ends with Slot and Spec Stories.\n\nTECH: tape order; label falls back to name; default_visible from api.toml\n(the slot columns are not in it yet: Step 5b decides how they show).",
+        "description": "BUSINESS: the grid's column headers, and which ones show at first. After a\nslotting run the list ends with Slot and Spec Stories.\n\nTECH: tape order; label falls back to name; default_visible from api.toml,\nchecked against the grid's columns, so Slot and Spec Stories show by default\nonce a run exists (Step 5b).",
         "operationId": "columns_api_loans_columns_get",
         "responses": {
           "200": {

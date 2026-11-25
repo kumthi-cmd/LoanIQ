@@ -181,8 +181,11 @@ def test_other_results_are_left_as_the_agent_wrote_them(wide_tools: TapeTools, s
 def test_a_result_with_every_default_column_adds_nothing(wide_tools: TapeTools) -> None:
     """BUSINESS: when the agent already selected the default fields, nothing is
     duplicated. TECH: added_columns empty; a computed base-named column keeps the
-    agent's value (ROUND(ltv) AS ltv)."""
-    cols = ", ".join(c for c in main.DEFAULT_VISIBLE_COLUMNS if c != "ltv")
+    agent's value (ROUND(ltv) AS ltv). Since Step 5b api.toml also lists the two
+    slot columns, which the agent's tape never has, so the query names only the
+    tape's own default columns (main.default_columns)."""
+    tape_defaults = main.default_columns(dict.fromkeys(wide_tools.columns, ""))
+    cols = ", ".join(c for c in tape_defaults if c != "ltv")
     out = call(wide_tools, "query_tape", title="All", sql=f"SELECT {cols}, ROUND(ltv) AS ltv FROM loans LIMIT 3")
     stored = wide_tools.store.get(out.event["query_id"])
     assert stored is not None and stored.added_columns == []

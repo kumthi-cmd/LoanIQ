@@ -17,8 +17,9 @@ The three panels show the tape's shape:
 - **Program mix**: balance by program. The program decides who can buy a loan:
   the GSEs for Conventional and High-Balance, Ginnie Mae for FHA, VA and USDA,
   banks and private investors for Jumbo and Non-QM.
-- **Note rate distribution**: balance in half-point buckets. One WAC can hide two
-  clusters of coupons that trade into very different TBA securities.
+- **Slotting**: once Product Slotting has run, how many loans carry each spec story
+  (low loan balance tiers, Low FICO, New York, Puerto Rico), how many go generic TBA
+  and how many no agency pool takes. Before a run it offers to run it.
 - **MBA delinquency**: how many loans are Current, and how many are in each late
   status, from 30 days to foreclosure, REO and bankruptcy.
 
@@ -34,16 +35,23 @@ others. Sort and filter any column: the largest balances, FICO under 680, every 
 in a state. Delinquency status is shown in red unless the loan is Current. Hover a
 term or a column header to read its definition.
 
+**Product Slotting** (in the sidebar, or the Slotting panel) slots the whole tape and
+adds two columns: **Slot**, the pool and its down and up coupons, and **Spec Stories**.
+Hover a loan ID to see where that loan can go, or why it cannot. "Explain" above this
+text switches to Product Slotting's own explanation.
+
 All loans are synthetic, and every number and threshold is illustrative.
 
 ## Technical
 When the screen opens it makes five calls at once: `/api/loans/columns` for the
 column list, `/api/loans/summary` for the headline numbers, `/api/loans/breakdowns`
-for the three panels, `/api/loans/questions` for the chip counts and `/api/tape` for
-the field and seller counts. Each panel is one GROUP BY over an in-memory DuckDB copy
-of the tape, so even a 50,000-loan tape answers in milliseconds. The note-rate bucket
-width and the order of the delinquency statuses are settings in the API's config,
-not in the screen.
+for the program and delinquency panels, `/api/loans/questions` for the chip counts and
+`/api/tape` for the field and seller counts; the app also asks
+`/api/slotting/status` for the Slotting panel. Each panel is one GROUP BY over an
+in-memory DuckDB copy of the tape, so even a 50,000-loan tape answers in milliseconds.
+The order of the delinquency statuses is a setting in the API's config, not in the
+screen. After a Product Slotting run the screen fetches the column list again and
+rebuilds the grid with the two new columns.
 
 The grid is AG Grid Community with the Infinite Row Model: it asks `/api/loans` for
 100 loans at a time as you scroll, so a tape of any size scrolls the same. Sorting
