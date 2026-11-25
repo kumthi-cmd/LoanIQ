@@ -2,52 +2,63 @@
 One entry per step, newest first. Copy the template for each new step.
 
 ## Step 5a, the product slotting engine (back end) (2026-11-25)
-- Built: product slotting. Every loan is slotted once, as the tape loads, from the
-  rules in `backend/app/config/slotting.toml`. Agency pools take only current,
-  unmodified loans out of forbearance; the rest are Not deliverable, with the reason.
-  Conventional and High-Balance loans go to UMBS, FHA, VA and USDA to Ginnie Mae II,
-  Jumbo and Non-QM are sold whole. Each agency loan gets its product (UMBS 30, G2 30,
-  UMBS ARM, ...), and each TBA loan its net rate, base, down and up coupons and spec
-  stories. Nine slot columns on the tape, two new routes (`GET /api/loans/slotting`
-  and `GET /api/slotting/rules`), the rules explained in
-  `docs/domain/slotting-rules.md`, words in `content/slotting.json`, ten glossary
-  entries, and two new public sources (the Ginnie Mae MBS Guide and FHFA's
-  guarantee-fee report). On the default tape: 1,513 agency loans, 290 whole loans,
-  197 not deliverable, none unslotted.
-- Desk problem it solves: a tape cannot be priced until each loan is slotted.
-  Slotting says which loans an agency will take, which coupons each can make, and
-  which carry a spec story worth a pay-up, so Step 6 knows which price applies.
-- My key decisions: slotting is a Loan Tape feature, not a screen; rules in config
-  as validated SQL, shown read-only in a popup (Step 5b), never edited on screen; the
-  two new sources; one coupon step each way; the sidebar's "Slotting" item decided
-  in 5b; 5a back end first, 5b the Loan Tape action.
-- What Claude Code did: proposed the rule groups and the coupon formula, and
-  answered how the rules would be stored before building. Wrote the config, the
-  engine (`slotting.py`), the routes (`slotting_api.py`), the rules page, the
-  glossary entries, the sources and three decision records, and regenerated the
-  OpenAPI spec and front-end types. Design choices made while building, for review:
-  slotting runs once as columns on the tape, so the grid's filters, sorting and Ask
-  the Tape work on slots with no new code; Ask the Tape's read-only copy slots
-  itself from the same config; one formula with three limits covers UMBS and Ginnie
-  Mae II; the planned `steps_each_way` setting was dropped, because the three coupon
-  columns fix one step each way and the setting could not change them; spec stories
-  show the tightest low-balance tier; slot labels live in `content/slotting.json`, so
-  `loan-columns.json` stays exactly the seller's tape. The fee math runs as exact
-  DECIMAL with named SQL parameters. A test caught a mistake in another test, which
-  replaced text inside a comment instead of a rule line.
+- Built: Product Slotting as a run a visitor starts. `POST /api/slotting/run` slots the
+  whole tape in one DuckDB pass and streams 13 steps (load, rules, three eligibility
+  checks, eligible loans, coupons, one step per spec-story family, overlaps, write),
+  each with a commentary line filled with real counts, then the totals. A loan is
+  slotted when its program has an agency pool (UMBS or GNMA II), its product is a 30-,
+  20- or 15-year fixed, and it is current; it gets a down coupon (note rate minus a 0.50
+  strip, rounded down to 0.5, illustrative) and an up coupon one step higher, plus
+  every spec story it fits, LLB at its lowest tier. Rules in
+  `backend/app/config/slotting.toml`, words in `content/slotting.json`. One shared
+  result for every visitor, in memory, behind a lock; `GET /api/slotting/status` and
+  `GET /api/loans/{loan_id}/slots` (the hover card); the Loan Tape gains Slot and Spec
+  Stories once a run exists. On the seeded tape: 1,467 slotted (1,012 UMBS, 455 GNMA
+  II), 533 not (312 no agency pool, 85 ARMs, 136 delinquent); LLB 974 (55 at $85K), NY
+  72, PR 17, Low FICO 379; 323 with more than one story; 363 generic TBA. Exactly the
+  design board's numbers.
+- Desk problem it solves: a tape cannot be priced until each loan is slotted. Slotting
+  says which loans an agency pool will take, at which coupons, and which carry a spec
+  story worth a pay-up, so Best Execution (Step 6) knows which prices to compare. The
+  streamed commentary shows the desk what was checked and how many loans each check
+  caught.
+- My key decisions: the "5 · Product Slotting" board in Claude Design as the spec, with
+  every number from the API; no slotting screen, slotting updates the Loan Tape; the
+  rules and the agency map in config; the simple coupon rule (0.50 strip, round down,
+  one step up); one shared result behind a lock, gone after a restart; no sleeps on the
+  server, the screen paces the commentary; replace the earlier Step 5a design (slotting
+  as the tape loads, nine columns, whole-loan execution) with a new commit on the same
+  branch and PR; no new public sources, so the GNMA II mapping, Non-QM and the strip
+  are flagged as unsourced; keep modified, forbearance and high-LTV loans slotted when
+  current, to match the board.
+- What Claude Code did: read the board and checked its totals against the seeded tape
+  before planning (all matched); found that the branch already held a different Step 5a
+  and asked how to replace it; flagged the loans a real desk would not slot, and that
+  the board's coupon range "1.5 to 8.0" is the down coupons only (up runs 2.0 to 8.5).
+  Wrote the config, the engine (`slotting.py`), the routes (`slotting_api.py`), the
+  words, nine glossary entries, the rules page, four decision records and the
+  architecture row; regenerated the OpenAPI spec and front-end types. Design choices
+  made while building, for review: the coupon rounding runs on whole 0.0001% units,
+  because DuckDB divides DECIMALs as floating point; the `slots` table also holds the
+  grid's two text columns, so the grid filters and sorts them like any column; the
+  Loan Tape switches to a view in the same step that publishes; a run stopped early or
+  failing changes nothing; story steps come from spec_stories.toml, so a new family
+  adds a step by itself; Ask the Tape keeps the seller's tape (a follow-up). A test
+  caught a mistake in another test, which replaced text inside a comment instead of
+  the `[coupons]` section line.
 - What I changed after review:
-- Tests and coverage: every layer passes through `test.ps1`. Back end: 517 tests (53
-  new. 52 in `test_slotting.py`: seven coupon worked examples, including each limit's
-  edge; spreads inside the limits on every loan; fourteen status, execution and
-  product cases; six spec-story cases; the default tape against an independent
-  pandas reading of the rules; the agent's copy equal to the grid's; eleven bad
-  configs refused; every source listed; content covering every column and rule; the
-  rules endpoint; the summary adding up to the grid, following its filter and
-  question, and refusing bad requests; the 503 path), coverage 99.0%. One timing
-  test added: the slotting summary on 50,000 loans within the panels budget. One test
-  updated: the column list is now the tape's columns plus exactly the nine slot
-  columns, none shown by default. Front end: 186 Vitest tests. End to end: 27
-  Playwright tests.
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 534 tests (70 in
+  the rewritten `test_slotting.py`: the board's totals, story counts and the
+  LN78265415 card; the 13-step stream, its commentary and the done event; the tape
+  before and after a run; filters and sorting on the new columns; three not-slotted
+  cards and the generic TBA card; bad and unknown loan IDs; the lock (409), a lost race,
+  a run stopped early, a failing run, a rerun and a restart; every loan against an
+  independent pandas + Decimal reading of the config; five coupon worked examples,
+  seven reason-order cases, five agency cases and seven spec-story cases; twelve bad
+  configs and a bad template; words for every story and reason; unsourced rules
+  flagged; a 50,000-loan run within 3 seconds and a grid page after it within the page
+  budget), coverage 99.1%. The earlier design's changes to `test_api.py` were undone.
+  Front end: 186 Vitest tests. End to end: 27 Playwright tests.
 - My take:
 
 ## Step 4e, closing Step 4: the live eval and the new build order (2026-11-25)

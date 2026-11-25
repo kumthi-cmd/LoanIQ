@@ -188,9 +188,11 @@ export interface paths {
         };
         /**
          * Columns
-         * @description BUSINESS: the grid's column headers, and which ones show at first.
+         * @description BUSINESS: the grid's column headers, and which ones show at first. After a
+         *     slotting run the list ends with Slot and Spec Stories.
          *
-         *     TECH: tape order; label falls back to name; default_visible from api.toml.
+         *     TECH: tape order; label falls back to name; default_visible from api.toml
+         *     (the slot columns are not in it yet: Step 5b decides how they show).
          */
         get: operations["columns_api_loans_columns_get"];
         put?: never;
@@ -222,28 +224,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/loans/slotting": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Slotting
-         * @description BUSINESS: the slotting panel (Step 5b): loans and UPB by execution, product
-         *     and base coupon, and the not-deliverable loans by reason, for the loans the
-         *     grid shows. TECH: same filter and question checks as /api/loans (400 if bad).
-         */
-        get: operations["slotting_api_loans_slotting_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/loans/summary": {
         parameters: {
             query?: never;
@@ -264,7 +244,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/slotting/rules": {
+    "/api/loans/{loan_id}/slots": {
         parameters: {
             query?: never;
             header?: never;
@@ -272,12 +252,57 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Slotting Rules
-         * @description BUSINESS: the slotting rules in force, read-only, for the rules popup
-         *     (Step 5b). TECH: what the server loaded, so the popup cannot disagree
-         *     with the engine. Rules change only in config/slotting.toml.
+         * Loan Slots
+         * @description BUSINESS: the hover card for one loan ID on the Loan Tape.
+         *
+         *     TECH: 400 for a malformed id (LN + 8 digits), 409 if slotting has not run, 404
+         *       for an id not on this tape. The id goes in as a bound parameter.
          */
-        get: operations["slotting_rules_api_slotting_rules_get"];
+        get: operations["loan_slots_api_loans__loan_id__slots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/slotting/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Slotting
+         * @description BUSINESS: slot the whole tape, streaming each step with its counts.
+         *
+         *     TECH: a plain (sync) generator; FastAPI runs it on a worker thread. The server
+         *       does not pause between steps: on 2,000 loans the whole run takes a fraction
+         *       of a second, and the screen paces the commentary for the visitor.
+         */
+        post: operations["run_slotting_api_slotting_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/slotting/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Slotting Status
+         * @description BUSINESS: "Last run 11:42 AM" or "Not run on this tape". TECH: no query.
+         */
+        get: operations["slotting_status_api_slotting_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -389,32 +414,6 @@ export interface components {
             /** Type */
             type: string;
         };
-        /**
-         * ExecutionOut
-         * @description One execution and its fees. TECH: fees and spreads in bps (illustrative).
-         */
-        ExecutionOut: {
-            /** Fee Source */
-            fee_source: string | null;
-            /** Guarantee Fee Bps */
-            guarantee_fee_bps: number;
-            /** Max Buydown Bps */
-            max_buydown_bps: number;
-            /** Max Spread Bps */
-            max_spread_bps: number;
-            /** Min Spread Bps */
-            min_spread_bps: number;
-            /** Name */
-            name: string;
-            /** Pricing */
-            pricing: string;
-            /** Servicing Min Bps */
-            servicing_min_bps: number;
-            /** Source */
-            source: string;
-            /** Where */
-            where: string;
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -441,6 +440,49 @@ export interface components {
             };
             /** Loan Id */
             loan_id: string;
+        };
+        /**
+         * LoanSlots
+         * @description GET /api/loans/{loan_id}/slots: the hover card.
+         *
+         *     BUSINESS: the loan's own facts, its pool and coupons (percent, as text, e.g.
+         *       "2.5"), every story it fits with the rule and the reason, and the generic TBA
+         *       slot that is always open; or, if it is not slotted, why.
+         */
+        LoanSlots: {
+            /** Agency */
+            agency?: string | null;
+            /** Down Coupon */
+            down_coupon?: string | null;
+            /** Generic Note */
+            generic_note?: string | null;
+            /** Generic Tba */
+            generic_tba?: string | null;
+            /** Loan */
+            loan: {
+                [key: string]: unknown;
+            };
+            /** Loan Id */
+            loan_id: string;
+            not_slotted?: components["schemas"]["NotSlotted"] | null;
+            /**
+             * Run At
+             * Format: date-time
+             */
+            run_at: string;
+            /** Slot */
+            slot: string;
+            /** Slotted */
+            slotted: boolean;
+            /**
+             * Stories
+             * @default []
+             */
+            stories: components["schemas"]["StoryFit"][];
+            /** Term */
+            term?: string | null;
+            /** Up Coupon */
+            up_coupon?: string | null;
         };
         /**
          * LoanTapeLink
@@ -483,32 +525,16 @@ export interface components {
             total: number;
         };
         /**
-         * NotDeliverableOut
-         * @description One not-deliverable rule. TECH: where is the validated SQL the engine runs.
+         * NotSlotted
+         * @description Why a loan is not slotted. TECH: reason is the code; short for the grid, text for the card.
          */
-        NotDeliverableOut: {
+        NotSlotted: {
             /** Reason */
             reason: string;
-            /** Source */
-            source: string;
-            /** Where */
-            where: string;
-        };
-        /**
-         * ProductOut
-         * @description One product rule. TECH: tba true = gets the coupon ladder.
-         */
-        ProductOut: {
-            /** Execution */
-            execution: string;
-            /** Name */
-            name: string;
-            /** Source */
-            source: string;
-            /** Tba */
-            tba: boolean;
-            /** Where */
-            where: string;
+            /** Short */
+            short: string;
+            /** Text */
+            text: string;
         };
         /**
          * ProgramSlice
@@ -579,65 +605,64 @@ export interface components {
             title: string;
         };
         /**
-         * SlotGroup
-         * @description One row of the slotting summary: loans with the same slot.
-         *
-         *     BUSINESS: "Agency · UMBS · UMBS 30 · 6.0: 212 loans, $68.4mm, WAC 6.912".
-         *       Not-deliverable rows carry their reason and no execution or coupon.
-         *     TECH: current_upb in dollars; base_coupon and wac in percent; None where a
-         *       slot has no such value (an ARM has no TBA coupon; a whole loan no product).
+         * SlottingStatus
+         * @description GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes.
          */
-        SlotGroup: {
-            /** Base Coupon */
-            base_coupon: number | null;
-            /** Current Upb */
-            current_upb: number;
-            /** Execution */
-            execution: string | null;
-            /** Loans */
-            loans: number;
-            /** Slot Product */
-            slot_product: string | null;
-            /** Slot Reason */
-            slot_reason: string | null;
-            /** Slot Status */
-            slot_status: string;
-            /** Wac */
-            wac: number | null;
+        SlottingStatus: {
+            /** Run */
+            run: boolean;
+            /** Run At */
+            run_at?: string | null;
+            /** Running */
+            running: boolean;
+            totals?: components["schemas"]["SlottingTotals"] | null;
         };
         /**
-         * SlottingRulesOut
-         * @description GET /api/slotting/rules: every rule slotting applies, in the order it applies them.
+         * SlottingTotals
+         * @description The counts a finished run reports.
          *
-         *     BUSINESS: illustrative is always true: every rule, fee and limit is an
-         *       illustrative choice traced to a public source, not a real desk's rules.
-         *     TECH: coupon_step_pct in percent.
+         *     BUSINESS: slotted + not_slotted = loans. by_agency: UMBS and GNMA II loans;
+         *       by_reason: not-slotted loans by the first check they failed (no_agency,
+         *       product, status); stories: slotted loans per story family (a loan can count in
+         *       several); tiers: per LLB tier, loans whose lowest fitting tier it is;
+         *       multi_story: loans with more than one story; generic_tba: slotted loans with
+         *       none. coupons: the down and up coupon range, percent, as text ("1.5").
          */
-        SlottingRulesOut: {
-            /** Coupon Step Pct */
-            coupon_step_pct: number;
-            /** Executions */
-            executions: components["schemas"]["ExecutionOut"][];
-            /** Illustrative */
-            illustrative: boolean;
-            /** Not Deliverable */
-            not_deliverable: components["schemas"]["NotDeliverableOut"][];
-            /** Products */
-            products: components["schemas"]["ProductOut"][];
-            /** Spec Stories */
-            spec_stories: components["schemas"]["StoryOut"][];
-        };
-        /**
-         * SlottingSummary
-         * @description GET /api/loans/slotting. TECH: totals are over the filtered loans; groups sorted.
-         */
-        SlottingSummary: {
-            /** Current Upb */
-            current_upb: number;
-            /** Groups */
-            groups: components["schemas"]["SlotGroup"][];
+        SlottingTotals: {
+            /** By Agency */
+            by_agency: {
+                [key: string]: number;
+            };
+            /** By Reason */
+            by_reason: {
+                [key: string]: number;
+            };
+            /** Coupons */
+            coupons: {
+                [key: string]: string | null;
+            };
+            /** Generic Tba */
+            generic_tba: number;
             /** Loans */
             loans: number;
+            /** Multi Story */
+            multi_story: number;
+            /** Not Slotted */
+            not_slotted: number;
+            /** Slotted */
+            slotted: number;
+            /** Stories */
+            stories: {
+                [key: string]: number;
+            };
+            /** Tiers */
+            tiers: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            /** With Story */
+            with_story: number;
         };
         /**
          * StatusCount
@@ -692,18 +717,18 @@ export interface components {
             truncated: boolean;
         };
         /**
-         * StoryOut
-         * @description One spec story (from spec_stories.toml). TECH: tiers are expanded (LLB_85K, ...).
+         * StoryFit
+         * @description One spec story a loan fits. BUSINESS: rule is the SQL test; why is plain English.
          */
-        StoryOut: {
-            /** Family */
-            family: string;
+        StoryFit: {
+            /** Label */
+            label: string;
             /** Name */
             name: string;
-            /** Products */
-            products: string[];
-            /** Where */
-            where: string;
+            /** Rule */
+            rule: string;
+            /** Why */
+            why: string;
         };
         /**
          * Summary
@@ -1032,40 +1057,6 @@ export interface operations {
             };
         };
     };
-    slotting_api_loans_slotting_get: {
-        parameters: {
-            query?: {
-                /** @description AG Grid filter model as JSON */
-                filter?: string | null;
-                /** @description Desk question id, for example ltv_over_125 */
-                question?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SlottingSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     summary_api_loans_summary_get: {
         parameters: {
             query?: never;
@@ -1086,7 +1077,38 @@ export interface operations {
             };
         };
     };
-    slotting_rules_api_slotting_rules_get: {
+    loan_slots_api_loans__loan_id__slots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanSlots"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_slotting_api_slotting_run_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -1101,7 +1123,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SlottingRulesOut"];
+                    "text/event-stream": unknown;
+                };
+            };
+        };
+    };
+    slotting_status_api_slotting_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlottingStatus"];
                 };
             };
         };

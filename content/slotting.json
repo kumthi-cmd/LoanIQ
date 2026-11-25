@@ -1,42 +1,63 @@
 {
-  "_about": "Visitor-facing words for product slotting (Step 5). labels: grid headers for the slot columns, served by GET /api/loans/columns. terms: the glossary term behind each slot column's header tooltip. rules: one plain-English line per rule in backend/app/config/slotting.toml, keyed by the rule's name or reason, for the read-only Slotting rules popup. Definitions of terms live in content/glossary.json; the rules themselves, their numbers and sources live in slotting.toml and docs/public-sources.md. Everything is illustrative.",
+  "_about": "Visitor-facing words for product slotting (Step 5a). The server fills every {placeholder} with real counts from the run; no number is written here. labels: grid headers for the two columns slotting adds. slot: the Slot column's text. steps: the running commentary, one entry per step kind, in run order ('name' while the step runs, 'line' once it is done); spec-story steps repeat once per story family in spec_stories.toml. stories: each family's display label, optional step words, and the hover card's reason it fits. reasons: why a loan is not slotted (short for the grid, text for the hover card). card: the hover card's generic TBA line. Rules and their numbers live in backend/app/config/slotting.toml and spec_stories.toml; terms are defined in content/glossary.json. Everything is illustrative.",
   "labels": {
-    "slot_status": "Slot Status",
-    "slot_reason": "Slot Reason",
-    "execution": "Execution",
-    "slot_product": "Slot Product",
-    "net_rate": "Net Rate (%)",
-    "base_coupon": "Base Coupon (%)",
-    "down_coupon": "Down Coupon (%)",
-    "up_coupon": "Up Coupon (%)",
+    "slot": "Slot",
     "spec_stories": "Spec Stories"
   },
-  "terms": {
-    "slot_status": "Product slotting",
-    "slot_reason": "Not deliverable",
-    "execution": "Execution",
-    "slot_product": "Product slotting",
-    "net_rate": "Net rate",
-    "base_coupon": "Pass-through coupon",
-    "down_coupon": "Buy-up and buy-down",
-    "up_coupon": "Buy-up and buy-down",
-    "spec_stories": "Spec story"
+  "slot": {
+    "slotted": "{agency} {term} {down} / {up}",
+    "not_slotted": "Not slotted",
+    "generic": "Generic TBA",
+    "tier_label": "{label} {cap}"
   },
-  "rules": {
-    "Delinquent": "Behind on payments (any MBA status other than Current). Agency pools take only current loans.",
-    "Modified": "The loan's terms were changed after a hardship. Modified loans do not go into new agency pools.",
-    "Forbearance": "The borrower is in, or recently left, a payment pause. Such loans wait until they are current again.",
-    "UMBS": "Conventional and High-Balance loans go into Uniform MBS, issued by Fannie Mae or Freddie Mac.",
-    "Ginnie Mae II": "FHA, VA and USDA loans go into Ginnie Mae II pools, backed by the US government.",
-    "Whole loan": "Jumbo and Non-QM loans fall outside the agencies' rules and are sold whole to banks and investors.",
-    "UMBS High-LTV": "Refinances above 125 LTV go into their own specified pools, not TBA.",
-    "UMBS 30 High-Balance": "30-year High-Balance loans. A TBA pool may hold only a small share of them, so they get their own slot.",
-    "UMBS 15 High-Balance": "15-year High-Balance loans, kept apart for the same reason.",
-    "UMBS 30": "30-year fixed-rate conventional loans: the most traded TBA product.",
-    "UMBS 20": "20-year fixed-rate conventional loans.",
-    "UMBS 15": "15-year fixed-rate conventional loans.",
-    "UMBS ARM": "SOFR ARMs go into ARM pools, which do not trade TBA, so they get no coupon ladder.",
-    "G2 30": "30-year fixed-rate FHA, VA and USDA loans.",
-    "G2 15": "15-year fixed-rate FHA and VA loans."
+  "steps": {
+    "load_tape": {"name": "Loading the tape", "line": "Loaded {loans} loans from the tape"},
+    "load_rules": {"name": "Loading the rules", "line": "Loaded {rules} rules in {stories} spec stories from spec_stories.toml; all passed the SQL safety check"},
+    "agency": {"name": "Checking agency eligibility", "line": "{count} {programs} loans have no agency pool: not slotted"},
+    "product": {"name": "Checking products", "line": "{count} loans have no fixed-rate TBA coupon ({products}): not slotted"},
+    "status": {"name": "Checking delinquency", "line": "{count} delinquent loans: agency pools take current loans only"},
+    "eligible": {"name": "Counting eligible loans", "line": "{count} loans to slot: {by_agency}", "by_agency_item": "{count} into {agency}"},
+    "coupons": {"name": "Setting pool coupons", "line": "Down and up coupons set from each note rate: down {down_min} to {down_max}, up {up_min} to {up_max}"},
+    "story": {"name": "Matching {label}: {rule}", "line": "{label}: {count} loans ({rule})"},
+    "story_tiered": {"name": "Matching {label} tiers", "line": "{label}: {count} loans fit a {label} tier, {lowest_count} of them the ${lowest_cap} tier"},
+    "overlaps": {"name": "Checking overlaps", "line": "{count} loans fit more than one story; the hover lists them all"},
+    "write": {"name": "Writing to the Loan Tape", "line": "Wrote {slotted} slots to the Loan Tape; {generic} loans have no story and go generic TBA"}
+  },
+  "stories": {
+    "LLB": {
+      "label": "LLB",
+      "step_name": "Matching LLB tiers",
+      "step_line": "LLB: {count} loans fit a low-loan-balance tier, {lowest_count} of them the ${lowest_cap} tier",
+      "why": "Original balance ${orig_upb} fits the ${cap} tier, the lowest it fits"
+    },
+    "NY": {"label": "NY", "why": "Property in New York"},
+    "PR": {"label": "PR", "why": "Property in Puerto Rico"},
+    "LOW_FICO": {"label": "Low FICO", "why": "FICO {fico}, below the Low FICO cut-off in the rule"}
+  },
+  "reasons": {
+    "no_agency": {
+      "short": "No agency pool",
+      "text": "{program} loans have no agency pool.",
+      "by_program": {
+        "Jumbo": "Jumbo loans are above the conforming limit, so they have no agency pool.",
+        "Non-QM": "Non-QM loans fall outside the agencies' rules, so they have no agency pool."
+      }
+    },
+    "product": {
+      "short": "No TBA product",
+      "text": "A {product} has no fixed-rate TBA coupon. ARM pools are out of scope for now."
+    },
+    "status": {
+      "short": "Delinquent",
+      "text": "MBA status {dq_status}. Agency pools take current loans only."
+    }
+  },
+  "errors": {
+    "busy": "Product Slotting is already running on this tape. Wait for it to finish, then try again.",
+    "failed": "Product Slotting stopped before it finished. The Loan Tape still shows the last finished run."
+  },
+  "card": {
+    "generic_tba": "Generic TBA · {agency} {term} {down}",
+    "generic_note": "always open"
   }
 }

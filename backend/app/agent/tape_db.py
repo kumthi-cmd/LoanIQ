@@ -16,9 +16,9 @@ TECH:
     stops any SET statement from switching it back on.
   - The temporary folder is new for every start, so a stale copy can never be read;
     close_readonly_tape() deletes it at shutdown.
-  - From Step 5a the copy is slotted exactly like the grid's tape
-    (slotting.create_slotted_table), so the model can ask about slot_product,
-    base_coupon and the other slot columns the grid lists.
+  - The copy is the seller's tape only. Product slotting (Step 5a) runs later, on
+    demand, on the grid's store, so the agent does not see slot columns yet
+    (docs/roadmap.md lists it as a follow-up).
 """
 
 from __future__ import annotations
@@ -29,8 +29,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
-
-from app.slotting import SlottingRules, create_slotted_table, load_slotting_rules, parquet_columns
 
 
 @dataclass
@@ -43,20 +41,17 @@ class ReadOnlyTape:
     folder: Path
 
 
-def open_readonly_tape(parquet_path: Path, rules: SlottingRules | None = None) -> ReadOnlyTape:
-    """Copy the Parquet tape, slotted, into a new DuckDB file and open it read-only.
+def open_readonly_tape(parquet_path: Path) -> ReadOnlyTape:
+    """Copy the Parquet tape into a new DuckDB file and open it read-only.
 
-    BUSINESS: the agent sees the same loans and the same slots as the grid.
-    TECH: rules default to config/slotting.toml, checked against this tape's
-      columns. The write connection is closed before the read-only one opens;
-      DuckDB allows only one writer, and none is needed after the copy.
+    TECH: the write connection is closed before the read-only one opens; DuckDB
+      allows only one writer, and none is needed after the copy.
     """
     folder = Path(tempfile.mkdtemp(prefix="loaniq-agent-"))
     db_path = folder / "tape.duckdb"
     writer = duckdb.connect(str(db_path))
     try:
-        rules = rules or load_slotting_rules(parquet_columns(writer, parquet_path))
-        create_slotted_table(writer, parquet_path, rules)
+        writer.execute("CREATE TABLE loans AS SELECT * FROM read_parquet(?)", [str(parquet_path)])
     finally:
         writer.close()
     con = duckdb.connect(str(db_path), read_only=True,

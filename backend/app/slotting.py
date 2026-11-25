@@ -1,63 +1,70 @@
-"""Product slotting: which execution, product and coupon each loan can be sold into.
+"""Product slotting: which agency pool and coupons each loan can go into, and its spec stories.
 
 Where it sits:
-    config/slotting.toml + config/spec_stories.toml -> [slotting]
-    -> the `loans` table's slot columns (main.open_store, agent/tape_db)
-    -> GET /api/loans/slotting and GET /api/slotting/rules -> Loan Tape (Step 5b)
-    -> best execution (Step 6)
+    loan tape (DuckDB `loans`) -> [slotting: POST /api/slotting/run] -> `slots` table
+    -> Loan Tape columns Slot and Spec Stories, and the loan hover card
+    -> best execution (Step 6) prices each slot
 
 BUSINESS:
     Before a desk can price a tape it has to slot it: for every loan, decide whether
-    an agency pool will take it, which execution (UMBS, Ginnie Mae II or whole
-    loan) and product (UMBS 30, G2 30, ...) it belongs to, which pass-through
-    coupons it can make, and which spec stories it carries. Step 6 then prices each
-    slot and picks the best execution. All rules, fees and limits are illustrative
-    and come from config/slotting.toml, with their sources in docs/public-sources.md.
-    The rules, the formula and worked examples: docs/domain/slotting-rules.md.
+    an agency pool will take it (UMBS or GNMA II), at which pass-through coupons (a
+    down and an up coupon from its note rate), and which spec stories it carries
+    (low loan balance, New York, Puerto Rico, low FICO). Loans that fail a check are
+    "not slotted", with the reason. All rules are illustrative: the agency map,
+    products, status and coupon rule are in config/slotting.toml, the stories in
+    config/spec_stories.toml, the sources in docs/public-sources.md, and worked
+    examples in docs/domain/slotting-rules.md.
 
 TECH:
-    - Rules are validated SQL tests (spec_stories.validate_where: tape columns,
-      comparisons, AND / OR / NOT, IN, BETWEEN and literals only), so a bad rule
-      stops the app when the config loads.
-    - Slotting runs once, when the tape loads: create_slotted_table() copies the
-      Parquet tape into a DuckDB table with nine extra columns (SLOT_COLUMNS). The
-      grid's sorting, filtering and paging, and Ask the Tape's queries, then work on
-      them unchanged, and nothing is recomputed per request.
-    - Fees and the coupon step go into the SQL as named parameters ($p0, $p1, ...),
-      as DECIMAL, so the coupon arithmetic is exact (no binary rounding of 0.19 or
-      0.06). Note rates are multiples of 1/8 percent, exact in DECIMAL(8,4).
-    - The rules' own SQL is the validated rendering from validate_where, never the
-      raw config text, placed inside brackets in a CASE expression.
+    - One pass: a single CREATE TABLE ... AS SELECT (slots_sql) slots every loan into
+      a staging table. Every value from config (programs, statuses, the strip, story
+      names) goes in as a named parameter ($p0, $p1, ...); the only SQL inlined is
+      each spec story's validated rule (spec_stories.validate_where).
+    - The run is a generator (SlottingRun.events): it yields one step event as each
+      step finishes, with real counts queried from the staging table. The server
+      never sleeps; the screen paces the commentary (docs/decisions.md).
+    - Publish is one transaction that swaps the staging table into `slots` and
+      rebuilds the view `loans_slotted` (the tape plus two text columns), so a
+      reader sees the old result or the new one, never half of each. A run that is
+      stopped early (the visitor closes the stream) drops its staging table and
+      leaves the last result untouched.
+    - Coupons are exact: the note rate is turned into whole units of 0.0001% and
+      rounded down with integer arithmetic, because DuckDB divides DECIMALs as
+      binary floating point.
 """
 
 from __future__ import annotations
 
 import json
+import string
 import tomllib
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import duckdb
 
-from app.spec_stories import SPEC_STORIES_PATH, Story, load_spec_stories, validate_where
+from app.spec_stories import SPEC_STORIES_PATH, Story, cap_label, load_spec_stories
 
 CONFIG_DIR = Path(__file__).resolve().parent / "config"
 SLOTTING_PATH = CONFIG_DIR / "slotting.toml"
-CONTENT_PATH = Path(__file__).resolve().parents[2] / "content" / "slotting.json"
+WORDS_PATH = Path(__file__).resolve().parents[2] / "content" / "slotting.json"
 
-# BUSINESS: the four outcomes of slotting, in the order a desk reads them.
-AGENCY, WHOLE_LOAN, NOT_DELIVERABLE, UNSLOTTED = "Agency", "Whole loan", "Not deliverable", "Unslotted"
-STATUS_ORDER = [AGENCY, WHOLE_LOAN, NOT_DELIVERABLE, UNSLOTTED]
-# BUSINESS: why a loan is Unslotted: the config has no rule for it. The default
-#   tape must have none (tests/test_slotting.py), so these flag a config gap.
-NO_EXECUTION, NO_PRODUCT = "No execution rule", "No product rule"
-PRICINGS = {"pass_through", "whole_loan"}
+# TECH: LoanIQ's own table names, constants, never user input.
+STAGING, SLOTS, GRID_VIEW = "slots_staging", "slots", "loans_slotted"
+# TECH: the two columns the Loan Tape gains once a run exists, with their DuckDB type.
+GRID_COLUMNS = {"slot": "VARCHAR", "spec_stories": "VARCHAR"}
 
-# TECH: the columns slotting adds to every loan, in this order, after the tape's own.
-SLOT_COLUMNS = ["slot_status", "slot_reason", "execution", "slot_product", "net_rate",
-                "base_coupon", "down_coupon", "up_coupon", "spec_stories"]
+# BUSINESS: why a loan is not slotted, in the order the checks run. The codes key the
+#   words in content/slotting.json "reasons".
+NO_AGENCY, NO_TBA_PRODUCT, NOT_CURRENT = "no_agency", "product", "status"
+REASONS = (NO_AGENCY, NO_TBA_PRODUCT, NOT_CURRENT)
+# TECH: note rates and coupons are compared in whole units of 0.0001 percent.
+UNITS = 10_000
+TOP_KEYS = {"agencies", "products", "status", "coupons"}
+NO_POOL = "none"  # TECH: the [agencies] key for programs with no agency pool
 
 
 # =============================================================================
@@ -65,157 +72,141 @@ SLOT_COLUMNS = ["slot_status", "slot_reason", "execution", "slot_product", "net_
 # =============================================================================
 
 @dataclass(frozen=True)
-class NotDeliverable:
-    """BUSINESS: a reason no agency pool will take the loan. TECH: where is validated SQL."""
-    reason: str
-    where: str
-    source: str
+class SlottingRules:
+    """Every rule slotting applies, validated.
 
-
-@dataclass(frozen=True)
-class Execution:
-    """Where a loan can be sold, and that execution's fees.
-
-    BUSINESS: min_spread_bps is the least the note rate must sit above the coupon:
-      the servicer's minimum fee plus the guarantee fee.
-    TECH: fees in bps (Decimal, exact). Whole-loan executions carry zeros and
-      never get a coupon.
+    BUSINESS: agencies maps program -> agency ("FHA" -> "GNMA II"); a program in
+      no_agency has no pool. terms maps an eligible product -> its term label
+      ("30Y Fixed" -> "30Y"). min_strip and step are in percent.
+    TECH: Decimals, exact. programs and products are every name the tape can hold
+      (the generator's config), in config order, used to order commentary.
+      stories are spec_stories.toml's, tiers expanded, in config order.
     """
-    name: str
-    where: str
-    pricing: str
-    servicing_min_bps: Decimal
-    guarantee_fee_bps: Decimal
-    max_spread_bps: Decimal
-    max_buydown_bps: Decimal
-    source: str
-    fee_source: str | None
+    agencies: dict[str, str]
+    no_agency: tuple[str, ...]
+    terms: dict[str, str]
+    eligible_status: str
+    min_strip: Decimal
+    step: Decimal
+    stories: tuple[Story, ...]
+    programs: tuple[str, ...] = ()
+    products: tuple[str, ...] = ()
 
     @property
-    def min_spread_bps(self) -> Decimal:
-        """BUSINESS: minimum servicing + guarantee fee, in bps."""
-        return self.servicing_min_bps + self.guarantee_fee_bps
+    def agency_names(self) -> list[str]:
+        """BUSINESS: the agencies in config order (UMBS, then GNMA II)."""
+        return list(dict.fromkeys(self.agencies.values()))
+
+    @property
+    def coupon_scale(self) -> int:
+        """TECH: decimals a coupon needs: 0.5 -> 1, 0.25 -> 2 (at least 1)."""
+        return max(1, -self.step.normalize().as_tuple().exponent)
+
+    def families(self) -> dict[str, list[Story]]:
+        """BUSINESS: stories grouped by family (LLB, NY, ...), tiers from the lowest cap up."""
+        out: dict[str, list[Story]] = {}
+        for s in self.stories:
+            out.setdefault(s.family, []).append(s)
+        return {k: sorted(v, key=lambda s: s.cap or 0) for k, v in out.items()}
 
 
-@dataclass(frozen=True)
-class Product:
-    """BUSINESS: an agency product within one execution. TECH: tba gives a coupon ladder."""
-    name: str
-    execution: str
-    where: str
-    tba: bool
-    source: str
+def percent(raw: dict[str, Any], key: str, minimum_exclusive: bool) -> Decimal:
+    """A percent from [coupons], exact. TECH: must be a number, > 0 or >= 0."""
+    value = raw.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"Slotting coupons: {key} must be a number (percent)")
+    number = Decimal(str(value))
+    if number < 0 or (minimum_exclusive and number == 0):
+        raise ValueError(f"Slotting coupons: {key} must be {'above' if minimum_exclusive else 'at least'} 0")
+    return number
 
 
-@dataclass(frozen=True)
-class SlottingRules:
-    """Every rule slotting applies, validated. TECH: coupon_step_pct in percent."""
-    coupon_step_pct: Decimal
-    not_deliverable: tuple[NotDeliverable, ...]
-    executions: tuple[Execution, ...]
-    products: tuple[Product, ...]
-    stories: tuple[Story, ...]
+def load_agencies(raw: dict[str, Any], programs: Sequence[str]) -> tuple[dict[str, str], tuple[str, ...]]:
+    """[agencies] -> (program -> agency, programs with no pool), checked.
 
-
-def bps(entry: dict[str, Any], key: str, name: str) -> Decimal:
-    """A fee in bps from the config, as an exact Decimal. TECH: must be a number >= 0."""
-    value = entry.get(key, 0)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise ValueError(f"Slotting rule {name}: {key} must be a number of bps, 0 or more")
-    return Decimal(str(value))
-
-
-def check_keys(entry: dict[str, Any], required: set[str], optional: set[str], kind: str) -> str:
-    """Refuse typos: every required key present, nothing unknown. Returns the rule's name."""
-    name = str(entry.get("name") or entry.get("reason") or "<unnamed>")
-    missing, unknown = required - set(entry), set(entry) - required - optional
-    if missing or unknown:
-        raise ValueError(f"Slotting {kind} {name}: missing {sorted(missing)}, unknown {sorted(unknown)}")
-    return name
-
-
-def rule_sql(entry: dict[str, Any], columns: Sequence[str], name: str) -> str:
-    """A rule's `where`, validated. TECH: errors say "Slotting rule <name>: ..."."""
-    return validate_where(entry["where"], columns, name, "Slotting rule")
-
-
-def load_execution(entry: dict[str, Any], columns: Sequence[str], step: Decimal) -> Execution:
-    """One [[execution]] table, checked.
-
-    BUSINESS: a pass-through execution must leave room for its base coupon. The
-      base coupon's spread is always at least the min spread and below min spread
-      + one step, so max_spread_bps must be at least that, or some loans' base
-      coupon would break the execution's own maximum.
+    BUSINESS: every program the tape can hold must be in exactly one list, so no
+      loan is left out by accident.
     """
-    fees = {"servicing_min_bps", "guarantee_fee_bps", "max_spread_bps", "max_buydown_bps", "fee_source"}
-    name = check_keys(entry, {"name", "where", "pricing", "source"}, fees, "execution")
-    if entry["pricing"] not in PRICINGS:
-        raise ValueError(f"Slotting execution {name}: pricing must be one of {sorted(PRICINGS)}")
-    amounts = [bps(entry, k, name) for k in
-               ("servicing_min_bps", "guarantee_fee_bps", "max_spread_bps", "max_buydown_bps")]
-    ex = Execution(name, rule_sql(entry, columns, name), entry["pricing"], *amounts,
-                   entry["source"], entry.get("fee_source"))
-    if ex.pricing == "pass_through" and ex.max_spread_bps < ex.min_spread_bps + step * 100:
-        raise ValueError(f"Slotting execution {name}: max_spread_bps must be at least "
-                         f"servicing + guarantee fee + one coupon step")
-    return ex
+    by_program: dict[str, str] = {}
+    for agency, members in raw.items():
+        if not isinstance(members, list) or not members:
+            raise ValueError(f"Slotting agencies: {agency} must list at least one program")
+        for program in members:
+            if program in by_program:
+                raise ValueError(f"Slotting agencies: {program} is in two lists")
+            by_program[program] = agency
+    if programs and set(by_program) != set(programs):
+        raise ValueError(f"Slotting agencies: unknown {sorted(set(by_program) - set(programs))}, "
+                         f"missing {sorted(set(programs) - set(by_program))}")
+    pools = {p: a for p, a in by_program.items() if a != NO_POOL}
+    return pools, tuple(p for p, a in by_program.items() if a == NO_POOL)
 
 
-def load_product(entry: dict[str, Any], columns: Sequence[str],
-                 executions: dict[str, Execution]) -> Product:
-    """One [[product]] table, checked: its execution exists and is pass-through."""
-    name = check_keys(entry, {"name", "execution", "where", "tba", "source"}, set(), "product")
-    ex = executions.get(entry["execution"])
-    if ex is None or ex.pricing != "pass_through":
-        raise ValueError(f"Slotting product {name}: execution {entry['execution']!r} "
-                         f"is not a pass-through execution in slotting.toml")
-    if not isinstance(entry["tba"], bool):
-        raise ValueError(f"Slotting product {name}: tba must be true or false")
-    return Product(name, ex.name, rule_sql(entry, columns, name), entry["tba"], entry["source"])
+def load_terms(raw: dict[str, Any], products: Sequence[str]) -> dict[str, str]:
+    """[products] -> product -> term label, checked against the tape's products."""
+    if not raw or not all(isinstance(v, str) and v for v in raw.values()):
+        raise ValueError("Slotting products: list at least one product, each with a term label")
+    if products and set(raw) - set(products):
+        raise ValueError(f"Slotting products: unknown {sorted(set(raw) - set(products))}")
+    return dict(raw)
 
 
-def load_slotting_rules(columns: Sequence[str], path: Path = SLOTTING_PATH,
+def load_slotting_rules(columns: Sequence[str], programs: Sequence[str] = (),
+                        products: Sequence[str] = (), path: Path = SLOTTING_PATH,
                         stories_path: Path = SPEC_STORIES_PATH) -> SlottingRules:
     """Load and validate slotting.toml, plus the spec stories it reads.
 
-    BUSINESS: the single entry point; if any rule is wrong, nothing loads and the
-      app does not start, rather than mis-slotting loans.
-    TECH: columns are the tape's own columns (the allow-list for every `where`).
-      Raises ValueError (UnsafeWhereError included) naming the bad rule.
+    BUSINESS: the single entry point; if any rule is wrong the app does not start,
+      rather than mis-slotting loans.
+    TECH: columns are the tape's columns (the allow-list for story rules); programs
+      and products are the names the tape can hold (empty = not checked, for small
+      test configs). Raises ValueError naming the bad rule.
     """
     with path.open("rb") as f:
         raw = tomllib.load(f)
-    step = Decimal(str(raw["coupons"]["coupon_step_pct"]))
-    if step <= 0:
-        raise ValueError("Slotting coupons: coupon_step_pct must be above 0")
-    nd = tuple(NotDeliverable(r, rule_sql(e, columns, r), e["source"]) for e in raw.get("not_deliverable", [])
-               for r in [check_keys(e, {"reason", "where", "source"}, set(), "not_deliverable")])
-    execs = [load_execution(x, columns, step) for x in raw.get("execution", [])]
-    by_name = {e.name: e for e in execs}
-    products = tuple(load_product(p, columns, by_name) for p in raw.get("product", []))
-    names = [r.reason for r in nd] + [e.name for e in execs] + [p.name for p in products]
-    if len(names) != len(set(names)):
-        raise ValueError(f"Slotting: duplicate rule names: {sorted({n for n in names if names.count(n) > 1})}")
-    stories = tuple(load_spec_stories(columns, path=stories_path))
-    return SlottingRules(step, nd, tuple(execs), products, stories)
+    if set(raw) != TOP_KEYS:
+        raise ValueError(f"Slotting: sections must be exactly {sorted(TOP_KEYS)}, got {sorted(raw)}")
+    agencies, no_agency = load_agencies(raw["agencies"], programs)
+    status = raw["status"].get("eligible")
+    if not isinstance(status, str) or not status or set(raw["status"]) != {"eligible"}:
+        raise ValueError("Slotting status: eligible must be one MBA status, e.g. \"Current\"")
+    if set(raw["coupons"]) != {"min_strip_pct", "coupon_step_pct"}:
+        raise ValueError("Slotting coupons: keys must be min_strip_pct and coupon_step_pct")
+    stories = tuple(load_spec_stories(columns, products or None, path=stories_path))
+    return SlottingRules(agencies, no_agency, load_terms(raw["products"], products), status,
+                         percent(raw["coupons"], "min_strip_pct", False),
+                         percent(raw["coupons"], "coupon_step_pct", True),
+                         stories, tuple(programs), tuple(products))
 
 
-def load_slot_labels(path: Path = CONTENT_PATH) -> dict[str, str]:
-    """Grid headers for SLOT_COLUMNS, from content/slotting.json "labels"."""
-    return json.loads(path.read_text(encoding="utf-8"))["labels"]
+def load_slotting_words(path: Path = WORDS_PATH) -> dict[str, Any]:
+    """The visitor-facing words in content/slotting.json (templates, labels, reasons)."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def story_labels(rules: SlottingRules, words: dict[str, Any]) -> dict[str, str]:
+    """Display label for every story: LLB_275K -> "LLB 275K", LOW_FICO -> "Low FICO".
+
+    TECH: a family missing from the words falls back to its config name.
+    """
+    out = {}
+    for s in rules.stories:
+        label = words["stories"].get(s.family, {}).get("label", s.family)
+        out[s.name] = (words["slot"]["tier_label"].format(label=label, cap=cap_label(s.cap))
+                       if s.cap is not None else label)
+    return out
 
 
 # =============================================================================
-# The SQL that slots every loan
+# The one-pass SQL
 # =============================================================================
 
 class Params:
     """Named query parameters for one SQL statement.
 
-    TECH: DuckDB accepts named parameters ($name) with a dict of values, so the
-      order in which pieces of SQL are written never has to match a list. add()
-      stores a value and returns its placeholder ("$p3"). Rule labels, fees and
-      the coupon step all go in this way; only validated rule SQL is inlined.
+    TECH: DuckDB takes named parameters ($name) with a dict of values, so the order
+      pieces of SQL are written in never has to match a list. add() stores a value
+      and returns its placeholder ("$p3").
     """
 
     def __init__(self) -> None:
@@ -227,148 +218,302 @@ class Params:
         self.values[key] = value
         return f"${key}"
 
-    def pct(self, value: Decimal) -> str:
-        """A percent value, exact, as DECIMAL(8,4) in the SQL."""
-        return f"CAST({self.add(str(value))} AS DECIMAL(8,4))"
+    def many(self, values: Sequence[Any]) -> str:
+        """"$p0, $p1, ..." for an IN (...) list."""
+        return ", ".join(self.add(v) for v in values)
 
 
-def first_match(cases: Sequence[tuple[str, str]], p: Params) -> str:
-    """CASE WHEN (rule) THEN 'label' ... END: the first matching rule's label, or NULL.
+def agency_case(rules: SlottingRules, p: Params) -> str:
+    """CASE WHEN program IN (...) THEN 'UMBS' ... END: the loan's agency, or NULL."""
+    by_agency: dict[str, list[str]] = {}
+    for program, agency in rules.agencies.items():
+        by_agency.setdefault(agency, []).append(program)
+    whens = " ".join(f"WHEN program IN ({p.many(progs)}) THEN {p.add(a)}" for a, progs in by_agency.items())
+    return f"CASE {whens} END"
 
-    TECH: each `where` is validated SQL from the config; labels are parameters.
+
+def term_case(rules: SlottingRules, p: Params) -> str:
+    """CASE WHEN product = '30Y Fixed' THEN '30Y' ... END: the TBA term, or NULL."""
+    return "CASE " + " ".join(f"WHEN product = {p.add(prod)} THEN {p.add(term)}"
+                              for prod, term in rules.terms.items()) + " END"
+
+
+def story_lists(rules: SlottingRules, labels: dict[str, str], p: Params) -> tuple[str, str]:
+    """(story names list, story labels list) SQL for one loan.
+
+    BUSINESS: one entry per family the loan fits. For a tiered family (LLB) the
+      lowest tier the loan fits, so a $60K loan shows LLB 85K, not all nine tiers.
+      A story applies only to the products it lists in spec_stories.toml.
+    TECH: one CASE per family, tiers from the lowest cap up, so the first match is
+      the tightest. list_filter(..., lambda x: x IS NOT NULL) drops families the
+      loan does not fit; DuckDB's lambda syntax is "lambda x: <expression>".
     """
-    if not cases:
-        return "CAST(NULL AS VARCHAR)"
-    return "CASE " + " ".join(f"WHEN ({where}) THEN {p.add(label)}" for where, label in cases) + " END"
+    names, shown = [], []
+    for members in rules.families().values():
+        products = p.many(members[0].products)
+        names.append(f"CASE WHEN product IN ({products}) THEN CASE "
+                     + " ".join(f"WHEN ({s.where}) THEN {p.add(s.name)}" for s in members) + " END END")
+        shown.append(f"CASE WHEN product IN ({products}) THEN CASE "
+                     + " ".join(f"WHEN ({s.where}) THEN {p.add(labels[s.name])}" for s in members) + " END END")
+    keep = "lambda x: x IS NOT NULL"
+    if not names:
+        return "CAST([] AS VARCHAR[])", "CAST([] AS VARCHAR[])"
+    return f"list_filter([{', '.join(names)}], {keep})", f"list_filter([{', '.join(shown)}], {keep})"
 
 
-def fees_values(rules: SlottingRules, p: Params) -> str:
-    """A VALUES table of each pass-through execution's spreads, in percent.
+def template_sql(template: str, fields: dict[str, str], p: Params) -> str:
+    """Turn a words template like "{agency} {term} {down} / {up}" into SQL concat(...).
 
-    BUSINESS (per execution, percent of balance a year):
-      _min   = (servicing_min_bps + guarantee_fee_bps) / 100     the minimum spread
-      _max   = max_spread_bps / 100                              the maximum spread
-      _floor = (min spread in bps - max_buydown_bps) / 100       the lowest spread an
-               up coupon may reach by buying down the guarantee fee
-    TECH: whole-loan executions are left out, so their loans join to NULL fees.
+    TECH: string.Formatter().parse splits the template into literal text (sent as
+      parameters) and {field} names (each mapped to a SQL expression). An unknown
+      field is a ValueError, so a typo in content/slotting.json fails at start-up.
     """
-    rows = [f"({p.add(ex.name)}, {p.pct(ex.min_spread_bps / 100)}, {p.pct(ex.max_spread_bps / 100)}, "
-            f"{p.pct((ex.min_spread_bps - ex.max_buydown_bps) / 100)})"
-            for ex in rules.executions if ex.pricing == "pass_through"]
-    if not rows:
-        null = "CAST(NULL AS DECIMAL(8,4))"
-        rows = [f"(CAST(NULL AS VARCHAR), {null}, {null}, {null})"]
-    return f"SELECT * FROM (VALUES {', '.join(rows)}) AS f(_fee_execution, _min, _max, _floor)"
+    parts = []
+    for literal, name, _spec, _conv in string.Formatter().parse(template):
+        if literal:
+            parts.append(p.add(literal))
+        if name is not None:
+            if name not in fields:
+                raise ValueError(f"Slotting words: unknown field {{{name}}} in {template!r}")
+            parts.append(fields[name])
+    return f"concat({', '.join(parts)})"
 
 
-def product_cases(rules: SlottingRules, p: Params) -> tuple[str, str]:
-    """(product name, TBA flag): the first product rule within the loan's execution."""
-    if not rules.products:
-        return "CAST(NULL AS VARCHAR)", "FALSE"
-    name = "CASE " + " ".join(f"WHEN _execution = {p.add(x.execution)} AND ({x.where}) THEN {p.add(x.name)}"
-                              for x in rules.products) + " END"
-    tba = [x.name for x in rules.products if x.tba]
-    flag = f"COALESCE(_product IN ({', '.join(p.add(n) for n in tba)}), FALSE)" if tba else "FALSE"
-    return name, flag
+def slots_sql(rules: SlottingRules, words: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """The one pass: SELECT one slot row per loan from `loans`.
 
-
-def stories_sql(rules: SlottingRules, p: Params) -> str:
-    """The loan's spec stories as text, e.g. "LLB_110K, NY", or NULL for none.
-
-    BUSINESS: only a TBA agency loan carries spec stories (the caller checks),
-      and only for the tape products each story lists. For a tiered family (LLB)
-      the tightest tier the loan fits is shown: an $80K loan fits every LLB tier,
-      and the $85K tier is the one a desk quotes first (docs/decisions.md).
-    TECH: one CASE per family, tiers in increasing cap order, so the first match
-      is the tightest; concat_ws skips NULLs; NULLIF turns "" (no story) into NULL.
+    BUSINESS (per loan, in this order; the first check that fails is the reason):
+      1. agency  = the agency its program goes into     (none -> no_agency)
+      2. term    = the TBA term of its product           (none -> product)
+      3. current = its MBA status is the eligible status (no   -> status)
+      If all pass, in percent:
+        down_coupon = FLOOR((note_rate - min_strip) / step) x step
+        up_coupon   = down_coupon + step
+      e.g. note 3.125, strip 0.50, step 0.5: 2.625 -> down 2.5, up 3.0.
+    TECH: the rounding runs on whole 0.0001% units (BIGINT), with a floored modulo
+      ((x % s) + s) % s so it rounds down even below zero, then is cast back to an
+      exact DECIMAL. Returns (sql, params); the grid text columns slot and
+      spec_stories are built here too, from the words templates, so the grid can
+      sort and filter them like any column.
     """
-    families: dict[str, list[Story]] = {}
-    for s in rules.stories:
-        families.setdefault(s.family, []).append(s)
-    pieces = []
-    for members in families.values():
-        members.sort(key=lambda s: s.cap or 0)
-        products = ", ".join(p.add(x) for x in members[0].products)
-        pieces.append(f"CASE WHEN product IN ({products}) THEN "
-                      f"{first_match([(s.where, s.name) for s in members], p)} END")
-    if not pieces:
-        return "CAST(NULL AS VARCHAR)"
-    return f"NULLIF(concat_ws(', ', {', '.join(pieces)}), '')"
-
-
-def slotted_select(rules: SlottingRules) -> tuple[str, dict[str, Any]]:
-    """SELECT every tape column plus SLOT_COLUMNS, from read_parquet($path).
-
-    BUSINESS (per loan, in this order):
-      1. a not-deliverable rule matches -> Not deliverable, with its reason
-      2. else the first execution rule -> UMBS, Ginnie Mae II or Whole loan
-      3. a pass-through execution -> the first product rule within it
-      4. a TBA product -> coupons, in percent:
-           net_rate    = note_rate - min spread
-           base_coupon = FLOOR(net_rate / step) x step
-           down_coupon = base - step, kept if note_rate - down <= max spread
-           up_coupon   = base + step, kept if note_rate - up   >= floor spread
-         e.g. UMBS (min 0.75, max 2.50, floor 0.50), note 6.875: net 6.125, base
-         6.0, down 5.5 (spread 1.375), up 6.5 (spread 0.375 < 0.50): no up coupon.
-    TECH: returns (sql, params); the caller adds params["path"], the Parquet file.
-      Helper columns start with "_" and are dropped with DuckDB's
-      SELECT * EXCLUDE (...), which keeps every tape column in tape order.
-    """
-    p = Params()
-    step = p.pct(rules.coupon_step_pct)
-    product, tba = product_cases(rules, p)
-    whole = [e.name for e in rules.executions if e.pricing == "whole_loan"]
-    is_whole = f"_execution IN ({', '.join(p.add(n) for n in whole)})" if whole else "FALSE"
-    agency, wl, nd, un = (p.add(s) for s in (AGENCY, WHOLE_LOAN, NOT_DELIVERABLE, UNSLOTTED))
-    note = "CAST(note_rate AS DECIMAL(8,4))"
+    p, scale = Params(), rules.coupon_scale
+    labels = story_labels(rules, words)
+    names, shown = story_lists(rules, labels, p)
+    note = f"CAST(ROUND(note_rate * {UNITS}) AS BIGINT)"
+    strip, step = p.add(int(rules.min_strip * UNITS)), p.add(int(rules.step * UNITS))
+    coupon = f"DECIMAL({scale + 4}, {scale})"
+    shorts = " ".join(f"WHEN {p.add(code)} THEN {p.add(words['reasons'][code]['short'])}" for code in REASONS)
+    slot_text = template_sql(words["slot"]["slotted"], {
+        "agency": "agency", "term": "term",
+        "down": "CAST(down_coupon AS VARCHAR)", "up": "CAST(up_coupon AS VARCHAR)"}, p)
     sql = f"""
-WITH src AS (SELECT * FROM read_parquet($path)),
-fees AS ({fees_values(rules, p)}),
-s1 AS (SELECT *, {first_match([(r.where, r.reason) for r in rules.not_deliverable], p)} AS _nd,
-              {first_match([(e.where, e.name) for e in rules.executions], p)} AS _rule FROM src),
-s2 AS (SELECT *, CASE WHEN _nd IS NULL THEN _rule END AS _execution FROM s1),
-s3 AS (SELECT s2.*, fees.* FROM s2 LEFT JOIN fees ON fees._fee_execution = s2._execution),
-s4 AS (SELECT *, CASE WHEN _min IS NOT NULL THEN {product} END AS _product FROM s3),
-s5 AS (SELECT *, {tba} AS _tba,
-           CASE WHEN _nd IS NOT NULL THEN {nd}
-                WHEN _execution IS NULL THEN {un}
-                WHEN {is_whole} THEN {wl}
-                WHEN _product IS NULL THEN {un}
-                ELSE {agency} END AS _status FROM s4),
-s6 AS (SELECT *, CASE WHEN _status = {agency} AND _tba THEN {note} - _min END AS _net FROM s5),
-s7 AS (SELECT *, FLOOR(_net / {step}) * {step} AS _base FROM s6)
-SELECT * EXCLUDE (_nd, _rule, _execution, _fee_execution, _min, _max, _floor, _product, _tba,
-                  _status, _net, _base),
-    _status AS slot_status,
-    CASE WHEN _nd IS NOT NULL THEN _nd
-         WHEN _status = {un} AND _execution IS NULL THEN {p.add(NO_EXECUTION)}
-         WHEN _status = {un} THEN {p.add(NO_PRODUCT)} END AS slot_reason,
-    CASE WHEN _status IN ({agency}, {wl}) THEN _execution END AS execution,
-    CASE WHEN _status = {agency} THEN _product END AS slot_product,
-    CAST(_net AS DECIMAL(8,4)) AS net_rate,
-    CAST(_base AS DECIMAL(6,3)) AS base_coupon,
-    CAST(CASE WHEN {note} - (_base - {step}) <= _max THEN _base - {step} END AS DECIMAL(6,3)) AS down_coupon,
-    CAST(CASE WHEN {note} - (_base + {step}) >= _floor THEN _base + {step} END AS DECIMAL(6,3)) AS up_coupon,
-    CASE WHEN _status = {agency} AND _tba THEN {stories_sql(rules, p)} END AS spec_stories
-FROM s7
+WITH s0 AS (SELECT *, {agency_case(rules, p)} AS agency, {term_case(rules, p)} AS term,
+                  {note} - {strip} AS _x FROM loans),
+s1 AS (SELECT *, CASE WHEN agency IS NULL THEN {p.add(NO_AGENCY)}
+                      WHEN term IS NULL THEN {p.add(NO_TBA_PRODUCT)}
+                      WHEN dq_status IS DISTINCT FROM {p.add(rules.eligible_status)} THEN {p.add(NOT_CURRENT)}
+                 END AS reason FROM s0),
+s2 AS (SELECT *, reason IS NULL AS eligible,
+              CASE WHEN reason IS NULL THEN _x - ((_x % {step}) + {step}) % {step} END AS _down FROM s1),
+s3 AS (SELECT *,
+              CAST(CAST(_down AS DECIMAL(18,0)) * CAST(0.0001 AS DECIMAL(5,4)) AS {coupon}) AS down_coupon,
+              CAST(CAST(_down + {step} AS DECIMAL(18,0)) * CAST(0.0001 AS DECIMAL(5,4)) AS {coupon}) AS up_coupon,
+              CASE WHEN reason IS NULL THEN {names} ELSE CAST([] AS VARCHAR[]) END AS stories,
+              CASE WHEN reason IS NULL THEN {shown} END AS _shown FROM s2)
+SELECT loan_id, eligible, reason, agency, term, down_coupon, up_coupon, stories,
+       CASE WHEN eligible THEN {slot_text} ELSE {p.add(words['slot']['not_slotted'])} END AS slot,
+       CASE WHEN NOT eligible THEN CASE reason {shorts} END
+            WHEN len(_shown) = 0 THEN {p.add(words['slot']['generic'])}
+            ELSE array_to_string(_shown, ', ') END AS spec_stories
+FROM s3
 """
     return sql, p.values
 
 
-def create_slotted_table(con: duckdb.DuckDBPyConnection, parquet_path: Path, rules: SlottingRules,
-                         table: str = "loans") -> None:
-    """Copy the Parquet tape into `table`, with every loan slotted.
+# =============================================================================
+# The run: one pass, then a step event per check, then publish
+# =============================================================================
 
-    BUSINESS: the one place slotting runs. The grid's tape and Ask the Tape's
-      read-only copy both call it, so they always agree.
-    TECH: CREATE TABLE ... AS SELECT with named parameters. `table` is LoanIQ's
-      own constant ("loans"), never user input.
+@dataclass
+class SlotEvent:
+    """One server-sent event of a run. TECH: type is "step" or "done"; data is JSON."""
+    type: str
+    data: dict[str, Any]
+
+
+def fmt(n: int) -> str:
+    """BUSINESS: counts as a desk writes them: 1467 -> "1,467"."""
+    return f"{n:,}"
+
+
+def and_list(items: Sequence[str]) -> str:
+    """["Jumbo", "Non-QM"] -> "Jumbo and Non-QM"; three or more -> "A, B and C"."""
+    items = list(items)
+    return " and ".join(items) if len(items) < 3 else f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+@dataclass
+class SlottingRun:
+    """One slotting run over the store's `loans` table.
+
+    BUSINESS: the 13 steps a visitor watches on the default config: load, three
+      eligibility checks, count, coupons, one step per spec-story family, overlaps,
+      write. A new story family in spec_stories.toml adds one step by itself.
+    TECH: events() is a generator: each step runs its query, then yields its event.
+      totals collects every count for the done event and GET /api/slotting/status.
+      on_publish (main.py) switches the Loan Tape to the new columns inside the same
+      call that publishes, before the done event is sent.
     """
-    sql, params = slotted_select(rules)
-    con.execute(f"CREATE TABLE {table} AS {sql}", {**params, "path": str(parquet_path)})
+    con: duckdb.DuckDBPyConnection
+    rules: SlottingRules
+    words: dict[str, Any]
+    on_publish: Callable[[], None] = lambda: None
+    totals: dict[str, Any] = field(default_factory=dict)
 
+    def plan(self) -> list[tuple[str, str | None]]:
+        """The steps, in order: (kind, story family or None)."""
+        stories = [("story", fam) for fam in self.rules.families()]
+        return ([("load_tape", None), ("load_rules", None), ("agency", None), ("product", None),
+                 ("status", None), ("eligible", None), ("coupons", None)]
+                + stories + [("overlaps", None), ("write", None)])
 
-def parquet_columns(con: duckdb.DuckDBPyConnection, parquet_path: Path) -> list[str]:
-    """The tape's own column names, in file order. TECH: DESCRIBE reads only the schema."""
-    rows = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(parquet_path)]).fetchall()
-    return [r[0] for r in rows]
+    def events(self) -> Iterator[SlotEvent]:
+        """Run every step, yielding a step event after each, then the done event.
+
+        TECH: percent = step / steps x 100, rounded (13 steps: 8, 15, 23, ... 100).
+          If the caller stops early (GeneratorExit), the finally drops the staging
+          table and the last published result stays as it was.
+        """
+        plan, cur = self.plan(), self.con.cursor()
+        try:
+            for i, (kind, family) in enumerate(plan, start=1):
+                name, line = self.run_step(cur, kind, family)
+                yield SlotEvent("step", {"step": i, "steps": len(plan), "kind": kind, "name": name,
+                                         "percent": round(100 * i / len(plan)), "line": line})
+            yield SlotEvent("done", {"totals": self.totals})
+        finally:
+            cur.execute(f"DROP TABLE IF EXISTS {STAGING}")
+            cur.close()
+
+    def run_step(self, cur: duckdb.DuckDBPyConnection, kind: str, family: str | None) -> tuple[str, str]:
+        """(step name, commentary line) for one step, after running its query."""
+        if kind == "story":
+            return self.story_step(cur, family or "")
+        words = self.words["steps"][kind]
+        values = getattr(self, f"step_{kind}")(cur)
+        return words["name"], words["line"].format(**values)
+
+    # -- the steps -------------------------------------------------------------
+    # TECH: each returns the values its commentary template needs, and records the
+    #   raw counts in self.totals.
+
+    def step_load_tape(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """BUSINESS: how many loans are on the tape being slotted."""
+        self.totals["loans"] = cur.execute("SELECT COUNT(*) FROM loans").fetchone()[0]
+        return {"loans": fmt(self.totals["loans"])}
+
+    def step_load_rules(self, _cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """BUSINESS: the spec-story rules in force, all validated when the app started."""
+        return {"rules": fmt(len(self.rules.stories)), "stories": fmt(len(self.rules.families()))}
+
+    def step_agency(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """The one pass that writes the staging table, then the loans with no agency pool."""
+        sql, params = slots_sql(self.rules, self.words)
+        cur.execute(f"CREATE OR REPLACE TABLE {STAGING} AS {sql}", params)
+        count, programs = self.reason_detail(cur, NO_AGENCY, "program", self.rules.programs)
+        return {"count": count, "programs": and_list(programs)}
+
+    def step_product(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """BUSINESS: agency loans whose product does not trade TBA (the ARMs)."""
+        count, products = self.reason_detail(cur, NO_TBA_PRODUCT, "product", self.rules.products)
+        return {"count": count, "products": ", ".join(products)}
+
+    def step_status(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """BUSINESS: agency loans in a TBA product that are not current."""
+        count, _ = self.reason_detail(cur, NOT_CURRENT, "dq_status", ())
+        return {"count": count}
+
+    def reason_detail(self, cur: duckdb.DuckDBPyConnection, reason: str, column: str,
+                      order: Sequence[str]) -> tuple[str, list[str]]:
+        """(count, distinct values of `column`) for the loans failing one check.
+
+        TECH: column is one of three constants above, never user input. Values are
+          put in `order` (config order), unknown ones last.
+        """
+        rows = cur.execute(f"SELECT l.{column}, COUNT(*) FROM {STAGING} s JOIN loans l USING (loan_id) "
+                           "WHERE s.reason = ? GROUP BY 1", [reason]).fetchall()
+        self.totals.setdefault("by_reason", {})[reason] = sum(n for _, n in rows)
+        rank = {v: i for i, v in enumerate(order)}
+        values = sorted((v for v, _ in rows), key=lambda v: (rank.get(v, len(rank)), v))
+        return fmt(self.totals["by_reason"][reason]), values
+
+    def step_eligible(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """BUSINESS: the loans that pass every check, by agency."""
+        rows = dict(cur.execute(f"SELECT agency, COUNT(*) FROM {STAGING} WHERE eligible GROUP BY 1").fetchall())
+        self.totals["by_agency"] = {a: rows.get(a, 0) for a in self.rules.agency_names}
+        self.totals["slotted"] = sum(self.totals["by_agency"].values())
+        self.totals["not_slotted"] = self.totals["loans"] - self.totals["slotted"]
+        item = self.words["steps"]["eligible"]["by_agency_item"]
+        parts = [item.format(count=fmt(n), agency=a) for a, n in self.totals["by_agency"].items()]
+        return {"count": fmt(self.totals["slotted"]), "by_agency": ", ".join(parts)}
+
+    def step_coupons(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """BUSINESS: the range of down and up coupons the slotted loans make, in percent."""
+        row = cur.execute(f"SELECT MIN(down_coupon), MAX(down_coupon), MIN(up_coupon), MAX(up_coupon) "
+                          f"FROM {STAGING} WHERE eligible").fetchone()
+        keys = ("down_min", "down_max", "up_min", "up_max")
+        self.totals["coupons"] = {k: (None if v is None else str(v)) for k, v in zip(keys, row)}
+        return {k: v or "-" for k, v in self.totals["coupons"].items()}
+
+    def story_step(self, cur: duckdb.DuckDBPyConnection, family: str) -> tuple[str, str]:
+        """BUSINESS: how many slotted loans carry one spec-story family.
+
+        TECH: list_has_any(stories, [tier names]) counts a loan once per family. For a
+          tiered family the lowest tier's count is reported too ("55 of them the
+          $85K tier"). The family's own words, if any, replace the generic ones.
+        """
+        members = self.rules.families()[family]
+        own = self.words["stories"].get(family, {})
+        label = own.get("label", family)
+        tiered = members[0].cap is not None
+        generic = self.words["steps"]["story_tiered" if tiered else "story"]
+        count = cur.execute(f"SELECT COUNT(*) FROM {STAGING} WHERE list_has_any(stories, ?)",
+                            [[s.name for s in members]]).fetchone()[0]
+        self.totals.setdefault("stories", {})[family] = count
+        values = {"label": label, "rule": members[0].where, "count": fmt(count)}
+        if tiered:
+            tiers = dict(cur.execute(f"SELECT s, COUNT(*) FROM (SELECT unnest(stories) AS s FROM {STAGING}) "
+                                     "WHERE list_contains(?, s) GROUP BY 1",
+                                     [[m.name for m in members]]).fetchall())
+            self.totals.setdefault("tiers", {})[family] = {m.name: tiers.get(m.name, 0) for m in members}
+            values.update(lowest_count=fmt(tiers.get(members[0].name, 0)),
+                          lowest_cap=cap_label(members[0].cap or 0))
+        name = own.get("step_name", generic["name"]).format(**values)
+        return name, own.get("step_line", generic["line"]).format(**values)
+
+    def step_overlaps(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """BUSINESS: loans that fit more than one story; they still go into one pool."""
+        row = cur.execute(f"SELECT COUNT(*) FILTER (WHERE len(stories) > 1), "
+                          f"COUNT(*) FILTER (WHERE eligible AND len(stories) = 0) FROM {STAGING}").fetchone()
+        self.totals["multi_story"], self.totals["generic_tba"] = row
+        self.totals["with_story"] = self.totals["slotted"] - self.totals["generic_tba"]
+        return {"count": fmt(self.totals["multi_story"])}
+
+    def step_write(self, cur: duckdb.DuckDBPyConnection) -> dict[str, str]:
+        """Publish: swap the staging table into `slots` and rebuild the grid view.
+
+        TECH: one transaction, so readers on other cursors see the old result or the
+          new one. on_publish then points the Loan Tape at the view.
+        """
+        cur.execute("BEGIN TRANSACTION")
+        try:
+            cur.execute(f"CREATE OR REPLACE TABLE {SLOTS} AS SELECT * FROM {STAGING}")
+            cur.execute(f"CREATE OR REPLACE VIEW {GRID_VIEW} AS SELECT l.*, s.slot, s.spec_stories "
+                        f"FROM loans l LEFT JOIN {SLOTS} s USING (loan_id)")
+            cur.execute(f"DROP TABLE {STAGING}")
+            cur.execute("COMMIT")
+        except duckdb.Error:
+            cur.execute("ROLLBACK")
+            raise
+        self.on_publish()
+        return {"slotted": fmt(self.totals["slotted"]), "generic": fmt(self.totals["generic_tba"])}
