@@ -104,7 +104,8 @@ query_store_ttl_s = 3600
 # -----------------------------------------------------------------------------
 [budget]
 # BUSINESS: past this many dollars of model use in one UTC day, built-in rules
-#   answer instead. About 2,000 Haiku questions at roughly $0.001 each.
+#   answer instead. About 7,000 Haiku questions at roughly $0.0003 each
+#   (measured by scripts\eval_agent.py, docs/evals/2026-11-25.json).
 daily_cap_usd = 2.00
 # BUSINESS: questions one visitor may send to the model per UTC day; after that,
 #   built-in rules answer. Desk-question chips never count: they skip the model.

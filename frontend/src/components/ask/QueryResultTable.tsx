@@ -8,7 +8,8 @@
  *   The first 8 rows show, as on the design board, with "Show all" for the rest
  *   (up to the 500-row cap). "Open in Loan Tape" opens the full grid with the same
  *   filter; when the filter cannot be shown as column filters, the button is
- *   disabled and says why. "Send to Slotting" waits for Step 5 and is not shown.
+ *   disabled and says why. There is no "Send to Slotting": slotting is a Loan Tape
+ *   action from Step 5, not a screen (docs/decisions.md, 2026-11-25).
  *   A loan-level result also carries the Loan Tape's 12 default columns, added by
  *   the server (Step 4c), so the table is drawn as stored, column for column. It is
  *   packed to its data by CSS (styles.css .result-table), not stretched.

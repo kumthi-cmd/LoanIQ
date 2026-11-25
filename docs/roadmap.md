@@ -1,12 +1,11 @@
 # Roadmap
-Current step: Step 4d done (2026-11-24): the gold Agent mark beside Ask the Tape
-(sidebar and title) with a one-line tooltip and a popover explaining the agent
-(content/agent.md and a loop diagram). Planned Tape Upload and Explorer moved to the
-end of the Trade group. Step 4c: Ask the Tape answers about specific loans
-show the Loan Tape's 12 default columns, packed to the data (one list for both
-screens in api.toml). Step 4b, the Ask the Tape screen, is on `main`. Step 4a, the
-engine, is merged into `main`. Step 4 was
-taken ahead of Steps 2 and 3.
+Current step: Step 4e done (2026-11-25): Step 4 is closed. The golden questions ran
+on Claude Haiku 5.5 and Sonnet 5.5 (docs/evals/2026-11-25.json; the numbers are in
+content/how-it-was-built.md). Slotting and best execution are now Loan Tape features,
+not screens (docs/decisions.md), so the order is Steps 5 and 6, then 2 and 3. Next:
+Step 5, product slotting on the Loan Tape. Step 4 (4a engine, 4b screen, 4c answer
+columns, 4d Agent mark, 4e live eval) is on `main`; it was taken ahead of Steps 2
+and 3.
 Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
 after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
 1c SPA and loan grid, 1d Loan Tape screen to the design board (panels, desk
@@ -20,37 +19,35 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 0 Setup | Done | 0.5 | 1 |
 | Hosting: live site, deploy on every push | Done | 4-6 | 1 |
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
+| 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns, 4d Agent mark, 4e live eval | 5-7 | 10.5 (4a: 3, 4b: 4, 4c: 1, 4d: 1.5, 4e: 1) |
+| 5 Slotting rules engine on the Loan Tape | Not started | 3-4 | |
+| 6 Price file and best execution on the Loan Tape | Not started | 5-7 | |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
-| 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns, 4d Agent mark | 5-7 | 8.5 (4a: 3, 4b: 4, 4d: 1.5) |
-| 5 Slotting rules engine | Not started | 3-4 | |
-| 6 Price file and best execution | Not started | 5-7 | |
 | 7 Blotter and position monitor | Not started | 6-8 | |
 | 8 Optimizer and pool candidates | Not started | 7-10 | |
 | 9 Polish and publish | Not started | 3-4 | |
 
 ## Pace and forecast
-Estimates set 2026-11-19, after Step 1d. Active hours are time spent building,
-including design and review.
+Estimates set 2026-11-19, after Step 1d; re-forecast 2026-11-25, after Step 4 ran
+50% over its estimate (10.5 active hours against 5-7). Active hours are time spent
+building, including design and review.
 
 - Pace so far: Steps 0 to 1d took about 8.5 active hours over 2026-11-18 and
   2026-11-19, about 4 a day. Step 1 is running about 1.5 times faster than the
   build guide's two to three evenings.
-- Left: about 41-56 active hours, including about 3 to finish Step 1 (About and
-  How it was built pages, "My take" entries, the Loan Tape polish follow-ups below).
-  The CI workflow and the merge to main moved into Hosting.
-- Forecast at 4 hours a day: 10-14 build days, finishing around 2026-12-07 to
-  2026-12-11 (weekdays, Thanksgiving Thursday and Friday off). At 2.5 hours a day:
-  around 2026-12-15 to 2026-12-23.
+- Left: about 30-41 active hours (Steps 5, 6, 2, 3, 7, 8 and 9).
+- Forecast at 4 hours a day: finishing around 2026-12-08 to 2026-12-11. At 2.5 hours
+  a day: around 2026-12-14 to 2026-12-21. Weekdays only, with Thanksgiving Thursday
+  and Friday (2026-11-26 and 27) off.
 - The high end of each estimate assumes a design pass like the Loan Tape screen's.
   The design canvas has boards for Ask the Tape, Slotting & Best Execution,
   Blotter & Positions and the Optimizer.
 - Hosting comes early, so every later step goes live on push and deployment problems
   show up while the app is small (decided 2026-11-19). On 2026-11-20 it moved ahead of
   the About page: one Docker container on Render (docs/decisions.md). Render's free
-  plan and free address for now. Before the link goes on any application: upgrade to
-  Starter ($7/month; change `plan` in render.yaml) and add the domain LoanIQLabs.com
-  (registered 2026-11-19 at Namecheap).
+  plan for now. Before the link goes on any application: upgrade to Starter
+  ($7/month; change `plan` in render.yaml).
 - Risk: plan usage limits can slow the agent (Step 4) and optimizer (Step 8)
   steps. Run routine sub-steps on Sonnet.
 
@@ -70,14 +67,11 @@ From Step 1f (About and How it was built, 2026-11-23):
 
 From Step 4a (Ask the Tape engine, 2026-11-23):
 - Done: ANTHROPIC_API_KEY set in the Render dashboard (Environment).
-- Run `backend\scripts\eval_agent.py` on Claude Haiku 5.5 once the key is set, to
-  measure real accuracy, tokens, cache hits and cost per question (content/agent.md
-  says about $0.001; the estimate is $0.001-0.002).
+- Done (Step 4e, 2026-11-25): ran `backend\scripts\eval_agent.py` on Claude Haiku 5.5
+  and Sonnet 5.5 (docs/evals/2026-11-25.json).
 - Stream the answer word by word if the whole-answer event feels slow on screen.
 
 From Step 4b (Ask the Tape screen, 2026-11-24):
-- Step 5: add "Send N loans to Slotting" under each answer's table (on the design
-  board, hidden until Slotting exists).
 - A chart for grouped answers (the board's "90+ by seller" bars); every result is a
   table for now.
 - "Open in Loan Tape" cannot show a list of more than two values in one column

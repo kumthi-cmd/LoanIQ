@@ -1,6 +1,47 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 4e, closing Step 4: the live eval and the new build order (2026-11-25)
+- Built: the first live run of Ask the Tape's 21 golden questions, on Claude Haiku 5.5
+  and Claude Sonnet 5.5, saved as `docs/evals/2026-11-25.json`. Both models got all 21
+  right. Haiku costs about $0.0003 a question (3.2 seconds on average) and Sonnet about
+  $0.006 (3.5 seconds). The real numbers are now in How it was built, and
+  `content/agent.md`'s cost is corrected from about $0.001 to about $0.0003. A new
+  decision makes slotting and best execution Loan Tape features, not screens, so the
+  build order is Steps 5 and 6, then 2 and 3. The roadmap is re-forecast to 30-41
+  active hours, finishing 2026-12-08 to 12-11 at 4 hours a day.
+- Desk problem it solves: a desk can trust an AI tool only once it has been measured.
+  The eval shows the agent gets the tape's numbers right on known answers, and what
+  each question costs. Slotting on the Loan Tape means a trader slots and prices the
+  loans already on screen, with no hand-off to a second grid.
+- My key decisions: run both models against the same questions and tape, under the
+  default $0.50 cap; keep Haiku, since Sonnet was no more accurate and cost twenty
+  times as much; slotting and best execution belong on the Loan Tape; leave `nav.ts`
+  for Step 5, which turns "Slotting" into a "Product Slotting" action; no "Send to
+  Slotting" button on Ask the Tape; the new order 5, 6, 2, 3, 7, 8, 9.
+- What Claude Code did: read the report and checked it before anything was written
+  from it. The first run came back with every answer from the built-in rules, after
+  the API returned 401. A length check showed the key was the 3-character
+  placeholder, not the real key, and the second run was all live. Claude Code checked
+  the prices in `llm.toml` against Anthropic's list and recomputed both totals by
+  hand. It then wrote the How it was built paragraph, corrected the old $0.001 figure
+  in `agent.md` and in two code comments (the daily cap in `llm.toml` and the eval
+  script's header), recorded the decision, and updated the roadmap. It moved the 1b
+  "My take" from under the template to Step 1b, unchanged. "Send to Slotting" had
+  never been built, so its comment now points to the decision, and the test that
+  checks it is absent keeps its check, without the "yet".
+- What I changed after review: asked for the eval script to fail when every answer
+  falls back, so a rejected key can never pass for an eval. It now stops with exit
+  code 2, names the model and the reason (for example "http_401 x21"), and writes no
+  report, so the last good one is kept. A run with only some fallbacks (the $0.50 cap
+  running out partway) still counts.
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 464 tests (3
+  new: every answer falling back stops the run with exit code 2 and leaves the last
+  report untouched; some fallbacks still write the report; no results is not an
+  all-fallback run), coverage 99.1%. Front end: 186 Vitest tests. End to end: 27
+  Playwright tests. One Ask the Tape test was renamed, with its check unchanged.
+- My take:
+
 ## Step 4d, the Agent mark and its explainer (2026-11-24)
 - Built: a small gold "Agent" mark (the LoanIQ Labs flask and the word "Agent") beside
   Ask the Tape in the sidebar and beside the screen's title. Hovering it shows the new
@@ -438,7 +479,7 @@ One entry per step, newest first. Copy the template for each new step.
   injection attempts, unknown columns and a 50,000-loan timing test; a deep sorted
   page takes about 150 ms against the 300 ms budget); coverage 98%, with
   `main.py` and `loan_query.py` at 100%.
-- My take:
+- My take: A trader slicing a seller’s tape shouldn’t have to wait on the screen, and the browser shouldn’t hold every loan. So the server does the paging, sorting, filtering and pool math in DuckDB, and no page can be bigger than 500 rows. The definitions matter as much as the speed: delinquent means any status other than Current, so the summary count is the conservative number a desk would quote, and I corrected the glossary’s LTV formula to match the tape. Claude Code wrote the API and 60 tests quickly, including SQL injection attempts. My part was setting the limits and the 300 ms budget (a deep page of a 50,000-loan tape comes back in about 150 ms) and checking that each number means what a desk expects.
 
 ## Step 1a, synthetic loan tape generator (2026-11-18)
 - Built: `python -m app.loan_tape_gen`, which writes a seeded synthetic loan tape
@@ -480,4 +521,4 @@ One entry per step, newest first. Copy the template for each new step.
 - What Claude Code did:
 - What I changed after review:
 - Tests and coverage:
-- My take:A trader slicing a seller’s tape shouldn’t have to wait on the screen, and the browser shouldn’t hold every loan. So the server does the paging, sorting, filtering and pool math in DuckDB, and no page can be bigger than 500 rows. The definitions matter as much as the speed: delinquent means any status other than Current, so the summary count is the conservative number a desk would quote, and I corrected the glossary’s LTV formula to match the tape. Claude Code wrote the API and 60 tests quickly, including SQL injection attempts. My part was setting the limits and the 300 ms budget (a deep page of a 50,000-loan tape comes back in about 150 ms) and checking that each number means what a desk expects.
+- My take:
