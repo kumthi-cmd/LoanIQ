@@ -30,11 +30,16 @@ One entry per step, newest first. Copy the template for each new step.
   "My take" from under the template to Step 1b, unchanged. "Send to Slotting" had
   never been built, so its comment now points to the decision, and the test that
   checks it is absent keeps its check, without the "yet".
-- What I changed after review:
-- Tests and coverage: every layer passes through `test.ps1`. Back end: 461 tests,
-  coverage 99.1%. Front end: 186 Vitest tests. End to end: 27 Playwright tests. No new
-  tests: this step changed words, comments and plans, not behavior. One Ask the Tape
-  test was renamed, with its check unchanged.
+- What I changed after review: asked for the eval script to fail when every answer
+  falls back, so a rejected key can never pass for an eval. It now stops with exit
+  code 2, names the model and the reason (for example "http_401 x21"), and writes no
+  report, so the last good one is kept. A run with only some fallbacks (the $0.50 cap
+  running out partway) still counts.
+- Tests and coverage: every layer passes through `test.ps1`. Back end: 464 tests (3
+  new: every answer falling back stops the run with exit code 2 and leaves the last
+  report untouched; some fallbacks still write the report; no results is not an
+  all-fallback run), coverage 99.1%. Front end: 186 Vitest tests. End to end: 27
+  Playwright tests. One Ask the Tape test was renamed, with its check unchanged.
 - My take:
 
 ## Step 4d, the Agent mark and its explainer (2026-11-24)

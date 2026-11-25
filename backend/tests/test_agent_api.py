@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+# TECH: dataclasses.replace copies a frozen GoldenResult with some fields changed.
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -216,6 +218,58 @@ def test_eval_script_needs_a_key_for_live_runs(tape_dir: Path, monkeypatch: pyte
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     assert eval_agent.main_cli(["--data-dir", str(tape_dir), "--only", "wac"]) == 1
     assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+def fall_back(monkeypatch: pytest.MonkeyPatch, which: Any) -> None:
+    """Make the chosen answers look like built-in-rule fallbacks after a rejected key.
+
+    TECH: wraps the real run_model (the --fake run, no network) and rewrites the
+      results that which(index) picks, with dataclasses.replace, the way a 401 from
+      the live provider leaves them: provider "offline", fallback_reason "http_401".
+    """
+    real = eval_agent.run_model
+
+    def run(*args: Any) -> list[Any]:
+        return [replace(r, provider="offline", fallback_reason="http_401") if which(i) else r
+                for i, r in enumerate(real(*args))]
+    monkeypatch.setattr(eval_agent, "run_model", run)
+
+
+def test_eval_script_fails_when_every_answer_falls_back(tape_dir: Path, tmp_path: Path,  # noqa: F811
+                                                        monkeypatch: pytest.MonkeyPatch,
+                                                        capsys: pytest.CaptureFixture) -> None:
+    """BUSINESS: a run where the model never answered (a rejected key) measures the
+    built-in rules, not the model. It must fail loudly with exit code 2, name the
+    model and the reason, and leave the last good report on disk untouched."""
+    fall_back(monkeypatch, lambda i: True)
+    out = tmp_path / "eval.json"
+    out.write_text("the last good report", encoding="utf-8")
+    code = eval_agent.main_cli(["--fake", "--data-dir", str(tape_dir), "--only", "wac", "loan_count",
+                                "--models", "claude-haiku-5-5", "claude-sonnet-5-5", "--out", str(out)])
+    printed = capsys.readouterr().out
+    assert code == 2
+    assert "ERROR: all 2 answers on claude-haiku-5-5 came from built-in rules" in printed
+    assert "http_401 x2" in printed and "No report was written." in printed
+    assert "=== claude-sonnet-5-5 ===" not in printed, "the run stops at the first all-fallback model"
+    assert out.read_text(encoding="utf-8") == "the last good report"
+
+
+def test_eval_script_accepts_a_run_with_some_fallbacks(tape_dir: Path, tmp_path: Path,  # noqa: F811
+                                                       monkeypatch: pytest.MonkeyPatch,
+                                                       capsys: pytest.CaptureFixture) -> None:
+    """BUSINESS: a few fallbacks (the --max-usd cap running out partway) are still a
+    real measurement of the model: exit code 0, the report is written and counts them."""
+    fall_back(monkeypatch, lambda i: i == 0)
+    out = tmp_path / "eval.json"
+    code = eval_agent.main_cli(["--fake", "--data-dir", str(tape_dir), "--only", "wac", "loan_count",
+                                "--out", str(out)])
+    assert code == 0 and "ERROR" not in capsys.readouterr().out
+    assert json.loads(out.read_text(encoding="utf-8"))[0]["fallbacks"] == 1
+
+
+def test_all_fallback_error_needs_every_answer_to_fall_back() -> None:
+    """TECH: no results, or any answer from the model, is not an all-fallback run."""
+    assert eval_agent.all_fallback_error("m", []) is None
 
 
 def test_eval_config_sets_model_cap_and_escalation() -> None:

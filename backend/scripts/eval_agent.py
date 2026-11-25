@@ -20,6 +20,9 @@ TECH:
     marked as fallbacks. The tape is the seeded default in data\ (generated if
     missing). Every model gets the same questions and the same tape.
     Output uses PASS / FAIL, not symbols, so Windows PowerShell 5.1 prints it.
+    Exit codes: 0 the run finished; 1 no API key is set; 2 every answer on a model
+    came from the built-in rules (a rejected key, say), so the model was never
+    measured and --out is NOT written: a failed run cannot overwrite a good report.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from dataclasses import asdict, replace
 from decimal import Decimal
 from pathlib import Path
@@ -99,6 +103,24 @@ def print_report(summary: dict[str, Any], results: list[GoldenResult]) -> None:
           f"average {summary['avg_ms']} ms")
 
 
+def all_fallback_error(model: str, results: list[GoldenResult]) -> str | None:
+    """The error to print when no answer on this model came from the model, else None.
+
+    BUSINESS: on 2026-11-25 a run with the placeholder key "passed" 11 of 21
+      questions with $0 spent: every answer came from the built-in rules after a
+      401. That measures the rules, not the model, so it must not count as an eval.
+      Some fallbacks (the --max-usd cap running out partway) are still a valid run.
+    TECH: results is one model's list; an empty list is not an all-fallback run.
+      collections.Counter counts each fallback reason, e.g. {"http_401": 21}.
+    """
+    if not results or any(r.fallback_reason is None for r in results):
+        return None
+    reasons = ", ".join(f"{k} x{n}" for k, n in Counter(r.fallback_reason for r in results).items())
+    return (f"ERROR: all {len(results)} answers on {model} came from built-in rules, not the model "
+            f"({reasons}). The model was never used: check ANTHROPIC_API_KEY and the --max-usd cap. "
+            f"No report was written.")
+
+
 def run_model(service: AskService, args: argparse.Namespace, questions: list, store: Any) -> list[GoldenResult]:
     """All questions on one model. TECH: --fake swaps in a fresh FakeProvider per question."""
     route = service.cfg.tasks["tape_query"]
@@ -111,7 +133,12 @@ def run_model(service: AskService, args: argparse.Namespace, questions: list, st
 
 
 def main_cli(argv: list[str] | None = None) -> int:
-    """Run the evaluation. TECH: exit code 1 if the live provider has no key."""
+    """Run the evaluation.
+
+    BUSINESS: a report is written only when every model was really measured.
+    TECH: exit code 0 when done, 1 if the live provider has no key, 2 if every
+      answer on a model fell back (see all_fallback_error); 1 and 2 write no --out.
+    """
     args = parse_args(argv)
     base = load_agent_config()
     questions = [q for q in load_golden() if not args.only or q.id in args.only]
@@ -133,6 +160,12 @@ def main_cli(argv: list[str] | None = None) -> int:
                 close_ask_service(service)
             summary = summarize(model, results)
             print_report(summary, results)
+            # BUSINESS: stop at once. A rejected key fails every model the same way,
+            #   and returning before --out keeps the last good report on disk.
+            error = all_fallback_error(model, results)
+            if error:
+                print(error)
+                return 2
             report.append({**summary, "results": [asdict(r) for r in results]})
     finally:
         store.con.close()
