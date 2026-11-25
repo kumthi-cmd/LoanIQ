@@ -39,3 +39,16 @@ export const DEFAULT_COLUMN_WIDTHS: Readonly<Record<string, number>> = {
   loan_id: 92, seller: 173, program: 100, product: 94, state: 60, note_rate: 106,
   current_upb: 120, fico: 60, ltv: 72, dti: 72, dq_status: 86, occupancy: 100,
 };
+
+/**
+ * Starting width of the two columns Product Slotting adds (Step 5b), in CSS pixels.
+ * BUSINESS: wide enough for "GNMA II 30Y 3.0 / 3.5" and three story pills. They
+ *   come after the tape's 12 default columns, so once the tape is slotted the grid
+ *   scrolls sideways for them at 1440 px (a choice made in planning); the tape's
+ *   own 12 still fit in the 1,150 px above. ILLUSTRATIVE display choices.
+ * TECH: applied with DEFAULT_COLUMN_WIDTHS in buildColumnDefs; together their keys
+ *   are exactly api.toml's default_visible names (loanColumns.test.ts).
+ */
+export const SLOT_COLUMN_WIDTHS: Readonly<Record<string, number>> = {
+  slot: 160, spec_stories: 210,
+};

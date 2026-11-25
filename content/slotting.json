@@ -59,5 +59,83 @@
   "card": {
     "generic_tba": "Generic TBA · {agency} {term} {down}",
     "generic_note": "always open"
+  },
+  "screen": {
+    "_about": "Read by the SPA only (Step 5b): the sidebar action, the run dialog, the Slotting panel, the notice after a run, the hover card and the Explain switch. Counts and times are filled in by the screen from the API.",
+    "nav": {
+      "label": "Product Slotting",
+      "notRun": "Not run on this tape",
+      "lastRun": "Last run {time}",
+      "running": "Running…"
+    },
+    "dialog": {
+      "confirmTitle": "Run Product Slotting?",
+      "confirmText": "Slotting checks every loan on the tape against the agency and spec-story rules and gives each one its pool coupons. It adds two columns to the Loan Tape, Slot and Spec Stories, and changes no loan data.",
+      "rows": {"tape": "Tape", "rules": "Rules", "coupons": "Coupons", "prices": "Prices", "takes": "Takes"},
+      "tapeValue": "{loans} loans · {fields} fields",
+      "rulesValue": "{rules} rules in {stories} spec stories: {list}",
+      "rulesFile": "spec_stories.toml",
+      "tierRange": "{label} tiers ${first} to ${last}",
+      "couponsValue": "A down and an up coupon from each note rate",
+      "pricesValue": "None yet: Best Execution prices the slots",
+      "takesValue": "A few seconds",
+      "replaces": "This replaces the slotting from {time}.",
+      "cancel": "Cancel",
+      "run": "Run slotting",
+      "runningTitle": "Slotting the tape",
+      "doneTitle": "Loan Tape updated",
+      "progress": "Slotting progress",
+      "stepLabel": "Step {step} of {steps} · {name}",
+      "allDone": "All {steps} steps done",
+      "commentary": "Running commentary",
+      "keepOpen": "You can keep this open. The Loan Tape changes only when the run finishes.",
+      "doneSummary": "{slotted} of {loans} loans slotted: {withStory} with a spec story, {generic} generic TBA.",
+      "doneNotSlotted": "{notSlotted} not slotted: {reasons}. Hover over a loan ID on the Loan Tape to see where each loan can go.",
+      "reasonItem": "{count} {short}",
+      "opening": "Opening the Loan Tape…",
+      "goNow": "Go now",
+      "errorTitle": "Product Slotting did not finish",
+      "close": "Close"
+    },
+    "panel": {
+      "name": "Slotting",
+      "caption": "Loans",
+      "tiered": "{label} tiers",
+      "note": "A loan can fit several stories; it still goes into one pool.",
+      "notRun": "Not run yet. Product Slotting finds the spec stories and pool coupons for every loan and adds them to this tape.",
+      "run": "Run Product Slotting"
+    },
+    "toast": {
+      "title": "Loan Tape updated by Product Slotting",
+      "text": "{slotted} of {loans} loans slotted. Hover over a loan ID to see where it can go.",
+      "close": "Close message"
+    },
+    "card": {
+      "slotted": "Slotted",
+      "notSlotted": "Not slotted",
+      "note": "Note",
+      "orig": "Orig UPB",
+      "fico": "FICO",
+      "dq": "DQ",
+      "coupons": "Coupons",
+      "down": "Down",
+      "up": "Up",
+      "whereItCanGo": "Where it can go · {fits}",
+      "noStory": "no spec story",
+      "oneStory": "1 spec story",
+      "manyStories": "{n} spec stories",
+      "storyName": "{label} spec",
+      "footnote": "A loan goes into one pool, so pay-ups don’t stack. Best Execution prices each slot and picks the highest.",
+      "loading": "Loading slots…",
+      "failed": "Could not load this loan’s slots: {error}"
+    },
+    "grid": {
+      "hoverHint": "Hover over a loan ID to see its slots"
+    },
+    "explain": {
+      "switchLabel": "Explain",
+      "loanTape": "Loan Tape",
+      "slotting": "Product Slotting"
+    }
   }
 }

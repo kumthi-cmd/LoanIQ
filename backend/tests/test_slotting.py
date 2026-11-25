@@ -196,9 +196,11 @@ def test_done_event_is_the_status(client: TestClient, events: list[tuple[str, di
 
 def test_before_a_run_the_tape_is_unslotted(fresh: TestClient) -> None:
     """BUSINESS: until someone runs slotting, the Loan Tape is the seller's tape:
-      status says not run, no slot columns, and the hover card is not available."""
-    assert fresh.get("/api/slotting/status").json() == {"run": False, "running": False,
-                                                        "run_at": None, "totals": None}
+      status says not run, no slot columns, and the hover card is not available.
+    TECH: status also carries the rules summary from Step 5b (tested below)."""
+    status = fresh.get("/api/slotting/status").json()
+    assert {k: status[k] for k in ("run", "running", "run_at", "totals")} == {
+        "run": False, "running": False, "run_at": None, "totals": None}
     assert [c["name"] for c in fresh.get("/api/loans/columns").json()] == gen.COLUMNS
     assert "slot" not in loan_row(fresh, BOARD_LOAN)
     assert fresh.get(f"/api/loans/{BOARD_LOAN}/slots").status_code == 409
@@ -206,14 +208,34 @@ def test_before_a_run_the_tape_is_unslotted(fresh: TestClient) -> None:
 
 def test_after_a_run_the_grid_gains_slot_and_spec_stories(client: TestClient, events: Any) -> None:
     """BUSINESS: slotting updates the Loan Tape: two new columns, Slot and Spec
-      Stories, at the end, not shown by default until Step 5b decides how."""
+      Stories, at the end, shown by default (Step 5b, as on the board)."""
     cols = client.get("/api/loans/columns").json()
     assert [c["name"] for c in cols] == gen.COLUMNS + ["slot", "spec_stories"]
     new = {c["name"]: c for c in cols[-2:]}
     assert new["slot"]["label"] == "Slot" and new["spec_stories"]["label"] == "Spec Stories"
-    assert all(c["kind"] == "text" and not c["default_visible"] for c in new.values())
+    assert all(c["kind"] == "text" and c["default_visible"] for c in new.values())
     row = loan_row(client, BOARD_LOAN)
     assert (row["slot"], row["spec_stories"]) == ("UMBS 30Y 2.5 / 3.0", "LLB 275K, NY, Low FICO")
+
+
+def test_status_summarises_the_rules_a_run_checks(fresh: TestClient) -> None:
+    """BUSINESS: the confirm dialog says what will run before anything runs: "12 rules
+      in 4 spec stories: LLB tiers $85K to $275K, NY, PR, Low FICO"."""
+    rules = fresh.get("/api/slotting/status").json()["rules"]
+    assert rules["rules"] == 12
+    assert [(f["family"], f["label"]) for f in rules["families"]] == [
+        ("LLB", "LLB"), ("NY", "NY"), ("PR", "PR"), ("LOW_FICO", "Low FICO")]
+    llb = rules["families"][0]["tiers"]
+    assert (llb[0], llb[-1], len(llb)) == ("85K", "275K", 9)
+    assert all(f["tiers"] == [] for f in rules["families"][1:])
+
+
+def test_ask_the_tape_default_columns_never_include_the_slot_columns(client: TestClient, events: Any) -> None:
+    """BUSINESS: Ask the Tape reads the seller's tape, so its default answer columns
+      stay the tape's own even though api.toml now lists Slot and Spec Stories."""
+    assert main.default_columns(client.app.state.store.columns) == [
+        c for c in gen.COLUMNS if c in main.DEFAULT_VISIBLE_COLUMNS]
+    assert "slot" not in main.default_columns(client.app.state.store.columns)
 
 
 @pytest.mark.parametrize("column, value, expected", [

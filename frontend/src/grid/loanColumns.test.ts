@@ -10,7 +10,10 @@ import type { ColumnInfo, LoanRow } from "../api/types";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_COLUMN_WIDTHS } from "./gridConfig";
+import { DEFAULT_COLUMN_WIDTHS, SLOT_COLUMN_WIDTHS } from "./gridConfig";
+import { LoanIdCell } from "./LoanIdCell";
+import { SlotCell } from "./SlotCell";
+import { SpecStoriesCell } from "./SpecStoriesCell";
 import { buildColumnDefs, isDelinquent, NUMBER_FILTER_OPTIONS, TEXT_FILTER_OPTIONS } from "./loanColumns";
 
 const COLUMNS: ColumnInfo[] = [
@@ -141,11 +144,32 @@ describe("buildColumnDefs default widths (Step 1g)", () => {
     expect(byName("property_type").minWidth).toBeUndefined();
   });
 
-  // BUSINESS: every default column has a width, and they add up to less than the
-  //   grid's width at 1440 px with the explanation closed (about 1,150 px).
+  // BUSINESS: every default column has a width, and the tape's 12 add up to less than
+  //   the grid's width at 1440 px with the explanation closed (about 1,150 px). Since
+  //   Step 5b the default list also names Slot and Spec Stories, which appear only
+  //   after Product Slotting and then scroll sideways (SLOT_COLUMN_WIDTHS); they are
+  //   outside that budget by design.
   it("sizes all 12 default columns within the 1440 px budget", () => {
-    expect(Object.keys(DEFAULT_COLUMN_WIDTHS).sort()).toEqual(configuredDefaultColumns().sort());
+    const all = [...Object.keys(DEFAULT_COLUMN_WIDTHS), ...Object.keys(SLOT_COLUMN_WIDTHS)];
+    expect(all.sort()).toEqual(configuredDefaultColumns().sort());
+    expect(Object.keys(DEFAULT_COLUMN_WIDTHS)).toHaveLength(12);
     const total = Object.values(DEFAULT_COLUMN_WIDTHS).reduce((a, b) => a + b, 0);
     expect(total).toBeLessThanOrEqual(1150);
+  });
+
+  // BUSINESS: the slot columns start wide enough for a slot and three story pills,
+  //   drawn by their own cells and tinted as the board's new columns (Step 5b).
+  it("gives Slot and Spec Stories their width, cell and tint", () => {
+    const defs = buildColumnDefs([
+      ...COLUMNS,
+      { name: "slot", type: "VARCHAR", kind: "text", label: "Slot", default_visible: true },
+      { name: "spec_stories", type: "VARCHAR", kind: "text", label: "Spec Stories", default_visible: true },
+    ]);
+    const slot = defs.find((d) => d.field === "slot")!;
+    const stories = defs.find((d) => d.field === "spec_stories")!;
+    expect([slot.width, stories.width]).toEqual([SLOT_COLUMN_WIDTHS.slot, SLOT_COLUMN_WIDTHS.spec_stories]);
+    expect([slot.cellRenderer, stories.cellRenderer]).toEqual([SlotCell, SpecStoriesCell]);
+    expect([slot.headerClass, stories.cellClass]).toEqual(["col-slotting", "col-slotting"]);
+    expect(defs.find((d) => d.field === "loan_id")!.cellRenderer).toBe(LoanIdCell);
   });
 });

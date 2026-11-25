@@ -490,12 +490,13 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
         """BUSINESS: the grid's column headers, and which ones show at first. After a
         slotting run the list ends with Slot and Spec Stories.
 
-        TECH: tape order; label falls back to name; default_visible from api.toml
-        (the slot columns are not in it yet: Step 5b decides how they show).
+        TECH: tape order; label falls back to name; default_visible from api.toml,
+        checked against the grid's columns, so Slot and Spec Stories show by default
+        once a run exists (Step 5b).
         """
         labels: dict[str, str] = request.app.state.labels
         _, grid_columns = store.grid_source()
-        shown = set(default_columns(store.columns))
+        shown = set(default_columns(grid_columns))
         return [ColumnInfo(name=n, type=t, kind=column_kind(t), label=labels.get(n, n),
                            default_visible=n in shown)
                 for n, t in grid_columns.items()]

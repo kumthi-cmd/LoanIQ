@@ -42,6 +42,10 @@ describe("styles.css text contrast (WCAG AA, 4.5:1)", () => {
     ["danger", "panel"],           // delinquent loans
     ["brand-gold", "panel"], ["brand-gold", "brand-navy"],
     ["brand-slate", "panel"], ["brand-slate", "brand-navy"],
+    // BUSINESS: Product Slotting (Step 5b): the run summary and notice, the Slotted
+    //   pill and the not-slotted box on the hover card, the new columns' tint.
+    ["ok-text", "ok-bg"], ["ok-soft", "ok-bg"], ["ok", "ok-bg"], ["stop-text", "stop-bg"],
+    ["accent-soft", "panel-2"],
   ];
 
   it.each(pairs)("--%s on --%s", (text, background) => {

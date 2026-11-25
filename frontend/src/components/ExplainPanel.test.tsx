@@ -59,4 +59,17 @@ describe("ExplainPanel", () => {
     await userEvent.click(panel.getByRole("button", { name: "Close explanation" }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("switches to the Product Slotting explanation and its glossary terms (Step 5b)", async () => {
+    // BUSINESS: the Loan Tape explains its own screen and its Product Slotting action.
+    render(<ExplainPanel screen="loan-tape" onClose={() => undefined} choicesLabel="Explain"
+      choices={[{ screen: "loan-tape", label: "Loan Tape" }, { screen: "product-slotting", label: "Product Slotting" }]} />);
+    const panel = within(screen.getByRole("complementary", { name: "Screen explanation" }));
+    const choice = within(panel.getByRole("group", { name: "Explain" }));
+    expect(choice.getByRole("button", { name: "Loan Tape" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(choice.getByRole("button", { name: "Product Slotting" }));
+    expect(choice.getByRole("button", { name: "Product Slotting" })).toHaveAttribute("aria-pressed", "true");
+    expect(panel.getByRole("tabpanel")).toHaveTextContent(/where can this loan go/);
+    expect(panel.getByText(`Glossary · ${screenTerms["product-slotting"][0]}`)).toBeInTheDocument();
+  });
 });

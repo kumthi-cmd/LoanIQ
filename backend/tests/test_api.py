@@ -120,12 +120,16 @@ def test_columns_mark_the_configured_defaults(client: TestClient) -> None:
     """BUSINESS: the Loan Tape opens on the fields a trader reads first, and the list
     comes from ONE place (api.toml [columns]) that Ask the Tape uses too (Step 4c).
 
-    TECH: exactly the configured names are default_visible, all of them real tape
-      columns, in tape order with loan_id first.
+    TECH: on an unslotted tape, exactly the configured tape names are default_visible
+      (12), in tape order with loan_id first. Since Step 5b the list also names the
+      two columns Product Slotting adds, which exist only after a run
+      (tests/test_slotting.py checks they then show); no other name may be listed.
     """
     cols = client.get("/api/loans/columns").json()
     shown = [c["name"] for c in cols if c["default_visible"]]
-    assert set(shown) == set(main.DEFAULT_VISIBLE_COLUMNS) and len(shown) == 12
+    tape_defaults = [n for n in main.DEFAULT_VISIBLE_COLUMNS if n in gen.COLUMNS]
+    assert set(shown) == set(tape_defaults) and len(shown) == 12
+    assert set(main.DEFAULT_VISIBLE_COLUMNS) - set(tape_defaults) == set(main.GRID_COLUMNS)
     assert shown == [n for n in gen.COLUMNS if n in shown] and shown[0] == "loan_id"
 
 

@@ -1,6 +1,47 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-25: Product Slotting is a sidebar action and a dialog over any screen
+Decision (Step 5b): the sidebar's planned "5 Slotting" link is now a **Product
+Slotting** button (`nav.ts` `action: "product-slotting"`, drawn by
+`components/SlottingNavButton.tsx`) that opens the run dialog
+(`components/SlottingDialog.tsx`) from any screen, as on the "5 · Product Slotting"
+board. Its state lives in one React context in the app layout
+(`slotting/SlottingContext.tsx`), shared by the sidebar, the dialog and the Loan Tape. A
+run started elsewhere ends on the Loan Tape. The confirm dialog's tape line shows loans
+and fields from `/api/tape`; the board's "as of 2026-11-01 · seed 42" is left out, since
+the API does not know either. The rules line comes from a rules summary added to
+`GET /api/slotting/status`.
+Why: slotting is something the desk does to the tape, not a place it goes, and one
+context means the "Last run" line, the panel and the grid can never disagree.
+Alternative considered: a slotting screen (rejected in Step 4e), or having the
+generator write the as-of date and seed beside the tape (extra scope for one line).
+
+## 2026-11-25: The Slotting panel replaces the note-rate distribution
+Decision (Step 5b): the Loan Tape's middle panel is now Slotting: loans per spec-story
+family, generic TBA and not slotted, from the last run's totals, or a "Run Product
+Slotting" button before any run. The Note rate distribution panel is no longer drawn.
+`components/NoteRatePanel.tsx` and its unit tests are kept (the API still sends the
+buckets), so the panel can come back elsewhere, for example in Step 6.
+Why: the board puts Slotting in that place, and three panels keep the 1440 px layout of
+Step 1g. Once a tape is slotted, its coupons are in the Slot column.
+Alternative considered: four panels in a row (narrower bars, and the one-line titles of
+Step 1g would wrap).
+
+## 2026-11-25: Slot and Spec Stories show by default once a run exists
+Decision (Step 5b): `api.toml` `[columns] default_visible` lists `slot` and
+`spec_stories`; they appear only after a run, so an unslotted tape is unchanged, and
+Ask the Tape (the seller's tape only) never gets them. At 1440 px the tape's 12 default
+columns still fit; the two new ones scroll sideways (`SLOT_COLUMN_WIDTHS`). The screen
+paces the commentary at 350 ms a line and holds the totals 1.5 s
+(`slotting/slottingConfig.ts`, illustrative), or shows every line at once for
+reduced motion. In Playwright, the Product Slotting spec is its own project that runs
+after all the others, because a run changes the one shared server for every test
+after it.
+Why: the board shows both columns after a run; a run is what the visitor asked for.
+Alternative considered: keeping them hidden until chosen in Columns (a visitor would
+not find what the run just did).
+
 ## 2026-11-25: Slotting eligibility: three checks, first failure is the reason
 Decision (Step 5a): a loan is slotted when its program has an agency pool (Conventional
 and High-Balance to UMBS; FHA, VA and USDA to GNMA II; Jumbo and Non-QM to none), its
