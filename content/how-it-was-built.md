@@ -43,6 +43,14 @@ pass that way too. Before a release, or a change of model, the same questions ru
 the live model, and a report shows how many it got right, how many tokens it used and
 what it cost.
 
+The first live run, on 2026-11-25, put two models through the same 21 questions on
+the same tape (`docs/evals/2026-11-25.json`). Claude Haiku 5.5 got all 21 right, at
+about 5,400 tokens and $0.0003 a question, in 3.2 seconds on average. Claude Sonnet
+5.5 also got all 21 right, at about 6,100 tokens and $0.006 a question, in 3.5
+seconds. About 70% of the input tokens came from the prompt cache.
+Sonnet was no more accurate, cost twenty times as much and was slightly slower, so
+Ask the Tape stays on Haiku. Prices are illustrative, from Anthropic's price list.
+
 ## By the numbers
 Every time all the test layers pass on my PC, `test.ps1` counts the tests in each layer,
 reads the back-end coverage and counts the commits, and writes them to

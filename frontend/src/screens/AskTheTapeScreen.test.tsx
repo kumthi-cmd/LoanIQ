@@ -138,7 +138,9 @@ describe("Ask the Tape", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("opens the same filter in the Loan Tape, and has no Send to Slotting yet", async () => {
+  // BUSINESS: slotting is a Loan Tape action, not a screen (docs/decisions.md,
+  // 2026-11-25), so an answer offers "Open in Loan Tape" and never "Send to Slotting".
+  it("opens the same filter in the Loan Tape, and has no Send to Slotting", async () => {
     const router = renderAsk();
     await askLtv();
     expect(screen.queryByText(/Send .* to Slotting/)).not.toBeInTheDocument();

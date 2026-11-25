@@ -20,7 +20,7 @@ explains the result. It never does the math and never sees the whole tape.
 - **DuckDB:** the single source of truth.
 
 ## Cost and models
-Tape questions run on Claude Haiku 5.5, about $0.001 each. Saved queries and
+Tape questions run on Claude Haiku 5.5, about $0.0003 each (measured 2026-11-25). Saved queries and
 desk-question chips skip the model. A daily cap and a per-visitor limit apply; past
 them, built-in rules answer instead. The model can be swapped (Claude, ChatGPT,
 Gemini) through one provider interface.

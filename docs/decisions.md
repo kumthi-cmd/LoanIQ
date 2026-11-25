@@ -1,6 +1,20 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-25: Slotting and best execution are Loan Tape features, not screens
+Decision (Step 4e): product slotting and best execution run on the Loan Tape, on the
+loans the trader has filtered or selected, instead of on screens of their own. Step 5
+turns the planned "Slotting" sidebar item into a "Product Slotting" action on the Loan
+Tape. `frontend/src/nav.ts` is unchanged until then. Ask the Tape gets no "Send to
+Slotting" button (the 4b plan hid it until Step 5): "Open in Loan Tape" already takes an
+answer's loans there. The build order is now Steps 5 and 6, then 2 and 3, then 7, 8
+and 9.
+Why: a desk slots and prices the loans it is already looking at. A separate screen
+would mean sending the same loans somewhere else first, and the Loan Tape already holds
+the filters, the selection and the pool summary.
+Alternative considered: separate Slotting and Best Execution screens fed by "Send N
+loans to Slotting" (an extra hand-off, and a second grid of the same loans).
+
 ## 2026-11-24: The Agent mark is a button beside the link, never inside it
 Decision (Step 4d): screens answered by an AI agent (`agent: true` in
 `frontend/src/nav.ts`, Ask the Tape only for now) carry a small gold "Agent" mark: the

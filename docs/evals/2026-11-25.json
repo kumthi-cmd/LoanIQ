@@ -1,0 +1,752 @@
+[
+  {
+    "model": "claude-haiku-5-5",
+    "questions": 21,
+    "passed": 21,
+    "accuracy_pct": 100.0,
+    "fallbacks": 0,
+    "tokens": {
+      "input_tokens": 26594,
+      "output_tokens": 4649,
+      "cache_read_tokens": 80666,
+      "cache_write_tokens": 1522
+    },
+    "cost_usd": "0.005980",
+    "cost_per_question_usd": "0.000285",
+    "avg_ms": 3225,
+    "results": [
+      {
+        "id": "loan_count",
+        "passed": true,
+        "expected": 2000,
+        "answer": "There are 2,000 loans on the tape, with total current UPB of $638.3M. Of those, 152 are delinquent (dq_status not Current), and the remaining 1,848 are current.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 449,
+          "output_tokens": 92,
+          "cache_read_tokens": 1522,
+          "cache_write_tokens": 1522
+        },
+        "cost_usd": "0.000296",
+        "fallback_reason": null,
+        "elapsed_ms": 6985
+      },
+      {
+        "id": "total_upb",
+        "passed": true,
+        "expected": "638337753.05",
+        "answer": "The total current UPB of the tape is $638.3M, across all 2,000 loans.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 455,
+          "output_tokens": 58,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000105",
+        "fallback_reason": null,
+        "elapsed_ms": 1937
+      },
+      {
+        "id": "wac",
+        "passed": true,
+        "expected": 5.311222579319525,
+        "answer": "The WAC of the whole tape is 5.311%, weighted by current UPB across all 2,000 loans ($638.3M total current UPB).",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 451,
+          "output_tokens": 77,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000114",
+        "fallback_reason": null,
+        "elapsed_ms": 1938
+      },
+      {
+        "id": "wa_fico",
+        "passed": true,
+        "expected": 740.3549453735698,
+        "answer": "The UPB-weighted average FICO across the whole tape is 740.35, covering all 2,000 loans with $638.3M of current UPB.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 483,
+          "output_tokens": 101,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000129",
+        "fallback_reason": null,
+        "elapsed_ms": 2156
+      },
+      {
+        "id": "ltv_over_125",
+        "passed": true,
+        "expected": 20,
+        "answer": "There are 20 loans with an LTV over 125%, carrying a combined current UPB of $3.5M.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 354,
+          "output_tokens": 162,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000147",
+        "fallback_reason": null,
+        "elapsed_ms": 2172
+      },
+      {
+        "id": "new_york_count",
+        "passed": true,
+        "expected": 101,
+        "answer": "There are 101 New York loans on the tape.",
+        "provider": "anthropic",
+        "rounds": 4,
+        "usage": {
+          "input_tokens": 2634,
+          "output_tokens": 257,
+          "cache_read_tokens": 6088,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000453",
+        "fallback_reason": null,
+        "elapsed_ms": 3922
+      },
+      {
+        "id": "new_york_upb",
+        "passed": true,
+        "expected": "29119678.28",
+        "answer": "The 101 New York loans have a total current UPB of $29.1M.",
+        "provider": "anthropic",
+        "rounds": 4,
+        "usage": {
+          "input_tokens": 2759,
+          "output_tokens": 311,
+          "cache_read_tokens": 6088,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000492",
+        "fallback_reason": null,
+        "elapsed_ms": 4094
+      },
+      {
+        "id": "puerto_rico_wac",
+        "passed": true,
+        "expected": 4.682708149385008,
+        "answer": "The WAC of the Puerto Rico loans is 4.683%. That covers all 27 Puerto Rico loans, with a total current UPB of $8.7M.",
+        "provider": "anthropic",
+        "rounds": 4,
+        "usage": {
+          "input_tokens": 2979,
+          "output_tokens": 451,
+          "cache_read_tokens": 6088,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000584",
+        "fallback_reason": null,
+        "elapsed_ms": 4546
+      },
+      {
+        "id": "seriously_delinquent_count",
+        "passed": true,
+        "expected": 66,
+        "answer": "There are 66 seriously delinquent loans on the tape (90+ days, foreclosure, REO or bankruptcy), with $14.7M of current UPB.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 414,
+          "output_tokens": 199,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000171",
+        "fallback_reason": null,
+        "elapsed_ms": 2407
+      },
+      {
+        "id": "seriously_delinquent_upb",
+        "passed": true,
+        "expected": "14660124.52",
+        "answer": "Seriously delinquent loans (90+ days, foreclosure, REO, or bankruptcy) carry $14.66M of current UPB across 66 loans. That is 2.297% of the tape's total UPB.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 469,
+          "output_tokens": 289,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000222",
+        "fallback_reason": null,
+        "elapsed_ms": 2265
+      },
+      {
+        "id": "fha_count",
+        "passed": true,
+        "expected": 303,
+        "answer": "There are 303 FHA loans on the tape.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2146,
+          "output_tokens": 169,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000345",
+        "fallback_reason": null,
+        "elapsed_ms": 2953
+      },
+      {
+        "id": "jumbo_upb",
+        "passed": true,
+        "expected": "158334579.21",
+        "answer": "The Jumbo loans carry a total current UPB of $158.3M across 143 loans.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 448,
+          "output_tokens": 238,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000194",
+        "fallback_reason": null,
+        "elapsed_ms": 3016
+      },
+      {
+        "id": "largest_loan",
+        "passed": true,
+        "expected": "LN16675948",
+        "answer": "The loan with the largest current UPB is LN16675948, carrying $2.62M of current unpaid principal balance. It is the top row by current UPB across the whole tape.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 349,
+          "output_tokens": 171,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000151",
+        "fallback_reason": null,
+        "elapsed_ms": 2172
+      },
+      {
+        "id": "top_seller_by_upb",
+        "passed": true,
+        "expected": "Tidewren Lending",
+        "answer": "Tidewren Lending has the most current UPB on the tape at $113.3M across 325 loans. Ninebark Home Finance is close behind at $113.0M across 346 loans, so the gap between the top two is only about $0.4M.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 227,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000192",
+        "fallback_reason": null,
+        "elapsed_ms": 2422
+      },
+      {
+        "id": "investor_count",
+        "passed": true,
+        "expected": 201,
+        "answer": "There are 201 investor-property loans on the tape, out of 2,000 total. The remaining loans are 1,733 primary residences and 66 second homes.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2177,
+          "output_tokens": 216,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000371",
+        "fallback_reason": null,
+        "elapsed_ms": 2937
+      },
+      {
+        "id": "low_fico_count",
+        "passed": true,
+        "expected": 545,
+        "answer": "There are 545 loans with a FICO below 700, carrying $132.8M of current UPB. That is the count for the whole tape, with no other filters applied.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 176,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000154",
+        "fallback_reason": null,
+        "elapsed_ms": 2078
+      },
+      {
+        "id": "modified_count",
+        "passed": true,
+        "expected": 55,
+        "answer": "There are 55 modified loans on the tape, or 2.75% of the 2,000 loans. Those 55 loans carry $15.8M of current UPB.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2277,
+          "output_tokens": 308,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000427",
+        "fallback_reason": null,
+        "elapsed_ms": 3500
+      },
+      {
+        "id": "arm_count",
+        "passed": true,
+        "expected": 126,
+        "answer": "There are 126 ARMs on the tape, with $67.9M of current UPB. That is the 7/6 ARM (58 loans), 5/6 ARM (45) and 10/6 ARM (23) products combined, out of 2,000-odd loans on the tape.",
+        "provider": "anthropic",
+        "rounds": 4,
+        "usage": {
+          "input_tokens": 3932,
+          "output_tokens": 536,
+          "cache_read_tokens": 6088,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000722",
+        "fallback_reason": null,
+        "elapsed_ms": 7688
+      },
+      {
+        "id": "wa_dti",
+        "passed": true,
+        "expected": 36.46232719677937,
+        "answer": "The UPB-weighted average DTI is 36.462%, across all 2,000 loans on the tape with a DTI value.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 397,
+          "output_tokens": 203,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000172",
+        "fallback_reason": null,
+        "elapsed_ms": 3078
+      },
+      {
+        "id": "originated_2024",
+        "passed": true,
+        "expected": 182,
+        "answer": "The tape has 182 loans originated in 2024, with a combined current UPB of $68.4M.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2226,
+          "output_tokens": 241,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000389",
+        "fallback_reason": null,
+        "elapsed_ms": 3094
+      },
+      {
+        "id": "top_state_by_count",
+        "passed": true,
+        "expected": "CA",
+        "answer": "California has the most loans, with 217 of them on the tape. Texas is second with 176 loans, followed by Florida with 157.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 360,
+          "output_tokens": 167,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.000150",
+        "fallback_reason": null,
+        "elapsed_ms": 2375
+      }
+    ]
+  },
+  {
+    "model": "claude-sonnet-5-5",
+    "questions": 21,
+    "passed": 21,
+    "accuracy_pct": 100.0,
+    "fallbacks": 0,
+    "tokens": {
+      "input_tokens": 36497,
+      "output_tokens": 4369,
+      "cache_read_tokens": 85232,
+      "cache_write_tokens": 1522
+    },
+    "cost_usd": "0.129015",
+    "cost_per_question_usd": "0.006144",
+    "avg_ms": 3507,
+    "results": [
+      {
+        "id": "loan_count",
+        "passed": true,
+        "expected": 2000,
+        "answer": "The tape has 2,000 loans with a total current UPB of $638.3M.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 449,
+          "output_tokens": 56,
+          "cache_read_tokens": 1522,
+          "cache_write_tokens": 1522
+        },
+        "cost_usd": "0.005415",
+        "fallback_reason": null,
+        "elapsed_ms": 2188
+      },
+      {
+        "id": "total_upb",
+        "passed": true,
+        "expected": "638337753.05",
+        "answer": "The tape's total current UPB is $638.3M, across 2,000 loans.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 339,
+          "output_tokens": 137,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.002352",
+        "fallback_reason": null,
+        "elapsed_ms": 1703
+      },
+      {
+        "id": "wac",
+        "passed": true,
+        "expected": 5.311222579319525,
+        "answer": "The tape's WAC is 5.311%. That is the weighted average coupon, weighted by current UPB, across all 2,000 loans, which total $638.3M.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 451,
+          "output_tokens": 83,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.002036",
+        "fallback_reason": null,
+        "elapsed_ms": 3437
+      },
+      {
+        "id": "wa_fico",
+        "passed": true,
+        "expected": 740.3549453735698,
+        "answer": "The UPB-weighted average FICO is 740.35. It covers all 2,000 loans on the tape, which total $638.3M in current UPB.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 459,
+          "output_tokens": 78,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.002002",
+        "fallback_reason": null,
+        "elapsed_ms": 1953
+      },
+      {
+        "id": "ltv_over_125",
+        "passed": true,
+        "expected": 20,
+        "answer": "20 loans have an LTV over 125%. They total $3.5M of current UPB, and the highest LTV among them is 157.94%.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2162,
+          "output_tokens": 209,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006871",
+        "fallback_reason": null,
+        "elapsed_ms": 2579
+      },
+      {
+        "id": "new_york_count",
+        "passed": true,
+        "expected": 101,
+        "answer": "There are 101 New York loans on the tape, with a combined current UPB of $29.1M.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2114,
+          "output_tokens": 169,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006375",
+        "fallback_reason": null,
+        "elapsed_ms": 2828
+      },
+      {
+        "id": "new_york_upb",
+        "passed": true,
+        "expected": "29119678.28",
+        "answer": "The 101 New York loans have a combined current UPB of $29.1M.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2137,
+          "output_tokens": 169,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006421",
+        "fallback_reason": null,
+        "elapsed_ms": 2531
+      },
+      {
+        "id": "puerto_rico_wac",
+        "passed": true,
+        "expected": 4.682708149385008,
+        "answer": "The 27 Puerto Rico loans have a WAC of 4.683%, weighted by current UPB. Together they have $8.7M of current UPB.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2196,
+          "output_tokens": 236,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.007209",
+        "fallback_reason": null,
+        "elapsed_ms": 5687
+      },
+      {
+        "id": "seriously_delinquent_count",
+        "passed": true,
+        "expected": 66,
+        "answer": "66 of the 2,000 loans are seriously delinquent. They carry $14.7M of current UPB. By status, 18 are 90 days, 19 are 120+, 11 are in foreclosure, 10 are REO and 8 are in bankruptcy.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 659,
+          "output_tokens": 443,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006052",
+        "fallback_reason": null,
+        "elapsed_ms": 4063
+      },
+      {
+        "id": "seriously_delinquent_upb",
+        "passed": true,
+        "expected": "14660124.52",
+        "answer": "Seriously delinquent current UPB is $14.7M across 66 loans, about 2.30% of the tape's total current UPB. This covers loans with a dq_status of 90, 120+, FC, REO or BK.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 416,
+          "output_tokens": 249,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.003626",
+        "fallback_reason": null,
+        "elapsed_ms": 2359
+      },
+      {
+        "id": "fha_count",
+        "passed": true,
+        "expected": 303,
+        "answer": "There are 303 FHA loans on the tape, with a combined current UPB of $59.2M.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2209,
+          "output_tokens": 170,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006575",
+        "fallback_reason": null,
+        "elapsed_ms": 2750
+      },
+      {
+        "id": "jumbo_upb",
+        "passed": true,
+        "expected": "158334579.21",
+        "answer": "The 143 Jumbo loans have a total current UPB of $158.3M. I identified them using the program field.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2169,
+          "output_tokens": 195,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006745",
+        "fallback_reason": null,
+        "elapsed_ms": 5297
+      },
+      {
+        "id": "largest_loan",
+        "passed": true,
+        "expected": "LN16675948",
+        "answer": "The largest current UPB is loan LN16675948, at $2.62M (originally $2.70M). It's a 30-year fixed jumbo with a 6.875% note rate. It's an Ohio primary-residence purchase from Alder & Finch Mortgage. The borrower has a 744 FICO and a 72.04% LTV, and the loan is current.",
+        "provider": "anthropic",
+        "rounds": 2,
+        "usage": {
+          "input_tokens": 699,
+          "output_tokens": 224,
+          "cache_read_tokens": 3044,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.003942",
+        "fallback_reason": null,
+        "elapsed_ms": 3000
+      },
+      {
+        "id": "top_seller_by_upb",
+        "passed": true,
+        "expected": "Tidewren Lending",
+        "answer": "Tidewren Lending has the most current UPB on the tape. It holds $113.3M across 325 loans, which is 17.75% of the tape. Ninebark Home Finance is a close second at $113.0M, so the gap is only about $0.4M.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2335,
+          "output_tokens": 281,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.007937",
+        "fallback_reason": null,
+        "elapsed_ms": 5094
+      },
+      {
+        "id": "investor_count",
+        "passed": true,
+        "expected": 201,
+        "answer": "There are 201 investor-property loans, with a combined current UPB of $64.6M. That is 201 of the 2,000 loans on the tape. The rest are 1,733 primary residences and 66 second homes.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2162,
+          "output_tokens": 215,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006931",
+        "fallback_reason": null,
+        "elapsed_ms": 3266
+      },
+      {
+        "id": "low_fico_count",
+        "passed": true,
+        "expected": 545,
+        "answer": "545 loans have a FICO below 700. They carry $132.8M of current UPB.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2173,
+          "output_tokens": 207,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006873",
+        "fallback_reason": null,
+        "elapsed_ms": 2734
+      },
+      {
+        "id": "modified_count",
+        "passed": true,
+        "expected": 55,
+        "answer": "55 of the 2,000 loans on the tape are modified. They carry $15.8M of current UPB.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2154,
+          "output_tokens": 203,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006795",
+        "fallback_reason": null,
+        "elapsed_ms": 2969
+      },
+      {
+        "id": "arm_count",
+        "passed": true,
+        "expected": 126,
+        "answer": "There are 126 ARMs on the tape, with a combined current UPB of $67.9M. They are 5/6 and 10/6 ARMs, and every one of them carries an ARM index.",
+        "provider": "anthropic",
+        "rounds": 4,
+        "usage": {
+          "input_tokens": 4632,
+          "output_tokens": 393,
+          "cache_read_tokens": 6088,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.013803",
+        "fallback_reason": null,
+        "elapsed_ms": 4187
+      },
+      {
+        "id": "wa_dti",
+        "passed": true,
+        "expected": 36.46232719677937,
+        "answer": "The UPB-weighted average DTI is 36.462%. It covers all 2,000 loans on the tape, and every loan has a DTI value.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2199,
+          "output_tokens": 242,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.007275",
+        "fallback_reason": null,
+        "elapsed_ms": 5563
+      },
+      {
+        "id": "originated_2024",
+        "passed": true,
+        "expected": 182,
+        "answer": "There are 182 loans originated in 2024, with a combined current UPB of $68.4M.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2142,
+          "output_tokens": 186,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.006601",
+        "fallback_reason": null,
+        "elapsed_ms": 5281
+      },
+      {
+        "id": "top_state_by_count",
+        "passed": true,
+        "expected": "CA",
+        "answer": "California has the most loans, with 217 loans and $66.1M of current UPB. Texas is next with 176 loans and $57.0M. Florida follows with 157 loans and $45.9M.",
+        "provider": "anthropic",
+        "rounds": 3,
+        "usage": {
+          "input_tokens": 2241,
+          "output_tokens": 224,
+          "cache_read_tokens": 4566,
+          "cache_write_tokens": 0
+        },
+        "cost_usd": "0.007179",
+        "fallback_reason": null,
+        "elapsed_ms": 4187
+      }
+    ]
+  }
+]

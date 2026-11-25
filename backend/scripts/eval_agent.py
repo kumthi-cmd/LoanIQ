@@ -14,7 +14,8 @@ TECH:
         .venv\Scripts\python.exe scripts\eval_agent.py --models claude-haiku-5-5 claude-sonnet-5-5
         .venv\Scripts\python.exe scripts\eval_agent.py --only wac new_york_upb --out eval.json
         .venv\Scripts\python.exe scripts\eval_agent.py --fake      # free dry run, no network
-    THIS SPENDS REAL MONEY (about 21 questions x ~$0.001-0.002 on Claude Haiku 5.5).
+    THIS SPENDS REAL MONEY: 21 questions cost about $0.006 on Claude Haiku 5.5 and
+    $0.13 on Claude Sonnet 5.5 (measured 2026-11-25, docs/evals/2026-11-25.json).
     --max-usd caps the run: past it, built-in rules answer and those questions are
     marked as fallbacks. The tape is the seeded default in data\ (generated if
     missing). Every model gets the same questions and the same tape.
