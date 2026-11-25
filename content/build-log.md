@@ -1,6 +1,73 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 5b, Product Slotting on the Loan Tape (2026-11-25)
+- Built: the "5 · Product Slotting" board in the app.
+  - The sidebar's planned "Slotting" link is now a **Product Slotting** button. It
+    shows "Not run on this tape" or "Last run 11:42 AM" and opens the run dialog from
+    any screen.
+  - The dialog confirms what will run, from the API: the tape's loans and fields, and
+    "12 rules in 4 spec stories: LLB tiers $85K to $275K, NY, PR, Low FICO". It then
+    shows the progress bar and the running commentary one line at a time, and ends on
+    the totals. It closes by itself on the Loan Tape, where a notice says what changed.
+  - The grid gains Slot and Spec Stories, shown by default, with stories as pills.
+  - Hovering or focusing a loan ID opens its card: pool, down and up coupons, each
+    story with its rule and why, and the generic TBA line; or why the loan is not
+    slotted.
+  - The Slotting panel replaces the note-rate distribution, and the Explain panel can
+    switch to a new Product Slotting explanation.
+- Desk problem it solves: a trader runs slotting where the loans already are, watches
+  what each check found, then reads where any loan can go without leaving the tape.
+  That is the view Best Execution (Step 6) will price.
+- My key decisions:
+  - Product Slotting is a sidebar action and a dialog, not a screen.
+  - The Slotting panel replaces the note-rate panel, as on the board.
+  - The dialog's tape line shows loans and fields; the board's as-of date and seed are
+    left out, because the API does not know them.
+  - Slot and Spec Stories are visible by default after a run, even though they scroll
+    sideways at 1440 px.
+  - The Step 4e decision is kept, marked as superseded in part.
+- What Claude Code did:
+  - Planned the flow from the board and asked the three questions above.
+  - Wrote a status rules summary and the default-visible change in the back end.
+  - On the front end, wrote the stream reader (reusing Ask the Tape's parser), a pure
+    reducer for the dialog's stages, the shared context, the dialog, the sidebar
+    button, the panel, the notice, the hover card and three grid cells.
+  - Wrote all the words in content/slotting.json "screen", the explanation, three
+    decision records and the architecture rows.
+  - Design choices made while building, for review:
+    - The pacing runs on a timer that keeps its rhythm as events arrive, and shows
+      every line at once for reduced motion.
+    - Closing the dialog mid-run counts as "Go now", since the server has already
+      published.
+    - Cards are cached per run.
+    - Keyboard users open the card by focusing the Loan ID cell.
+    - The Playwright slotting spec runs as its own project after the others, because a
+      run changes the shared server.
+  - A real bug caught by the new end-to-end test: after a run the sidebar kept saying
+    "Running…". The done event is sent while the server still holds its lock. The
+    screen now marks the run finished and refreshes the status, and a Vitest case
+    covers it.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`.
+  - Back end: 536 tests, coverage 99.1%. Two new: the rules summary, and Ask the Tape
+    never gets the slot columns.
+  - Tests updated because their rule changed:
+    - the status test, for the rules summary;
+    - the new columns, now visible by default;
+    - the configured-defaults test, since api.toml now names the two slot columns;
+    - an agent test that built its query from that list.
+  - Front end: 222 Vitest tests, 36 new: the reducer and pacing, the sentences and the
+    stream, the whole flow with fake timers (including the 409 and "replaces" cases),
+    the hover card, the grid cells, the column widths and the Explain switch. Tests
+    updated because their rule changed:
+    - the sidebar test ("Product Slotting" is a button, not Planned);
+    - the width test (the 1,150 px budget stays on the tape's 12 columns).
+  - End to end: 30 Playwright tests, 3 new: run from the sidebar to the updated tape,
+    hover LN78265415, and filter Spec Stories. The layout and panel specs now check
+    the Slotting panel instead of the note-rate axis.
+- My take:
+
 ## Step 5a, the product slotting engine (back end) (2026-11-25)
 - Built: Product Slotting as a run a visitor starts. `POST /api/slotting/run` slots the
   whole tape in one DuckDB pass and streams 13 steps (load, rules, three eligibility

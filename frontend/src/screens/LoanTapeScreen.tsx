@@ -7,8 +7,9 @@
  * BUSINESS: a trader's first look at a seller's tape, top to bottom:
  *   1. the title line: how wide the tape is (fields) and how many sellers are in it;
  *   2. the headline numbers (KPI tiles): loans, balance, WAC, WA FICO, WA LTV, late loans;
- *   3. three panels on its shape: program mix (who can buy it), note-rate buckets
- *      (which coupons it fits), MBA delinquency (how much is late);
+ *   3. three panels on its shape: program mix (who can buy it), slotting (which spec
+ *      stories it carries, after Product Slotting; it took the note-rate panel's
+ *      place in Step 5b), MBA delinquency (how much is late);
  *   4. desk-question chips (LTV over 125, New York, ...) that filter the grid in one click;
  *   5. the grid of every loan, sorted and filtered on the server.
  *   The "Explain this screen" button opens a panel on the right that says what all of
@@ -30,6 +31,11 @@
  *     React key made from it, so a new link builds a fresh grid with that filter;
  *     "Show the whole tape" removes the parameters and the grid opens on the whole tape again.
  *     Columns the link filters or sorts on are shown even if hidden by default.
+ *   - Product Slotting (Step 5b, slotting/SlottingContext.tsx): when a run finishes
+ *     its run time changes, so the columns are fetched again (now with Slot and
+ *     Spec Stories) and the grid is rebuilt (its key includes the run time). The
+ *     notice says what changed. Once slotted, hovering or focusing a loan ID opens
+ *     its SlotCard; the screen holds which loan and where.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router";
@@ -41,10 +47,13 @@ import { DeskQuestionChips } from "../components/DeskQuestionChips";
 import { ExplainPanel } from "../components/ExplainPanel";
 import { KpiTiles } from "../components/KpiTiles";
 import { LoanGrid } from "../components/LoanGrid";
-import { NoteRatePanel } from "../components/NoteRatePanel";
 import { ProgramMixPanel } from "../components/ProgramMixPanel";
+import { SlotCard } from "../components/SlotCard";
+import { SlottingNotice } from "../components/SlottingNotice";
+import { SlottingPanel } from "../components/SlottingPanel";
+import { useSlotting } from "../slotting/SlottingContext";
 import { columnsInUse, readLoanTapeParams } from "../ask/loanTapeUrl";
-import { deskQuestionLabels, fillCaption, loanTapeContent } from "../content/content";
+import { deskQuestionLabels, fillCaption, loanTapeContent, slottingContent } from "../content/content";
 import { formatNumber } from "../grid/columnFormats";
 import { gridConfig } from "../grid/gridConfig";
 import type { LayoutContext } from "../App";
@@ -87,6 +96,13 @@ export function LoanTapeScreen() {
   const [explainOpen, setExplainOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  // BUSINESS: Product Slotting's last run, its notice, and the loan being hovered.
+  const slotting = useSlotting();
+  const runAt = slotting.status?.run_at ?? null;
+  const [hovered, setHovered] = useState<{ loanId: string; anchor: DOMRect } | null>(null);
+  const onLoanHover = useCallback((loanId: string | null, anchor: DOMRect | null) => {
+    setHovered(loanId && anchor ? { loanId, anchor } : null);
+  }, []);
   // BUSINESS: the filter, sort and chip an Ask the Tape answer opened the grid with.
   const fromUrl = useMemo(
     () => readLoanTapeParams(searchParams, QUESTION_IDS, columns?.map((c) => c.name) ?? []),
@@ -111,12 +127,6 @@ export function LoanTapeScreen() {
     const fail = (e: Error) => {
       if (!ctrl.signal.aborted) setError(e.message);
     };
-    fetchColumns(ctrl.signal)
-      .then((cols) => {
-        setHidden(defaultHidden(cols));
-        setColumns(cols);
-      })
-      .catch(fail);
     fetchSummary(ctrl.signal).then(setSummary).catch(fail);
     fetchBreakdowns(ctrl.signal).then(setBreakdowns).catch(fail);
     fetchQuestionCounts(ctrl.signal).then(setQuestionCounts).catch(fail);
@@ -127,6 +137,23 @@ export function LoanTapeScreen() {
       setRowCount(null);
     };
   }, [setRowCount]);
+
+  // BUSINESS: the grid's columns, fetched again after a Product Slotting run, which
+  //   adds Slot and Spec Stories (shown by default, api.toml [columns]).
+  // TECH: runAt is null before any run, so this also runs once on first draw.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setHovered(null);
+    fetchColumns(ctrl.signal)
+      .then((cols) => {
+        setHidden(defaultHidden(cols));
+        setColumns(cols);
+      })
+      .catch((e: Error) => {
+        if (!ctrl.signal.aborted) setError(e.message);
+      });
+    return () => ctrl.abort();
+  }, [runAt]);
 
   // BUSINESS: the grid's matching count shows in the header and the grid footer.
   // TECH: useCallback keeps one function between redraws, so LoanGrid's datasource
@@ -168,12 +195,14 @@ export function LoanTapeScreen() {
         </div>
       )}
 
+      {slotting.notice && <SlottingNotice run={slotting.notice} onClose={slotting.closeNotice} />}
+
       <div className="screen-body">
         <div className="screen-main">
           <KpiTiles summary={summary} />
           <div className="panels">
             <ProgramMixPanel programs={breakdowns?.programs ?? null} />
-            <NoteRatePanel buckets={breakdowns?.note_rates ?? null} />
+            <SlottingPanel status={slotting.status} onRun={slotting.open} />
             <DelinquencyPanel statuses={breakdowns?.dq_status ?? null} />
           </div>
           <DeskQuestionChips counts={questionCounts} active={question} onChange={setQuestion} />
@@ -188,8 +217,9 @@ export function LoanTapeScreen() {
           )}
           <section className="grid-card" aria-label="Loan grid">
             {columns && (
-              <LoanGrid key={searchParams.toString()} columns={columns} onRowCount={onRowCount} question={question}
-                hiddenColumns={hidden} initialFilter={fromUrl.filter} initialSort={fromUrl.sort} />
+              <LoanGrid key={`${searchParams.toString()}|${runAt ?? ""}`} columns={columns} onRowCount={onRowCount}
+                question={question} hiddenColumns={hidden} initialFilter={fromUrl.filter} initialSort={fromUrl.sort}
+                onLoanHover={runAt ? onLoanHover : undefined} />
             )}
             <div className="grid-foot">
               <span data-testid="grid-showing">
@@ -197,11 +227,17 @@ export function LoanTapeScreen() {
                 {" · "}
                 {fillCaption(captions.gridPaging, { blockSize: gridConfig.blockSize })}
               </span>
-              <span>{captions.gridServer}</span>
+              <span>{runAt ? slottingContent.grid.hoverHint : captions.gridServer}</span>
             </div>
           </section>
         </div>
-        {explainOpen && <ExplainPanel screen="loan-tape" onClose={() => setExplainOpen(false)} />}
+        {explainOpen && (
+          <ExplainPanel screen="loan-tape" onClose={() => setExplainOpen(false)}
+            choicesLabel={slottingContent.explain.switchLabel}
+            choices={[{ screen: "loan-tape", label: slottingContent.explain.loanTape },
+              { screen: "product-slotting", label: slottingContent.explain.slotting }]} />
+        )}
+        {hovered && runAt && <SlotCard loanId={hovered.loanId} anchor={hovered.anchor} runAt={runAt} />}
       </div>
     </div>
   );

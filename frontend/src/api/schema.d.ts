@@ -191,8 +191,9 @@ export interface paths {
          * @description BUSINESS: the grid's column headers, and which ones show at first. After a
          *     slotting run the list ends with Slot and Spec Stories.
          *
-         *     TECH: tape order; label falls back to name; default_visible from api.toml
-         *     (the slot columns are not in it yet: Step 5b decides how they show).
+         *     TECH: tape order; label falls back to name; default_visible from api.toml,
+         *     checked against the grid's columns, so Slot and Spec Stories show by default
+         *     once a run exists (Step 5b).
          */
         get: operations["columns_api_loans_columns_get"];
         put?: never;
@@ -605,10 +606,23 @@ export interface components {
             title: string;
         };
         /**
+         * RulesSummary
+         * @description BUSINESS: what a run will check, for the confirm dialog (Step 5b): "12 rules in 4
+         *     spec stories: LLB tiers $85K to $275K, NY, PR, Low FICO". TECH: from the loaded rules.
+         */
+        RulesSummary: {
+            /** Families */
+            families: components["schemas"]["StoryFamily"][];
+            /** Rules */
+            rules: number;
+        };
+        /**
          * SlottingStatus
-         * @description GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes.
+         * @description GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes;
+         *     rules is always the rules in force (Step 5b).
          */
         SlottingStatus: {
+            rules?: components["schemas"]["RulesSummary"] | null;
             /** Run */
             run: boolean;
             /** Run At */
@@ -715,6 +729,19 @@ export interface components {
             total_rows: number;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * StoryFamily
+         * @description One spec-story family in force. BUSINESS: tiers are its caps' labels, lowest first
+         *     ("85K" ... "275K"); empty for a story with no tiers (NY).
+         */
+        StoryFamily: {
+            /** Family */
+            family: string;
+            /** Label */
+            label: string;
+            /** Tiers */
+            tiers: string[];
         };
         /**
          * StoryFit

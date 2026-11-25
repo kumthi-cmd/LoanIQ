@@ -49,3 +49,18 @@ export type LoanTapeLink = components["schemas"]["LoanTapeLink"];
 export type AskRequest = components["schemas"]["AskRequest"];
 /** POST /api/ask/rerun body: a saved query's SQL and tag. */
 export type RerunRequest = components["schemas"]["RerunRequest"];
+
+// ---------------------------------------------------------------------------
+// Product Slotting (Steps 5a and 5b)
+// ---------------------------------------------------------------------------
+
+/** BUSINESS: has slotting run, when, its totals, and the rules a run checks. TECH: GET /api/slotting/status. */
+export type SlottingStatus = components["schemas"]["SlottingStatus"];
+/** BUSINESS: the counts a finished run reports (slotted, by agency, by reason, stories). */
+export type SlottingTotals = components["schemas"]["SlottingTotals"];
+/** BUSINESS: the spec-story rules in force, by family, for the confirm dialog. */
+export type RulesSummary = components["schemas"]["RulesSummary"];
+/** BUSINESS: one loan's hover card. TECH: GET /api/loans/{loan_id}/slots. */
+export type LoanSlots = components["schemas"]["LoanSlots"];
+/** BUSINESS: one spec story a loan fits: its rule and why. */
+export type StoryFit = components["schemas"]["StoryFit"];

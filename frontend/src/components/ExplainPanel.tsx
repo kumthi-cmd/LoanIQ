@@ -16,6 +16,9 @@
  *     tabs (the key handler is on the tab list only, never global).
  *   - Whether the panel is open belongs to the screen (it has the toggle button in
  *     its title row); the panel only reports "close" through onClose.
+ *   - A screen can offer more than one explanation (Step 5b: the Loan Tape and its
+ *     Product Slotting action). `choices` then draws a switch of toggle buttons
+ *     (aria-pressed) above the tabs; the first choice is shown at first.
  */
 import { useId, useState, type KeyboardEvent } from "react";
 import Markdown from "react-markdown";
@@ -27,9 +30,19 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "technical", label: "Technical" },
 ];
 
+/** One explanation a screen offers: which file, and the switch button's word. */
+export interface ExplainChoice {
+  screen: ScreenId;
+  label: string;
+}
+
 interface ExplainPanelProps {
   /** Which screen's explanation to show, for example "loan-tape". */
   screen: ScreenId;
+  /** BUSINESS: other explanations to switch to, with this screen's first (Step 5b). */
+  choices?: ExplainChoice[];
+  /** The switch's group name, for screen readers ("Explain"). */
+  choicesLabel?: string;
   /** Called when the visitor closes the panel. */
   onClose: () => void;
 }
@@ -70,8 +83,9 @@ function GlossaryCard({ terms }: { terms: string[] }) {
  * TECH: useState holds the chosen tab; useId gives unique ids linking each tab to
  *   its panel, so two screens' panels never clash.
  */
-export function ExplainPanel({ screen, onClose }: ExplainPanelProps) {
+export function ExplainPanel({ screen: first, choices, choicesLabel, onClose }: ExplainPanelProps) {
   const [tab, setTab] = useState<Tab>("business");
+  const [screen, setScreen] = useState<ScreenId>(first);
   const baseId = useId();
   const sections = splitExplanation(screenExplanations[screen]);
 
@@ -94,6 +108,16 @@ export function ExplainPanel({ screen, onClose }: ExplainPanelProps) {
           </svg>
         </button>
       </div>
+      {choices && choices.length > 1 && (
+        <div className="explain-switch" role="group" aria-label={choicesLabel}>
+          {choices.map((c) => (
+            <button key={c.screen} type="button" className="term-chip" aria-pressed={c.screen === screen}
+              onClick={() => setScreen(c.screen)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div role="tablist" aria-label="Explanation" className="explain-tabs" onKeyDown={onTabKey}>
         {TABS.map((t) => (
           <button key={t.id} id={`${baseId}-tab-${t.id}`} type="button" role="tab"
@@ -107,7 +131,8 @@ export function ExplainPanel({ screen, onClose }: ExplainPanelProps) {
         <div className="explain-text">
           <Markdown>{sections[tab]}</Markdown>
         </div>
-        <GlossaryCard terms={screenTerms[screen]} />
+        {/* TECH: a new key per explanation resets the glossary card to its first term. */}
+        <GlossaryCard key={screen} terms={screenTerms[screen]} />
       </div>
     </aside>
   );

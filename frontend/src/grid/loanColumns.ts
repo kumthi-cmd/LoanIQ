@@ -21,7 +21,10 @@ import type { CellClassParams, ColDef, ValueFormatterParams } from "ag-grid-comm
 import type { ColumnInfo, LoanRow } from "../api/types";
 import { columnTerms, termTooltip } from "../content/content";
 import { formatBoolean, formatDate, formatNumber, numberFormatFor } from "./columnFormats";
-import { DEFAULT_COLUMN_WIDTHS } from "./gridConfig";
+import { DEFAULT_COLUMN_WIDTHS, SLOT_COLUMN_WIDTHS } from "./gridConfig";
+import { LoanIdCell } from "./LoanIdCell";
+import { SlotCell } from "./SlotCell";
+import { SpecStoriesCell } from "./SpecStoriesCell";
 
 // BUSINESS: the loan key, pinned on the left.
 export const PINNED_COLUMN = "loan_id";
@@ -30,6 +33,11 @@ export const PINNED_COLUMN = "loan_id";
 //   CURRENT_STATUS in backend/app/main.py, which the Delinquent loans tile counts.
 export const DQ_COLUMN = "dq_status";
 export const CURRENT_STATUS = "Current";
+// BUSINESS: the two columns Product Slotting adds (Step 5b), drawn by their own cells
+//   and tinted as the board's "new" columns. TECH: names as backend/app/slotting.py
+//   GRID_COLUMNS.
+export const SLOT_COLUMN = "slot";
+export const SPEC_STORIES_COLUMN = "spec_stories";
 
 // TECH: the AG Grid filter options the API supports, per column kind. The "or equal"
 //   and "not equal" options were added in Step 4b, so an Ask the Tape filter such as
@@ -95,6 +103,9 @@ function kindSettings(col: ColumnInfo): Partial<ColDef<LoanRow>> {
  *   columns with no term get no tooltip. dq_status gets the "dq-delinquent" class
  *   (red text, styles.css) through cellClassRules, which AG Grid re-checks per cell.
  *   loan_id gets "cell-mono" (a monospace font), so IDs line up character by character.
+ *   From Step 5b loan_id is drawn by LoanIdCell (the slot card on hover), and slot and
+ *   spec_stories by SlotCell and SpecStoriesCell, with the "col-slotting" class on
+ *   header and cells; their widths come from SLOT_COLUMN_WIDTHS.
  */
 export function buildColumnDefs(columns: ColumnInfo[], hidden: ReadonlySet<string> = new Set()): ColDef<LoanRow>[] {
   return columns.map((col) => {
@@ -111,7 +122,7 @@ export function buildColumnDefs(columns: ColumnInfo[], hidden: ReadonlySet<strin
     // BUSINESS: default columns start at a width fitted to their content, so all 12
     //   fit at 1440 px (gridConfig.ts). TECH: minWidth drops with it, because the grid
     //   default minWidth (90 px) would otherwise widen FICO, State, LTV and DTI again.
-    const width = DEFAULT_COLUMN_WIDTHS[col.name];
+    const width = DEFAULT_COLUMN_WIDTHS[col.name] ?? SLOT_COLUMN_WIDTHS[col.name];
     if (width !== undefined) {
       def.width = width;
       def.minWidth = width;
@@ -120,6 +131,12 @@ export function buildColumnDefs(columns: ColumnInfo[], hidden: ReadonlySet<strin
       def.pinned = "left";
       def.lockPinned = true;
       def.cellClass = "cell-mono";
+      def.cellRenderer = LoanIdCell;
+    }
+    if (col.name === SLOT_COLUMN || col.name === SPEC_STORIES_COLUMN) {
+      def.cellRenderer = col.name === SLOT_COLUMN ? SlotCell : SpecStoriesCell;
+      def.headerClass = "col-slotting";
+      def.cellClass = "col-slotting";
     }
     if (col.name === DQ_COLUMN) {
       def.cellClassRules = {

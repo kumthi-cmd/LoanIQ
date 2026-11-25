@@ -72,12 +72,29 @@ class SlottingTotals(BaseModel):
     coupons: dict[str, str | None]
 
 
+class StoryFamily(BaseModel):
+    """One spec-story family in force. BUSINESS: tiers are its caps' labels, lowest first
+    ("85K" ... "275K"); empty for a story with no tiers (NY)."""
+    family: str
+    label: str
+    tiers: list[str]
+
+
+class RulesSummary(BaseModel):
+    """BUSINESS: what a run will check, for the confirm dialog (Step 5b): "12 rules in 4
+    spec stories: LLB tiers $85K to $275K, NY, PR, Low FICO". TECH: from the loaded rules."""
+    rules: int
+    families: list[StoryFamily]
+
+
 class SlottingStatus(BaseModel):
-    """GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes."""
+    """GET /api/slotting/status. TECH: run_at is UTC; totals null until a run finishes;
+    rules is always the rules in force (Step 5b)."""
     run: bool
     running: bool
     run_at: datetime | None = None
     totals: SlottingTotals | None = None
+    rules: RulesSummary | None = None
 
 
 class StoryFit(BaseModel):
@@ -167,11 +184,23 @@ class SlottingService:
         self.on_publish()
 
     def status(self) -> SlottingStatus:
-        """BUSINESS: has slotting run on this tape, when, and with what totals."""
+        """BUSINESS: has slotting run on this tape, when, with what totals, and which
+        rules a run checks."""
+        rules = self.rules_summary()
         if self.run_at is None or self.totals is None:
-            return SlottingStatus(run=False, running=self.lock.locked())
+            return SlottingStatus(run=False, running=self.lock.locked(), rules=rules)
         return SlottingStatus(run=True, running=self.lock.locked(), run_at=self.run_at,
-                              totals=SlottingTotals(**self.totals))
+                              totals=SlottingTotals(**self.totals), rules=rules)
+
+    def rules_summary(self) -> RulesSummary:
+        """BUSINESS: the spec-story rules in force, by family, with their tiers.
+
+        TECH: labels from content/slotting.json "stories" (config name if missing).
+        """
+        families = [StoryFamily(family=fam, label=self.words["stories"].get(fam, {}).get("label", fam),
+                                tiers=[cap_label(s.cap) for s in members if s.cap is not None])
+                    for fam, members in self.rules.families().items()]
+        return RulesSummary(rules=len(self.rules.stories), families=families)
 
 
 def get_service(request: Request) -> SlottingService:

@@ -34,6 +34,16 @@
   --warn-bg: #3a2c0f;
   --warn-text: #f5c86a;
   --warn-border: #6b5220;
+  /* BUSINESS: a finished Product Slotting run (Step 5b): colour for meaning only. */
+  --ok: #3ddc97;
+  --ok-bg: #0e2a22;
+  --ok-border: #1f6b52;
+  --ok-text: #d7f5e8;
+  --ok-soft: #a9d9c4;
+  /* BUSINESS: a loan no agency pool takes, on its hover card (Step 5b). */
+  --stop-bg: #1a1520;
+  --stop-border: #4a2b35;
+  --stop-text: #ffb3b3;
   --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
 
   /* BUSINESS: the LoanIQ Labs brand colours. The source of truth is brand/README.txt
@@ -516,3 +526,124 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
   .screen { padding: 14px 16px; }
   .explain-panel { max-width: none; }
 }
+
+/* ---- Product Slotting (Step 5b) ----
+ * BUSINESS: the sidebar action, the run dialog, the notice after a run, the Slotting
+ *   panel, the new grid columns and the loan hover card, as on the
+ *   "5 · Product Slotting" board.
+ * TECH: the dialog is fixed over the whole page with a dark backdrop; the card is
+ *   fixed beside the hovered cell (SlotCard.tsx places it). Widths in px.
+ */
+.nav-action {
+  width: 100%; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer;
+  min-height: 44px; padding-top: 4px; padding-bottom: 4px;
+}
+.nav-action[aria-expanded="true"] { background: var(--panel-2); }
+.nav-action-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.nav-action-sub { font-size: 10.5px; color: var(--muted); }
+.nav-action-icon { color: var(--accent-soft); flex: none; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 50; background: rgba(5, 9, 16, 0.72);
+  display: flex; justify-content: center; align-items: flex-start; padding: 110px 20px 40px; overflow-y: auto;
+}
+.slotting-dialog {
+  width: 100%; max-width: 600px; background: var(--panel); border: 1px solid var(--accent-border);
+  border-radius: 12px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); display: flex; flex-direction: column;
+  padding: 6px 0 4px;
+}
+.slotting-dialog:focus { outline: none; }
+.slotting-dialog h2 { margin: 0; font-size: 19px; font-weight: 600; }
+.dialog-section { padding: 16px 24px 4px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; }
+.dialog-section p { margin: 0; }
+.dialog-facts { margin: 8px 24px; border: 1px solid var(--border); border-radius: 8px; }
+.dialog-facts > div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--row-line); }
+.dialog-facts > div:last-child { border-bottom: 0; }
+.dialog-facts dt { color: var(--muted); }
+.dialog-facts dd { margin: 0; }
+.dialog-facts code { color: var(--accent-soft); }
+.dialog-warn { margin: 4px 24px 0; color: var(--warn-text); font-size: 12px; }
+.dialog-note { margin: 10px 24px 14px; }
+.dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 14px 24px 16px; }
+.dialog-actions .muted { margin-right: auto; }
+.btn-primary { border: 0; background: var(--accent); color: var(--bg); font-weight: 600; }
+.run-progress-line { display: flex; align-items: baseline; gap: 12px; }
+.run-percent { font-size: 30px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.run-percent-done { color: var(--ok); }
+.run-bar { height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.run-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.25s ease; }
+.run-bar-done { background: var(--ok); }
+.run-lines {
+  margin: 0; padding: 10px 12px; list-style: none; border-radius: 8px; background: var(--bg);
+  border: 1px solid var(--row-line); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.45;
+}
+.run-line { padding-left: 22px; position: relative; }
+.run-line::before {
+  content: ""; position: absolute; left: 4px; top: 4px; width: 8px; height: 5px;
+  border-left: 2px solid var(--ok); border-bottom: 2px solid var(--ok); transform: rotate(-45deg);
+}
+.run-line-current { color: var(--accent-soft); }
+.run-line-current::before {
+  border: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); transform: none; top: 5px;
+}
+.run-summary {
+  margin: 12px 24px 0; padding: 12px 14px; border-radius: 8px; background: var(--ok-bg);
+  border: 1px solid var(--ok-border); color: var(--ok-soft); display: flex; flex-direction: column; gap: 4px; line-height: 1.55;
+}
+.run-summary strong { color: var(--ok-text); }
+@media (prefers-reduced-motion: reduce) { .run-bar-fill { transition: none; } }
+
+.slotting-notice {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px;
+  background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok-soft);
+}
+.slotting-notice > svg { color: var(--ok); }
+.slotting-notice strong { color: var(--ok-text); }
+.slotting-notice-time { margin-left: auto; font-size: 12px; }
+.slotting-notice .icon-btn { color: var(--ok-soft); border-color: var(--ok-border); }
+
+.bar-fill-muted { background: var(--muted); }
+.slotting-not-run { display: flex; flex-direction: column; gap: 10px; line-height: 1.6; }
+.slotting-not-run .btn { align-self: flex-start; }
+
+.explain-switch { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0; }
+
+.ag-header-cell.col-slotting { background: var(--accent-bg); color: var(--accent-soft); }
+.ag-cell.col-slotting { background: var(--panel-2); }
+.loan-id-hover { text-decoration: underline dotted; text-underline-offset: 3px; color: var(--accent-soft); cursor: default; }
+.story-pills { display: inline-flex; gap: 4px; }
+.story-pill {
+  font-size: 11px; padding: 0 7px; line-height: 18px; border-radius: 999px;
+  border: 1px solid var(--accent-border); color: var(--accent-soft);
+}
+
+.slot-card {
+  position: fixed; z-index: 40; background: var(--panel); border: 1px solid var(--accent-border); border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55); padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  max-height: calc(100vh - 16px); overflow-y: auto;
+}
+.slot-card-head { display: flex; align-items: center; gap: 8px; }
+.slot-card-id { font-size: 14px; color: var(--accent-soft); }
+.slot-pill { margin-left: auto; font-size: 11px; padding: 1px 8px; border-radius: 999px; }
+.slot-pill-yes { background: var(--ok-bg); color: var(--ok); }
+.slot-pill-no { background: var(--stop-bg); color: var(--stop-text); }
+.slot-facts { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.slot-facts > div { padding: 6px 8px; border-radius: 6px; background: var(--panel-2); display: flex; flex-direction: column; gap: 2px; }
+.slot-facts dt { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.slot-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.slot-coupons { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); }
+.slot-coupons-values { margin-left: auto; }
+.slot-stories { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.slot-story {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 10px; border-radius: 6px;
+  background: var(--accent-bg); border: 1px solid var(--accent-border);
+}
+.slot-story code { color: var(--accent-soft); text-align: right; }
+.slot-story-name { font-weight: 600; }
+.slot-story-why { grid-column: 1 / -1; color: var(--text); font-size: 11.5px; }
+.slot-story-generic { background: var(--bg); border-color: var(--border); }
+.slot-why-not {
+  padding: 10px 12px; border-radius: 6px; background: var(--stop-bg); border: 1px solid var(--stop-border);
+  display: flex; flex-direction: column; gap: 4px; line-height: 1.5;
+}
+.slot-why-not strong { color: var(--stop-text); }

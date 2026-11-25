@@ -121,9 +121,12 @@ describe("App", () => {
     expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual(
       ["1Loan Tape", "4Ask the Tape", "About", "How it was built", "kumthi-cmd/LoanIQ"],
     );
-    const slotting = nav.getByText("Slotting").closest("[aria-disabled]");
-    expect(slotting).toHaveAttribute("aria-disabled", "true");
-    expect(slotting).toHaveTextContent(/^5Slotting\s*Planned$/);
+    // BUSINESS: since Step 5b Product Slotting is an action on the Loan Tape, not a
+    //   screen: a button (not a link, not Planned) that opens its dialog.
+    const slotting = nav.getByRole("button", { name: /Product Slotting/ });
+    expect(slotting).toHaveAttribute("aria-haspopup", "dialog");
+    expect(slotting).not.toHaveTextContent("Planned");
+    expect(slotting).toHaveTextContent(/^5Product Slotting/);
     for (const group of ["Tape", "Price", "Trade", "Showcase"]) {
       expect(nav.getByRole("list", { name: group })).toBeInTheDocument();
     }

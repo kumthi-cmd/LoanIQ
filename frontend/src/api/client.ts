@@ -7,16 +7,17 @@
  * BUSINESS: column headers, the headline numbers, the three summary panels, the
  *   desk-question counts, the tape line, and one page of loans at a time. For Ask
  *   the Tape (Step 4b): who is answering, every row behind an answer, one loan for
- *   the drawer, and a saved query's rerun. The streamed question itself is in
- *   ask/askStream.ts, because it is read event by event, not as one JSON body.
+ *   the drawer, and a saved query's rerun. For Product Slotting (Step 5b): the last
+ *   run and the rules in force, and one loan's hover card. Streams are read event by
+ *   event in their own modules (ask/askStream.ts, slotting/slottingStream.ts).
  * TECH: plain fetch() with relative URLs, so the same code works through Vite's dev
  *   proxy and against the built app served by FastAPI. A non-2xx answer throws an
  *   ApiError carrying the server's message (for example a 400 for a bad filter),
  *   so callers never treat an error body as data.
  */
 import type {
-  AskStatus, Breakdowns, ColumnInfo, LoanRecord, LoansPage, QuestionCount, RerunRequest, StoredQuery, Summary,
-  TapeInfo,
+  AskStatus, Breakdowns, ColumnInfo, LoanRecord, LoanSlots, LoansPage, QuestionCount, RerunRequest, SlottingStatus,
+  StoredQuery, Summary, TapeInfo,
 } from "./types";
 
 /**
@@ -121,3 +122,18 @@ export const fetchLoanRecord = (loanId: string, signal?: AbortSignal) =>
  */
 export const rerunQuery = (body: RerunRequest, signal?: AbortSignal) =>
   postJson<StoredQuery>("/api/ask/rerun", body, signal);
+
+// ---------------------------------------------------------------------------
+// Product Slotting (Step 5b). The run itself streams: slotting/slottingStream.ts.
+// ---------------------------------------------------------------------------
+
+/** BUSINESS: "Last run 11:42 AM" or "Not run on this tape", the totals and the rules in force. */
+export const fetchSlottingStatus = (signal?: AbortSignal) =>
+  getJson<SlottingStatus>("/api/slotting/status", signal);
+
+/**
+ * BUSINESS: the hover card for one loan ID: coupons, stories and why, or why not slotted.
+ * TECH: 409 before any run; 404 for a loan not on the tape.
+ */
+export const fetchLoanSlots = (loanId: string, signal?: AbortSignal) =>
+  getJson<LoanSlots>(`/api/loans/${encodeURIComponent(loanId)}/slots`, signal);

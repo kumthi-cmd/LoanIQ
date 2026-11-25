@@ -69,4 +69,7 @@ dq_status_order = ["Current", "30", "60", "90", "120+", "FC", "REO", "BK"]
 default_visible = [
   "loan_id", "seller", "program", "product", "state", "note_rate",
   "current_upb", "fico", "ltv", "dti", "dq_status", "occupancy",
+  # BUSINESS: the two columns Product Slotting adds (Step 5b). They exist only after
+  #   a run, so before one they are simply skipped; Ask the Tape never has them.
+  "slot", "spec_stories",
 ]

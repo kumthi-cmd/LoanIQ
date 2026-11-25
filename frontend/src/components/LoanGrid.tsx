@@ -30,15 +30,20 @@
  *     an answer here) go into AG Grid's initialState, which the grid reads once
  *     when it is created, before its first request. The screen re-creates the grid
  *     (a new React key) when the URL changes, so a new link applies cleanly.
+ *   - onLoanHover (Step 5b, after Product Slotting has run) goes into AG Grid's
+ *     `context`, which every cell renderer receives: LoanIdCell calls it on mouse
+ *     hover. For keyboard users, focusing a Loan ID cell (arrow keys) opens the same
+ *     card, and Escape or focusing another cell closes it.
  */
-import type { ColDef, GridState, SortModelItem } from "ag-grid-community";
+import type { CellFocusedEvent, CellKeyDownEvent, ColDef, GridState, SortModelItem } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { useMemo, useState } from "react";
 import type { ColumnInfo, LoanRow } from "../api/types";
 import { gridConfig } from "../grid/gridConfig";
 import { loanIqGridTheme } from "../grid/gridTheme";
-import { buildColumnDefs } from "../grid/loanColumns";
+import { buildColumnDefs, PINNED_COLUMN } from "../grid/loanColumns";
 import { createLoanDatasource } from "../grid/loanDatasource";
+import type { LoanGridContext } from "../grid/LoanIdCell";
 
 /**
  * Settings every column shares.
@@ -63,6 +68,18 @@ interface LoanGridProps {
   initialFilter?: Record<string, unknown> | null;
   /** BUSINESS: the sort to open with ("largest balance first"). */
   initialSort?: SortModelItem[];
+  /** BUSINESS: show a loan's slot card (Step 5b); absent before Product Slotting has run. */
+  onLoanHover?: LoanGridContext["onLoanHover"];
+}
+
+/**
+ * The on-screen box of a focused Loan ID cell, for placing the card.
+ * TECH: AG Grid marks each row with row-index and each cell with col-id.
+ */
+function focusedCellBox(rowIndex: number | null): DOMRect | null {
+  if (rowIndex === null) return null;
+  const cell = document.querySelector(`[row-index="${rowIndex}"] [col-id="${PINNED_COLUMN}"]`);
+  return cell ? cell.getBoundingClientRect() : null;
 }
 
 // TECH: one shared empty set, so the default prop is the same object every redraw
@@ -75,7 +92,7 @@ const NO_HIDDEN: ReadonlySet<string> = new Set();
  * TECH: getRowId uses loan_id so AG Grid can track rows across blocks.
  */
 export function LoanGrid({
-  columns, onRowCount, question = null, hiddenColumns = NO_HIDDEN, initialFilter = null, initialSort,
+  columns, onRowCount, question = null, hiddenColumns = NO_HIDDEN, initialFilter = null, initialSort, onLoanHover,
 }: LoanGridProps) {
   const [error, setError] = useState<string | null>(null);
   // TECH: read once by AG Grid at creation; useState keeps the first value so a
@@ -101,6 +118,20 @@ export function LoanGrid({
     [onRowCount, question],
   );
 
+  // TECH: one context object per onLoanHover, so cells are not redrawn needlessly.
+  const context = useMemo<LoanGridContext>(() => ({ onLoanHover }), [onLoanHover]);
+  // BUSINESS: keyboard users open the slot card by moving onto a Loan ID cell.
+  const onCellFocused = (e: CellFocusedEvent<LoanRow>) => {
+    if (!onLoanHover) return;
+    const col = typeof e.column === "object" && e.column ? e.column.getColId() : e.column;
+    const row = e.rowIndex === null ? undefined : e.api.getDisplayedRowAtIndex(e.rowIndex)?.data;
+    if (col === PINNED_COLUMN && row) onLoanHover(String(row.loan_id), focusedCellBox(e.rowIndex));
+    else onLoanHover(null, null);
+  };
+  const onCellKeyDown = (e: CellKeyDownEvent<LoanRow>) => {
+    if (onLoanHover && (e.event as KeyboardEvent | null)?.key === "Escape") onLoanHover(null, null);
+  };
+
   return (
     <div className="grid-wrap">
       {error && (
@@ -122,6 +153,9 @@ export function LoanGrid({
           getRowId={(p) => String(p.data.loan_id)}
           suppressColumnVirtualisation
           rowBuffer={gridConfig.rowBuffer}
+          context={context}
+          onCellFocused={onCellFocused}
+          onCellKeyDown={onCellKeyDown}
         />
       </div>
     </div>
