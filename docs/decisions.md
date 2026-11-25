@@ -71,6 +71,9 @@ would mean sending the same loans somewhere else first, and the Loan Tape alread
 the filters, the selection and the pool summary.
 Alternative considered: separate Slotting and Best Execution screens fed by "Send N
 loans to Slotting" (an extra hand-off, and a second grid of the same loans).
+Superseded in part (2026-11-25, Step 5a): slotting runs on the whole tape as one shared
+result, not only on the loans the trader has filtered or selected; see "One shared
+slotting result, in memory, one run at a time" above. The rest of this decision stands.
 
 ## 2026-11-24: The Agent mark is a button beside the link, never inside it
 Decision (Step 4d): screens answered by an AI agent (`agent: true` in
