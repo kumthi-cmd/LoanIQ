@@ -34,19 +34,21 @@ describe("chipLabel and chipDetail", () => {
   });
 });
 
+// TECH: since Step 5c the status also carries the desk stages (AgentScopeStrip.test.tsx);
+//   the banner ignores them, so these statuses carry none.
 describe("OfflineBanner", () => {
   it("shows only for lasting reasons", () => {
-    expect(isOffline({ mode: "offline", reason: "daily_budget", notice: "n" })).toBe(true);
-    expect(isOffline({ mode: "offline", reason: "visitor_limit", notice: "n" })).toBe(true);
-    expect(isOffline({ mode: "offline", reason: "timeout", notice: "n" })).toBe(false);
-    expect(isOffline({ mode: "model", reason: null, notice: null })).toBe(false);
+    expect(isOffline({ mode: "offline", reason: "daily_budget", notice: "n", stages: [] })).toBe(true);
+    expect(isOffline({ mode: "offline", reason: "visitor_limit", notice: "n", stages: [] })).toBe(true);
+    expect(isOffline({ mode: "offline", reason: "timeout", notice: "n", stages: [] })).toBe(false);
+    expect(isOffline({ mode: "model", reason: null, notice: null, stages: [] })).toBe(false);
     expect(isOffline(null)).toBe(false);
   });
 
   it("draws nothing while the model answers", () => {
-    const { container } = render(<OfflineBanner status={{ mode: "model", reason: null, notice: null }} />);
+    const { container } = render(<OfflineBanner status={{ mode: "model", reason: null, notice: null, stages: [] }} />);
     expect(container).toBeEmptyDOMElement();
-    render(<OfflineBanner status={{ mode: "offline", reason: "daily_budget", notice: "Budget used up." }} />);
+    render(<OfflineBanner status={{ mode: "offline", reason: "daily_budget", notice: "Budget used up.", stages: [] }} />);
     expect(screen.getByRole("status")).toHaveTextContent("Budget used up.");
   });
 });

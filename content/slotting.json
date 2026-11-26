@@ -52,6 +52,18 @@
       "text": "MBA status {dq_status}. Agency pools take current loans only."
     }
   },
+  "agent_columns": {
+    "_about": "Labels for the flat slot columns Ask the Tape sees once Product Slotting has run (Step 5c), shown by its list_columns tool. tier and story are templates per story family from spec_stories.toml.",
+    "slot": "Slot: agency, term, down / up coupon",
+    "deliverable": "Deliverable to an agency pool (TRUE/FALSE)",
+    "not_slotted_reason": "Why not slotted: No agency pool, No TBA product, Delinquent",
+    "agency": "Agency pool: UMBS or GNMA II",
+    "down_coupon": "Down coupon (%)",
+    "up_coupon": "Up coupon (%)",
+    "spec_stories": "Spec stories, or Generic TBA",
+    "tier": "Lowest {label} tier cap ($)",
+    "story": "Carries the {label} spec story (TRUE/FALSE)"
+  },
   "errors": {
     "busy": "Product Slotting is already running on this tape. Wait for it to finish, then try again.",
     "failed": "Product Slotting stopped before it finished. The Loan Tape still shows the last finished run."

@@ -1,0 +1,1 @@
+Product Slotting has not run on this tape yet, so there are no slot, coupon or spec-story columns. If asked about slots, pools, coupons or spec stories, say that Product Slotting has not run yet and that the desk can run it from the Loan Tape.

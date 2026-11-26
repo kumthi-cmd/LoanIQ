@@ -1,12 +1,11 @@
 # Roadmap
-Current step: Step 5 done (2026-11-25): Product Slotting on the Loan Tape. 5a, the
-engine: POST /api/slotting/run slots the whole tape (UMBS or GNMA II; down and up
-coupons; spec stories) from backend/app/config/slotting.toml and streams 13 steps with
-real counts; one shared result in memory behind a lock. 5b, the screen: the sidebar's
-Product Slotting button and run dialog, the paced commentary, the Slotting panel (in
-the note-rate panel's place), Slot and Spec Stories in the grid, and the loan hover
-card. Next: Step 6, the price file and best execution on the Loan Tape. Step 4e is in
-PR #8, 5a in PR #9 and 5b in a PR stacked on it.
+Current step: Step 5c done (2026-11-25): Ask the Tape's scope grows with the desk.
+The agent knows the tape from the start and each stage once the desk has run it
+(backend/app/agent/stages.py): after a Product Slotting run its read-only copy is rebuilt
+with flat slot columns, it gets a short Slotting prompt section and the explain_slot tool,
+and Ask the Tape shows the stages it knows. Step 5 (5a engine, 5b Loan Tape action, 5c
+agent) is done. Next: Step 6, the price file and best execution on the Loan Tape, which
+plugs into the same stages.
 Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
 after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
 1c SPA and loan grid, 1d Loan Tape screen to the design board (panels, desk
@@ -21,7 +20,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | Hosting: live site, deploy on every push | Done | 4-6 | 1 |
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns, 4d Agent mark, 4e live eval | 5-7 | 10.5 (4a: 3, 4b: 4, 4c: 1, 4d: 1.5, 4e: 1) |
-| 5 Slotting rules engine on the Loan Tape | Done: 5a engine, 5b Loan Tape action | 3-4 | 4 (5a: 3, 5b: 1) |
+| 5 Slotting rules engine on the Loan Tape | Done: 5a engine, 5b Loan Tape action, 5c agent stages | 3-4 | 8 (5a: 3, 5b: 1, 5c: 4) |
 | 6 Price file and best execution on the Loan Tape | Not started | 5-7 | |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
@@ -30,17 +29,22 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 9 Polish and publish | Not started | 3-4 | |
 
 ## Pace and forecast
-Estimates set 2026-11-19, after Step 1d; re-forecast 2026-11-25, after Step 4 ran
-50% over its estimate (10.5 active hours against 5-7). Active hours are time spent
-building, including design and review.
+Estimates set 2026-11-19, after Step 1d; re-forecast 2026-11-25 after Step 4 ran 50%
+over its estimate (10.5 active hours against 5-7), and again 2026-11-25 after Step 5
+ran twice its estimate (8 against 3-4). Most of Step 5's overrun is scope added along
+the way, not slower work: 5c (the agent's scope growing with the desk, 4 hours) was not
+in the original estimate. Active hours are time spent building, including design and
+review.
 
-- Pace so far: Steps 0 to 1d took about 8.5 active hours over 2026-11-18 and
-  2026-11-19, about 4 a day. Step 1 is running about 1.5 times faster than the
-  build guide's two to three evenings.
-- Left: about 30-41 active hours (Steps 5, 6, 2, 3, 7, 8 and 9).
-- Forecast at 4 hours a day: finishing around 2026-12-08 to 2026-12-11. At 2.5 hours
-  a day: around 2026-12-14 to 2026-12-21. Weekdays only, with Thanksgiving Thursday
-  and Friday (2026-11-26 and 27) off.
+- Pace so far: Steps 4 and 5 took 18.5 active hours against estimates of 8-11, about
+  1.7 times the estimate. Steps 0 to 1 ran close to theirs.
+- Left at the estimates: about 26-36 active hours (Steps 6, 2, 3, 7, 8 and 9), plus
+  about 2-3 for the simple Postgres planned before trading (docs/decisions.md).
+- Forecast at 4 hours a day, weekdays from 2026-11-30 (Thanksgiving Thursday and Friday,
+  2026-11-26 and 27, off): at the estimates, around 2026-12-09 to 2026-12-11; if later
+  steps also run about 1.5 times over, around 2026-12-14 to 2026-12-18.
+- At 2.5 hours a day: around 2026-12-15 to 2026-12-21 at the estimates, and around
+  2026-12-22 to 2026-12-31 at 1.5 times.
 - The high end of each estimate assumes a design pass like the Loan Tape screen's.
   The design canvas has boards for Ask the Tape, Slotting & Best Execution,
   Blotter & Positions and the Optimizer.
@@ -77,12 +81,23 @@ From Step 5a (slotting engine, 2026-11-25):
   and Spec Stories show by default after a run; the screen paces the commentary.
 - Slot and Spec Stories have no glossary tooltips on their headers yet: the grid reads
   tooltips from content/loan-columns.json only.
-- Ask the Tape does not see the slot columns: its read-only copy is built at start-up,
-  before any run. Then a golden question about slots.
+- Done (Step 5c): Ask the Tape sees Product Slotting once it has run, with six golden
+  questions on slots.
 - Not modelled: modified, forbearance and high-LTV loans treated separately; seasoning;
   per-agency fees; ARM pools; pool-level limits (pooling is Step 8).
 - Find public sources for the three rules listed under "Rules without a recorded
   source" in docs/public-sources.md.
+
+From Step 5c (Ask the Tape's stages, 2026-11-25):
+- Done: content/agent.md says the agent learns each step of the desk's workflow, and
+  lists explain_slot.
+- Done: live eval on Claude Haiku 5.5, 27 of 28 (docs/evals/2026-11-25-5c.json). The
+  miss was "Twenty" written in words; the prompt now asks for digits, and the rerun
+  got 28 of 28 (docs/evals/2026-11-25-5c-digits.json).
+- Step 6 plugs best execution into the same stages: a contribution in main.py, a
+  prompt file, its tools and golden questions.
+- Results live in memory: a restart forgets slotting and the agent's stages until the
+  desk reruns it. A simple Postgres comes with the paid Render plan, before Step 7.
 
 From Step 5b (Product Slotting on the Loan Tape, 2026-11-25):
 - The board's "NEW" badges on the Slot and Spec Stories headers are not drawn (they

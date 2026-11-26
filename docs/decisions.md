@@ -1,6 +1,49 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-25: Ask the Tape's scope grows with the desk's stages
+Decision (Step 5c): the agent knows the stages the desk has finished, in its workflow
+order: tape (parsing), slotting, best execution, optimization, pooling, trading
+(`backend/app/agent/stages.py`). It knows the tape from the start and each later stage
+once it has run. When a stage publishes (today, a Product Slotting run) the agent's
+read-only copy is rebuilt in the background with that stage's results as flat columns
+(`deliverable`, `not_slotted_reason`, `agency`, `slot`, `down_coupon`, `up_coupon`,
+`spec_stories`, `llb_tier`, `story_<family>`), and swapped in under a lock; a question
+in flight finishes on the old copy, which is then deleted. Each stage adds a short
+prompt section (`agent/prompts/<stage>.md`, sent only once it has run, and a "not run
+yet" line before) and its tools (`explain_slot`, the same card as the Loan Tape's
+hover). The one-table SQL guard is unchanged. Golden questions name their stage and run
+only at it; one checks the agent says slotting has not run. Ask the Tape shows the
+stages as a strip ("Knows: Tape ✓ · Slotting –"). Answers' default columns follow the
+grid: Slot and Spec Stories appear once a run exists. This replaces the Step 5c spec's
+"slot the copy at start-up", so the agent and the Loan Tape always agree on what has
+been done.
+Why: the agent should answer at the desk's stage of work, not ahead of it, and each new
+stage (best execution next) plugs in by adding a contribution, a prompt file and its
+tools, with no change to the loop or the guard. The prompt grows only as stages finish,
+so early questions stay cheap, and it is fixed between stage changes, so prompt caching
+holds. The copy is built in memory and written to its file once: about 2 s on 50,000
+loans (the timing tests hold it within the 3 s slotting budget), where writing it twice
+took 3.3 s.
+Trade-off: just after a run on a large tape, the background rebuild competes with the
+grid for a moment.
+Alternative considered: slotting the agent's copy at start-up (the agent would answer
+about slots the Loan Tape had not shown yet), or giving the agent the `slots` table and
+joins (a looser guard).
+
+## 2026-11-25: Results stay in memory for now; Postgres before trading
+Decision (Step 5c): the tape, the slotting result and the agent's stages live in
+memory, and a server restart (on Render's free plan, every wake from sleep) goes back
+to the tape alone. The deterministic stages (slotting, best execution) simply rerun.
+With the paid Render plan, and before trading (Step 7), LoanIQ adds a simple Postgres
+for results that cannot be recomputed: pools, trades, positions. Each stage's result is
+published in one place (its publish hook), so it can write to Postgres later without
+reshaping the agent.
+Why: nothing before Step 7 needs to survive a restart, and a blotter that forgets its
+trades would be wrong.
+Alternative considered: a DuckDB file on a Render disk (simplest, but the free plan has
+no disk), or Postgres now (more parts before they are needed).
+
 ## 2026-11-25: Product Slotting is a sidebar action and a dialog over any screen
 Decision (Step 5b): the sidebar's planned "5 Slotting" link is now a **Product
 Slotting** button (`nav.ts` `action: "product-slotting"`, drawn by

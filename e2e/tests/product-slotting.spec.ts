@@ -101,3 +101,17 @@ test("Spec Stories filters like any column, with the run's count", async ({ page
   // TECH: the floating filter uses "contains"; only generic TBA loans contain that text.
   await expect(page.getByTestId("row-count")).toHaveText(`${fmt(status.totals.generic_tba)} loans`);
 });
+
+test("after a run, Ask the Tape knows Product Slotting", async ({ page, request }) => {
+  // BUSINESS: Step 5c: the agent's scope grows with the desk; the strip says so.
+  // TECH: the agent's copy is rebuilt in the background after the run, so the status
+  //   is polled until it reports slotting as known.
+  await ensureSlotted(request);
+  await expect.poll(async () => {
+    const status = await (await request.get("/api/ask/status")).json();
+    return status.stages.find((s: { id: string }) => s.id === "slotting")?.state;
+  }).toBe("known");
+  await page.goto("/ask");
+  const strip = page.getByRole("list", { name: "What Ask the Tape knows" });
+  await expect(strip.getByRole("listitem").filter({ hasText: "Slotting" })).toContainText("✓");
+});

@@ -38,7 +38,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel
 
 from app.agent.tools import LOAN_ID_PATTERN
-from app.slotting import SLOTS, SlottingRules, SlottingRun, story_labels
+from app.slot_card import LoanSlots, fetch_slot_row, slot_card
+from app.slotting import SlottingRules, SlottingRun
 from app.spec_stories import cap_label
 
 router = APIRouter()
@@ -95,43 +96,6 @@ class SlottingStatus(BaseModel):
     run_at: datetime | None = None
     totals: SlottingTotals | None = None
     rules: RulesSummary | None = None
-
-
-class StoryFit(BaseModel):
-    """One spec story a loan fits. BUSINESS: rule is the SQL test; why is plain English."""
-    name: str
-    label: str
-    rule: str
-    why: str
-
-
-class NotSlotted(BaseModel):
-    """Why a loan is not slotted. TECH: reason is the code; short for the grid, text for the card."""
-    reason: str
-    short: str
-    text: str
-
-
-class LoanSlots(BaseModel):
-    """GET /api/loans/{loan_id}/slots: the hover card.
-
-    BUSINESS: the loan's own facts, its pool and coupons (percent, as text, e.g.
-      "2.5"), every story it fits with the rule and the reason, and the generic TBA
-      slot that is always open; or, if it is not slotted, why.
-    """
-    loan_id: str
-    run_at: datetime
-    slotted: bool
-    loan: dict[str, Any]
-    agency: str | None = None
-    term: str | None = None
-    slot: str
-    down_coupon: str | None = None
-    up_coupon: str | None = None
-    stories: list[StoryFit] = []
-    generic_tba: str | None = None
-    generic_note: str | None = None
-    not_slotted: NotSlotted | None = None
 
 
 # =============================================================================
@@ -253,69 +217,4 @@ def loan_slots(loan_id: str, service: Service) -> LoanSlots:
     row = fetch_slot_row(service.con, loan_id)
     if row is None:
         raise HTTPException(404, f"No loan {loan_id} on this tape")
-    return hover_card(row, service)
-
-
-CARD_FIELDS = ["seller", "state", "program", "product", "note_rate", "orig_upb", "fico", "dq_status"]
-
-
-def fetch_slot_row(con: duckdb.DuckDBPyConnection, loan_id: str) -> dict[str, Any] | None:
-    """One loan's slot row joined to the tape fields the card shows, or None."""
-    cur = con.cursor()
-    try:
-        cols = ", ".join(f"l.{c}" for c in CARD_FIELDS)
-        result = cur.execute(f"SELECT s.*, {cols} FROM {SLOTS} s JOIN loans l USING (loan_id) "
-                             "WHERE loan_id = ?", [loan_id])
-        names = [d[0] for d in result.description]
-        values = result.fetchone()
-    finally:
-        cur.close()
-    return None if values is None else dict(zip(names, values))
-
-
-def hover_card(row: dict[str, Any], service: SlottingService) -> LoanSlots:
-    """Build the card from one slot row and the words.
-
-    BUSINESS: the loan's facts; for a slotted loan, its coupons, each story with its
-      rule and why it fits, and the generic TBA line; otherwise the reason.
-    TECH: money and rates go out as numbers (float); coupons as text, as stored.
-    """
-    loan = {c: (float(row[c]) if c in ("note_rate", "orig_upb") else row[c]) for c in CARD_FIELDS}
-    base = dict(loan_id=row["loan_id"], run_at=service.run_at, slotted=row["eligible"], loan=loan,
-                agency=row["agency"], term=row["term"], slot=row["slot"])
-    if not row["eligible"]:
-        return LoanSlots(**base, not_slotted=not_slotted(row, service.words))
-    down, up = str(row["down_coupon"]), str(row["up_coupon"])
-    card = service.words["card"]
-    return LoanSlots(**base, down_coupon=down, up_coupon=up,
-                     stories=story_fits(row, service.rules, service.words),
-                     generic_tba=card["generic_tba"].format(agency=row["agency"], term=row["term"], down=down),
-                     generic_note=card["generic_note"])
-
-
-def story_fits(row: dict[str, Any], rules: SlottingRules, words: dict[str, Any]) -> list[StoryFit]:
-    """BUSINESS: each story the loan carries, with its rule and the plain-English reason.
-
-    TECH: the why template may use {orig_upb} (dollars, with commas), {fico} and
-      {cap} (the tier, e.g. "275K").
-    """
-    by_name = {s.name: s for s in rules.stories}
-    labels = story_labels(rules, words)
-    out = []
-    for name in row["stories"]:
-        story = by_name[name]
-        why = words["stories"].get(story.family, {}).get("why", "")
-        out.append(StoryFit(name=name, label=labels[name], rule=story.where,
-                            why=why.format(orig_upb=f"{row['orig_upb']:,.0f}", fico=row["fico"],
-                                           cap=cap_label(story.cap) if story.cap else "")))
-    return out
-
-
-def not_slotted(row: dict[str, Any], words: dict[str, Any]) -> NotSlotted:
-    """BUSINESS: why the loan is not slotted, in the card's words.
-
-    TECH: a program can have its own sentence (by_program); else the template.
-    """
-    reason = words["reasons"][row["reason"]]
-    text = reason.get("by_program", {}).get(row["program"]) or reason["text"].format(**row)
-    return NotSlotted(reason=row["reason"], short=reason["short"], text=text)
+    return slot_card(row, service.rules, service.words, service.run_at)

@@ -17,6 +17,24 @@
     "error": "Answered by built-in rules: the AI model could not be reached."
   },
   "screen": {
+    "scope": {
+      "_about": "Step 5c: the strip under the title that shows which desk stages the agent knows. Stage ids and states come from GET /api/ask/status (backend/app/agent/stages.py).",
+      "label": "Knows",
+      "listName": "What Ask the Tape knows",
+      "stages": {
+        "tape": "Tape",
+        "slotting": "Slotting",
+        "bestex": "BestEx",
+        "optimization": "Optimization",
+        "pooling": "Pooling",
+        "trading": "Trading"
+      },
+      "states": {
+        "known": "known",
+        "not_run": "not run yet: run it on the Loan Tape",
+        "planned": "coming in a later step"
+      }
+    },
     "agentMark": {
       "label": "Agent",
       "linkSuffix": ", agent",
@@ -71,6 +89,10 @@
       {
         "name": "get_loan",
         "what": "Every field of one loan, by its loan ID."
+      },
+      {
+        "name": "explain_slot",
+        "what": "Why one loan is or is not slotted: its pool, coupons and stories. Once Product Slotting has run."
       }
     ],
     "guardrailsTitle": "Guardrails",

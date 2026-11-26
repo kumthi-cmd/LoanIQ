@@ -517,3 +517,114 @@ class SlottingRun:
             raise
         self.on_publish()
         return {"slotted": fmt(self.totals["slotted"]), "generic": fmt(self.totals["generic_tba"])}
+
+
+# =============================================================================
+# Ask the Tape's view of slotting (Step 5c)
+# =============================================================================
+# BUSINESS: once Product Slotting has run, Ask the Tape can answer "how many loans
+#   are in UMBS?", "which loans carry the New York story?" or "why is this loan not
+#   deliverable?" from the same rules and results as the Loan Tape.
+# TECH: the agent's SQL guard allows one table, `loans`, and no joins or arrays, so
+#   the agent gets slotting as FLAT columns added to its own copy of `loans`
+#   (agent/tape_db.AgentTape builds the copy; agent/stages.py says when).
+
+AGENT_FIXED = ["slot", "deliverable", "not_slotted_reason", "agency", "down_coupon", "up_coupon",
+               "spec_stories"]
+
+
+def story_column(family: str) -> str:
+    """BUSINESS: the TRUE/FALSE column for one story family: LOW_FICO -> story_low_fico."""
+    return f"story_{family.lower()}"
+
+
+def tier_column(family: str) -> str:
+    """BUSINESS: the lowest-tier cap column for a tiered family: LLB -> llb_tier (dollars)."""
+    return f"{family.lower()}_tier"
+
+
+def agent_column_names(rules: SlottingRules) -> list[str]:
+    """Every column slotting adds to the agent's copy, in order.
+
+    TECH: one tier column per tiered family, then one story column per family, both
+      generated from spec_stories.toml, so a new story is a new column by itself.
+    """
+    fams = rules.families()
+    tiers = [tier_column(f) for f, members in fams.items() if members[0].cap is not None]
+    return AGENT_FIXED + tiers + [story_column(f) for f in fams]
+
+
+def agent_column_labels(rules: SlottingRules, words: dict[str, Any]) -> dict[str, str]:
+    """Readable labels for the agent's slot columns, for its list_columns tool.
+
+    TECH: fixed columns from content/slotting.json "agent_columns"; tier and story
+      columns from its templates, with each family's display label.
+    """
+    w = words["agent_columns"]
+    labels = {c: w[c] for c in AGENT_FIXED}
+    for fam, members in rules.families().items():
+        label = words["stories"].get(fam, {}).get("label", fam)
+        if members[0].cap is not None:
+            labels[tier_column(fam)] = w["tier"].format(label=label)
+        labels[story_column(fam)] = w["story"].format(label=label)
+    return labels
+
+
+def agent_columns_sql(rules: SlottingRules, words: dict[str, Any], p: Params) -> str:
+    """The SELECT list that turns one slot row (alias s) into the agent's flat columns.
+
+    BUSINESS (per loan):
+      deliverable         TRUE when an agency pool takes the loan
+      not_slotted_reason  the short reason ("Delinquent"), NULL when deliverable
+      agency, slot, coupons, spec_stories  only when deliverable, else NULL
+      <family>_tier       the cap of the lowest tier the loan fits, in dollars
+      story_<family>      TRUE when the loan carries that story
+    TECH: values come from the slots row the grid's one-pass SQL wrote (slots_sql);
+      reason words and story names are parameters.
+    """
+    shorts = " ".join(f"WHEN {p.add(code)} THEN {p.add(words['reasons'][code]['short'])}" for code in REASONS)
+    cols = [
+        "s.slot AS slot",
+        "s.eligible AS deliverable",
+        f"CASE s.reason {shorts} END AS not_slotted_reason",
+        "CASE WHEN s.eligible THEN s.agency END AS agency",
+        "s.down_coupon AS down_coupon",
+        "s.up_coupon AS up_coupon",
+        "CASE WHEN s.eligible THEN s.spec_stories END AS spec_stories",
+    ]
+    fams = rules.families()
+    for fam, members in fams.items():
+        if members[0].cap is None:
+            continue
+        whens = " ".join(f"WHEN list_contains(s.stories, {p.add(m.name)}) THEN {p.add(int(m.cap or 0))}"
+                         for m in members)
+        cols.append(f"CASE {whens} END AS {tier_column(fam)}")
+    for fam, members in fams.items():
+        names = ", ".join(p.add(m.name) for m in members)
+        cols.append(f"list_has_any(s.stories, [{names}]) AS {story_column(fam)}")
+    return ", ".join(cols)
+
+
+def add_agent_columns(con: duckdb.DuckDBPyConnection, rules: SlottingRules, words: dict[str, Any]) -> None:
+    """Slot the agent's copy of `loans` and add the flat slot columns to it.
+
+    BUSINESS: the same one-pass slotting as the grid, so the agent and the Loan Tape
+      always agree.
+    TECH: runs on the WRITE connection while the copy is built (tape_db.py). The slot
+      rows go to a scratch table, `loans` is rebuilt as the tape plus the flat
+      columns, and the scratch table is dropped, so the copy holds one table.
+      Raises ValueError if a slot column would clash with a tape column.
+    """
+    tape_cols = [r[0] for r in con.execute("DESCRIBE loans").fetchall()]
+    clash = set(tape_cols) & set(agent_column_names(rules))
+    if clash:
+        raise ValueError(f"Slotting: agent columns clash with tape columns: {sorted(clash)}")
+    sql, params = slots_sql(rules, words)
+    con.execute(f"CREATE TABLE _agent_slots AS {sql}", params)
+    p = Params()
+    flat = agent_columns_sql(rules, words, p)
+    con.execute(f"CREATE TABLE _agent_loans AS SELECT l.*, {flat} FROM loans l "
+                "JOIN _agent_slots s USING (loan_id)", p.values)
+    con.execute("DROP TABLE loans")
+    con.execute("DROP TABLE _agent_slots")
+    con.execute("ALTER TABLE _agent_loans RENAME TO loans")

@@ -25,9 +25,12 @@ TECH:
     - The loop is written here rather than with the SDK's tool runner because
       LoanIQ must see and check every call, count refusals, switch model mid-
       question and stop on its own clock; and the same loop drives every provider.
-    - The system prompt is app/agent/system_prompt.md, read once. It holds no date
-      or id, so it is byte-for-byte the same on every call and prompt caching
-      works.
+    - The system prompt is app/agent/system_prompt.md plus a section per finished
+      stage (agent/stages.py, Step 5c), and the tool list is the tools of those
+      stages. Both are fixed for the whole question, from the stages known when it
+      starts. The prompt holds no date or id and changes only when a stage
+      finishes, so it is byte-for-byte the same between stage changes and prompt
+      caching works.
     - One JSON log line per question: provider, models, rounds, tokens, cost,
       fallback reason, time. The question's text and the visitor are not logged.
       When a model call fails, one more line (log_provider_error, Step 4b) gives
@@ -42,7 +45,6 @@ import time
 from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
 
 from app.agent.budget import SpendMeter, cost_usd
@@ -50,9 +52,11 @@ from app.agent.config import AgentConfig, TaskRoute
 from app.agent.providers.base import (AssistantTurn, ChatOptions, LLMProvider, Message,
                                       ProviderError, ToolResults, Usage, UserText)
 from app.agent.providers.offline_provider import OfflineProvider
-from app.agent.tools import TOOL_SPECS, TapeTools
+from app.agent import stages as stage_info
+from app.agent.providers.base import ToolSpec
+from app.agent.tools import TapeTools
 
-SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent / "system_prompt.md"
+SYSTEM_PROMPT_PATH = stage_info.BASE_PROMPT_PATH
 TASK = "tape_query"
 OFFLINE_MODEL = "offline"
 # TECH: provider error reasons that have their own notice; anything else is "error".
@@ -109,7 +113,23 @@ class Orchestrator:
                  clock: Callable[[], float] = time.monotonic) -> None:
         self.cfg, self.providers, self.offline, self.tools = cfg, providers, offline, tools
         self.meter, self.notices, self.clock = meter, notices, clock
-        self.system = system_prompt or SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+        # TECH: a test may pin the whole prompt; otherwise it follows the stages.
+        self.fixed_system = system_prompt
+
+    def context(self) -> tuple[str, list[ToolSpec]]:
+        """The system prompt and tool list for a question starting now.
+
+        BUSINESS: the agent knows the stages the desk has finished, and is offered
+          their tools, and no others.
+        """
+        done = self.tools.stages
+        system = self.fixed_system or stage_info.system_prompt(done)
+        return system, self.tools.specs(done)
+
+    @property
+    def system(self) -> str:
+        """TECH: the system prompt a question starting now would get."""
+        return self.context()[0]
 
     # ------------------------------------------------------------------ the question
 
@@ -178,12 +198,13 @@ class Orchestrator:
           call, RoundLimit after max_rounds turns without an answer.
         """
         lim = self.cfg.limits
+        system, specs = self.context()
         messages: list[Message] = [UserText(question)]
         model = route.model if route else OFFLINE_MODEL
         failures = 0
         for _ in range(lim.max_rounds):
             run.model = model  # TECH: the model being called, for the error log
-            turn = provider.chat(self.system, messages, TOOL_SPECS, model,
+            turn = provider.chat(system, messages, specs, model,
                                  lim.max_output_tokens, self.options(route, model, run))
             run.rounds += 1
             if route:

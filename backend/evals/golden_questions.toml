@@ -183,3 +183,80 @@ check = "text"
 truth_sql = "SELECT state FROM loans GROUP BY state ORDER BY COUNT(*) DESC, state LIMIT 1"
 sql = "SELECT state, COUNT(*) AS n FROM loans GROUP BY state ORDER BY n DESC, state LIMIT 1"
 answer = "{value} has the most loans."
+
+# -----------------------------------------------------------------------------
+# Product Slotting (Step 5c). Asked only once the desk has run slotting
+# (stage = "slotting"), on the agent's copy with its flat slot columns
+# (app/slotting.py add_agent_columns). truth_sql reads those columns, which
+# backend/tests/test_slotting.py checks against the slotting engine itself.
+# -----------------------------------------------------------------------------
+
+[[question]]
+id = "slots_before_run"
+stage = "tape"
+before = "slotting"
+question = "How many loans are slotted into an agency pool?"
+check = "text"
+# BUSINESS: before the desk has run Product Slotting, the agent must say so, not guess.
+truth_sql = "SELECT 'Product Slotting'"
+sql = ""
+tool = "none"
+answer = "Product Slotting has not run on this tape yet, so there are no slots. Run it from the Loan Tape."
+
+[[question]]
+id = "slotted_count"
+stage = "slotting"
+question = "How many loans are slotted into an agency pool?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE deliverable"
+sql = "SELECT COUNT(*) FILTER (WHERE deliverable) AS slotted FROM loans"
+answer = "{value} loans are slotted into an agency pool."
+
+[[question]]
+id = "umbs_upb"
+stage = "slotting"
+question = "What is the current UPB of the loans slotted into UMBS?"
+check = "usd"
+truth_sql = "SELECT SUM(current_upb) FROM loans WHERE agency = 'UMBS'"
+sql = "SELECT SUM(current_upb) AS umbs_upb FROM loans WHERE deliverable AND agency IN ('UMBS')"
+answer = "The UMBS slots hold {value} of current UPB."
+
+[[question]]
+id = "llb_85k"
+stage = "slotting"
+question = "How many loans are in the LLB 85K tier?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE llb_tier = 85000"
+sql = "SELECT COUNT(loan_id) AS llb_85k FROM loans WHERE llb_tier <= 85000"
+answer = "{value} loans are in the $85K low-loan-balance tier."
+
+[[question]]
+id = "ny_story"
+stage = "slotting"
+question = "How many slotted loans carry the New York spec story?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE story_ny"
+sql = "SELECT COUNT(*) FILTER (WHERE story_ny AND deliverable) AS ny FROM loans"
+answer = "{value} slotted loans carry the New York story."
+
+[[question]]
+id = "not_slotted_delinquent"
+stage = "slotting"
+question = "How many loans are not slotted because they are delinquent?"
+check = "count"
+truth_sql = "SELECT COUNT(*) FROM loans WHERE not_slotted_reason = 'Delinquent'"
+sql = "SELECT COUNT(*) AS delinquent FROM loans WHERE NOT deliverable AND not_slotted_reason LIKE 'Delinq%'"
+answer = "{value} loans are not slotted because they are delinquent."
+
+[[question]]
+id = "why_not_slotted"
+stage = "slotting"
+question = "Why isn't loan LN79962194 slotted?"
+check = "text"
+# BUSINESS: the answer must name the reason's subject, the loan's product (an ARM).
+truth_sql = "SELECT product FROM loans WHERE loan_id = 'LN79962194'"
+sql = ""
+tool = "explain_slot"
+loan_id = "LN79962194"
+value_key = "reason_text"
+answer = "LN79962194 is not slotted: {value}"

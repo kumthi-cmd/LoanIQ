@@ -193,3 +193,13 @@ test("the Agent mark beside the Ask the Tape title opens the same explainer", as
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("the scope strip shows what the agent knows before Product Slotting has run", async ({ page }) => {
+  // BUSINESS: Step 5c: the agent knows the tape; slotting is not run yet (this project
+  //   never slots: product-slotting.spec.ts runs after it); later stages are coming.
+  await page.goto("/ask");
+  const strip = page.getByRole("list", { name: "What Ask the Tape knows" });
+  await expect(strip.getByRole("listitem").filter({ hasText: "Tape" }).first()).toContainText("known");
+  await expect(strip.getByRole("listitem").filter({ hasText: "Slotting" })).toContainText("not run yet");
+  await expect(strip.getByRole("listitem").filter({ hasText: "BestEx" })).toContainText("coming in a later step");
+});

@@ -19,8 +19,9 @@
  *   - Each question is sent on its own: the agent has no memory of earlier turns, so
  *     every answer can be checked by itself (Step 4a's design).
  *   - On first draw: the tape's columns (labels and formats for tables and the loan
- *     drawer) and the status for the Offline banner. Status is asked again after
- *     every answer, since a limit can be reached mid-session.
+ *     drawer) and the status for the Offline banner and, from Step 5c, the scope
+ *     strip (which desk stages the agent knows). Status is asked again after every
+ *     answer, since a limit can be reached mid-session.
  *   - ?q= in the URL (from the header box or Ctrl K) fills the question box and
  *     focuses it, but does not send: no model call until the visitor presses Send.
  *     The effect runs on every navigation (location.key), so Ctrl K works again
@@ -41,6 +42,7 @@ import { AgentMark } from "../components/AgentMark";
 import { AgentToolsPanel } from "../components/ask/AgentToolsPanel";
 import { AnswerTurn } from "../components/ask/AnswerTurn";
 import { LoanDrawer } from "../components/ask/LoanDrawer";
+import { AgentScopeStrip } from "../components/ask/AgentScopeStrip";
 import { OfflineBanner } from "../components/ask/OfflineBanner";
 import { SavedQueriesPanel } from "../components/ask/SavedQueriesPanel";
 import { ExplainPanel } from "../components/ExplainPanel";
@@ -213,6 +215,7 @@ export function AskTheTapeScreen() {
         </div>
       </div>
 
+      <AgentScopeStrip status={status} />
       <OfflineBanner status={status} />
 
       <div className="screen-body">

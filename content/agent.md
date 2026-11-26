@@ -4,6 +4,11 @@ Ask the Tape uses one Claude agent to answer plain-English questions about the l
 tape. The agent decides which data to fetch, LoanIQ's code fetches it, and the agent
 explains the result. It never does the math and never sees the whole tape.
 
+It learns each step of the desk's workflow as the desk completes it: it knows the tape
+from the start, and each stage (Product Slotting today, then best execution,
+optimization, pooling and trading) once that stage has run, using the same results as
+the Loan Tape.
+
 ## How it works
 1. You ask a question.
 2. Claude plans the next step and picks a tool.
@@ -16,7 +21,7 @@ explains the result. It never does the math and never sees the whole tape.
 - **Claude:** plans and explains.
 - **LoanIQ's orchestrator:** runs the loop, checks every call, enforces the limits.
 - **Tools:** do every calculation: `list_columns`, `query_tape`, `summarize_tape`,
-  `lookup_term`, `get_loan`.
+  `lookup_term`, `get_loan`, and `explain_slot` once Product Slotting has run.
 - **DuckDB:** the single source of truth.
 
 ## Cost and models

@@ -74,7 +74,8 @@ from app.agent.service import build_ask_service, close_ask_service
 from app.desk_questions import DESK_QUESTIONS_PATH, DeskQuestion, load_desk_questions
 from app.loan_query import ColumnTypes, QueryError, column_kind, parse_filter, parse_sort, select_list
 from app import slotting_api
-from app.slotting import GRID_COLUMNS, GRID_VIEW, SlottingRules, load_slotting_rules, load_slotting_words
+from app.slotting import (GRID_COLUMNS, GRID_VIEW, SlottingRules, add_agent_columns, agent_column_labels,
+                          load_slotting_rules, load_slotting_words)
 from app.slotting_api import SlottingService
 from app.tape_panels import (Breakdowns, QuestionCount, TapeInfo, bucket_spec, fetch_breakdowns,
                              fetch_question_counts, fetch_tape_info)
@@ -103,6 +104,23 @@ def load_labels(path: Path = LABELS_PATH) -> dict[str, str]:
     BUSINESS: grid headers say "Current UPB ($)", not current_upb.
     """
     return json.loads(path.read_text(encoding="utf-8"))["labels"]
+
+
+def agent_contributions(rules: SlottingRules | None, words: dict[str, Any]) -> dict[str, Any]:
+    """What each stage adds to Ask the Tape's copy of the tape (agent/stages.py).
+
+    BUSINESS: today only Product Slotting: its flat columns, from the same rules as
+      the Loan Tape. Best execution and the later stages add theirs here.
+    TECH: stage id -> a function of the copy's write connection.
+    """
+    if rules is None:
+        return {}
+    return {"slotting": lambda con: add_agent_columns(con, rules, words)}
+
+
+def agent_labels(labels: dict[str, str], rules: SlottingRules | None, words: dict[str, Any]) -> dict[str, str]:
+    """Labels for the agent's list_columns: the grid's, plus the agent's slot columns."""
+    return {**labels, **(agent_column_labels(rules, words) if rules else {})}
 
 
 def all_labels() -> dict[str, str]:
@@ -459,14 +477,25 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
         store = open_store(data_dir, questions_path)
         app.state.store = store
         app.state.labels = all_labels()
+        words = load_slotting_words()
         app.state.ask = build_ask_service(
-            data_dir / TAPE_FILE, store.columns, app.state.labels,
+            data_dir / TAPE_FILE, store.columns, agent_labels(app.state.labels, store.slotting, words),
             {qid: q.where for qid, q in store.questions.items()},
             lambda: tape_summary(store), agent_config, ask_providers,
-            base_columns=default_columns(store.columns))
+            base_columns=DEFAULT_VISIBLE_COLUMNS,
+            contributions=agent_contributions(store.slotting, words),
+            grid_columns=lambda: store.grid_source()[1],
+            slotting=(store.slotting, words) if store.slotting else None)
         # BUSINESS: Product Slotting (Step 5a): one shared result for every visitor.
-        app.state.slotting = SlottingService(store.con, store.slotting, load_slotting_words(),
-                                             on_publish=store.show_slots)
+        #   When a run publishes, the Loan Tape shows the new columns and Ask the Tape
+        #   learns the Slotting stage (Step 5c), its copy rebuilt in the background.
+        ask_tape = app.state.ask.tape
+
+        def published() -> None:
+            store.show_slots()
+            ask_tape.add_stage_async("slotting")
+
+        app.state.slotting = SlottingService(store.con, store.slotting, words, on_publish=published)
         yield
         close_ask_service(app.state.ask)
         store.con.close()

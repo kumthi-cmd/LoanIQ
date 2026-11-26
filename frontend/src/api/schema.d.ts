@@ -104,7 +104,8 @@ export interface paths {
         };
         /**
          * Ask Status
-         * @description BUSINESS: is the AI model answering right now? TECH: no model call, no cost.
+         * @description BUSINESS: is the AI model answering right now, and which stages does it know?
+         *     TECH: no model call, no cost.
          */
         get: operations["ask_status_api_ask_status_get"];
         put?: never;
@@ -337,6 +338,22 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AgentStage
+         * @description One desk stage and whether Ask the Tape knows it.
+         *
+         *     BUSINESS: the screen's scope strip: "Knows: Tape ✓ · Slotting ✓ · BestEx –".
+         *     TECH: id from agent/stages.py; step is the roadmap step; state is "known" (the
+         *       desk has run it), "not_run" (built, not run on this tape) or "planned".
+         */
+        AgentStage: {
+            /** Id */
+            id: string;
+            /** State */
+            state: string;
+            /** Step */
+            step: number;
+        };
+        /**
          * AskRequest
          * @description POST /api/ask body.
          *
@@ -374,6 +391,11 @@ export interface components {
             notice?: string | null;
             /** Reason */
             reason?: string | null;
+            /**
+             * Stages
+             * @default []
+             */
+            stages: components["schemas"]["AgentStage"][];
         };
         /**
          * Breakdowns

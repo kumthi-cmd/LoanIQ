@@ -45,6 +45,8 @@ from app.agent.config import AgentConfig, load_agent_config  # noqa: E402
 from app.agent.golden import GoldenResult, fake_script, load_golden, run_golden  # noqa: E402
 from app.agent.providers.fake_provider import FakeProvider  # noqa: E402
 from app.agent.service import AskService, build_ask_service, close_ask_service  # noqa: E402
+from app.agent.stages import STAGE_IDS, TAPE  # noqa: E402
+from app.slotting import load_slotting_words  # noqa: E402
 
 EVAL_VISITOR = "eval"
 
@@ -121,15 +123,30 @@ def all_fallback_error(model: str, results: list[GoldenResult]) -> str | None:
             f"No report was written.")
 
 
-def run_model(service: AskService, args: argparse.Namespace, questions: list, store: Any) -> list[GoldenResult]:
-    """All questions on one model. TECH: --fake swaps in a fresh FakeProvider per question."""
+def run_model(service: AskService, args: argparse.Namespace, questions: list) -> list[GoldenResult]:
+    """All questions on one model, each at its stage of the desk.
+
+    BUSINESS: first the bare tape (its questions, and "slots before Product Slotting
+      has run"), then the same agent after the desk has run each later stage, with
+      only that stage's questions (Step 5c).
+    TECH: --fake swaps in a fresh FakeProvider per question. Truth is read from the
+      agent's own copy, which holds every finished stage's columns. A stage with no
+      contribution wired (stages not built yet) is skipped.
+    """
     route = service.cfg.tasks["tape_query"]
 
     def ask(q: Any) -> Any:
         if args.fake:
             service.orchestrator.providers[route.provider] = FakeProvider(fake_script(q))
         return service.orchestrator.ask(q.question, EVAL_VISITOR)
-    return run_golden(ask, questions, store.con)
+    results = run_golden(ask, questions, service.tools.con, service.tape.stages)
+    for stage in STAGE_IDS:
+        if stage == TAPE or stage not in service.tape.contributions:
+            continue
+        service.tape.add_stage(stage)
+        results += run_golden(ask, [q for q in questions if q.stage == stage], service.tools.con,
+                              service.tape.stages)
+    return results
 
 
 def main_cli(argv: list[str] | None = None) -> int:
@@ -147,15 +164,20 @@ def main_cli(argv: list[str] | None = None) -> int:
     try:
         for model in args.models or [base.tasks["tape_query"].model]:
             cfg = eval_config(base, model, args)
-            service = build_ask_service(args.data_dir / main.TAPE_FILE, store.columns, main.all_labels(),
+            words = load_slotting_words()
+            service = build_ask_service(args.data_dir / main.TAPE_FILE, store.columns,
+                                        main.agent_labels(main.all_labels(), store.slotting, words),
                                         {k: q.where for k, q in store.questions.items()},
-                                        lambda: main.tape_summary(store), cfg)
+                                        lambda: main.tape_summary(store), cfg,
+                                        base_columns=main.DEFAULT_VISIBLE_COLUMNS,
+                                        contributions=main.agent_contributions(store.slotting, words),
+                                        slotting=(store.slotting, words) if store.slotting else None)
             try:
                 route = cfg.tasks["tape_query"]
                 if not args.fake and not service.orchestrator.providers[route.provider].available():
                     print(f"No API key for {route.provider}: set {cfg.provider_keys.get(route.provider)}.")
                     return 1
-                results = run_model(service, args, questions, store)
+                results = run_model(service, args, questions)
             finally:
                 close_ask_service(service)
             summary = summarize(model, results)

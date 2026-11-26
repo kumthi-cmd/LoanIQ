@@ -1,6 +1,30 @@
 {
   "components": {
     "schemas": {
+      "AgentStage": {
+        "description": "One desk stage and whether Ask the Tape knows it.\n\nBUSINESS: the screen's scope strip: \"Knows: Tape \u2713 \u00b7 Slotting \u2713 \u00b7 BestEx \u2013\".\nTECH: id from agent/stages.py; step is the roadmap step; state is \"known\" (the\n  desk has run it), \"not_run\" (built, not run on this tape) or \"planned\".",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "step",
+          "state"
+        ],
+        "title": "AgentStage",
+        "type": "object"
+      },
       "AskRequest": {
         "description": "POST /api/ask body.\n\nBUSINESS: a typed question, or a desk-question chip's id (which skips the model).\nTECH: question length is checked against llm.toml max_question_chars in\n  ask_input, so the limit lives in config.",
         "properties": {
@@ -54,6 +78,14 @@
               }
             ],
             "title": "Reason"
+          },
+          "stages": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AgentStage"
+            },
+            "title": "Stages",
+            "type": "array"
           }
         },
         "required": [
@@ -1129,7 +1161,7 @@
     },
     "/api/ask/status": {
       "get": {
-        "description": "BUSINESS: is the AI model answering right now? TECH: no model call, no cost.",
+        "description": "BUSINESS: is the AI model answering right now, and which stages does it know?\nTECH: no model call, no cost.",
         "operationId": "ask_status_api_ask_status_get",
         "responses": {
           "200": {
