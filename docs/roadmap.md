@@ -89,8 +89,8 @@ From Step 5a (slotting engine, 2026-11-25):
   source" in docs/public-sources.md.
 
 From Step 5c (Ask the Tape's stages, 2026-11-25):
-- content/agent.md: one line saying the agent's scope grows with the desk, and
-  explain_slot in its tool list (wording waiting for approval).
+- Done: content/agent.md says the agent learns each step of the desk's workflow, and
+  lists explain_slot.
 - Run scripts\eval_agent.py live on Claude Haiku 5.5 (28 questions at their stages,
   about $0.01) and record accuracy and cost; needs ANTHROPIC_API_KEY.
 - Step 6 plugs best execution into the same stages: a contribution in main.py, a
