@@ -91,8 +91,9 @@ From Step 5a (slotting engine, 2026-11-25):
 From Step 5c (Ask the Tape's stages, 2026-11-25):
 - Done: content/agent.md says the agent learns each step of the desk's workflow, and
   lists explain_slot.
-- Run scripts\eval_agent.py live on Claude Haiku 5.5 (28 questions at their stages,
-  about $0.01) and record accuracy and cost; needs ANTHROPIC_API_KEY.
+- Done: live eval on Claude Haiku 5.5, 27 of 28 (docs/evals/2026-11-25-5c.json). The
+  miss was "Twenty" written in words; the prompt now asks for digits. Rerun the eval
+  to confirm it (about $0.008).
 - Step 6 plugs best execution into the same stages: a contribution in main.py, a
   prompt file, its tools and golden questions.
 - Results live in memory: a restart forgets slotting and the agent's stages until the

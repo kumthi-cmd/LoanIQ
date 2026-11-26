@@ -51,6 +51,16 @@ seconds. About 70% of the input tokens came from the prompt cache.
 Sonnet was no more accurate, cost twenty times as much and was slightly slower, so
 Ask the Tape stays on Haiku. Prices are illustrative, from Anthropic's price list.
 
+When the agent learned Product Slotting (Step 5c), the golden set grew to 28
+questions, each asked at its stage of the desk: the tape's 21 and "how many loans are
+slotted?" before a run, where the right answer is that slotting has not run yet, then
+six slot questions after it (`docs/evals/2026-11-25-5c.json`). Haiku got 27 of 28, at
+$0.00028 a question. Every slot question passed, including "why isn't LN79962194
+slotted?", answered from the loan's slot card. The one miss was right but written in
+words: "Twenty loans have an LTV over 125%", which the grader, reading digits only,
+could not check. The fix was a one-line rule in the agent's prompt (write every number
+in digits), not a looser grader.
+
 ## By the numbers
 Every time all the test layers pass on my PC, `test.ps1` counts the tests in each layer,
 reads the back-end coverage and counts the commits, and writes them to

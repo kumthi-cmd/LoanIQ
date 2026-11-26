@@ -75,6 +75,12 @@ One entry per step, newest first. Copy the template for each new step.
   - Front end: 225 Vitest tests (3 new, for the strip).
   - End to end: 32 Playwright tests (2 new: the strip before a run, and slotting
     known after one).
+  - Live eval on Claude Haiku 5.5 (`docs/evals/2026-11-25-5c.json`, the second of two
+    runs): 27 of 28, $0.0079 in all, $0.00028 a question, 3.1 s on average, no
+    fallbacks. All seven slot questions passed. The miss, `ltv_over_125` in both runs,
+    was right but written in words ("Twenty loans"), which the grader cannot read; I
+    added a prompt rule to write every number in digits instead of loosening the
+    grader. The rule is not yet measured live.
 - My take:
 
 ## Step 5b, Product Slotting on the Loan Tape (2026-11-25)
