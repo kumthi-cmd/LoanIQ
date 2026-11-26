@@ -14,6 +14,14 @@ way, for example a list of five delinquency statuses, the button says why.
 right. One click reruns them on the tape without the AI model, so a question the desk
 asks of every tape costs nothing and follows the same rule each time.
 
+The agent's scope grows with the desk. The strip under the title, **Knows: Tape ✓ ·
+Slotting – · BestEx –**, shows which stages it knows. Before Product Slotting has run,
+a question about slots gets a plain "not run yet". Once the desk has run it, the agent
+answers from the same slots as the Loan Tape: how many loans are deliverable, the UPB
+in UMBS, the loans in each LLB tier or with the New York story, and, for one loan,
+exactly why it is or is not slotted. Best execution and the later stages join as they
+are built.
+
 When the AI model isn't available, built-in rules answer instead and a small
 "Offline" banner says so. That happens when the server has no key or today's limit is
 reached. The desk questions and saved queries still work. All loans are synthetic.
@@ -28,6 +36,16 @@ values. The AI model never sees the added columns, so they cost nothing in token
 can't change its answer. The SQL shown on screen is still exactly what the agent
 ran. Each column is as wide as its widest value, and headers wrap if needed, so all
 12 fit across without stretching.
+
+The agent's copy of the tape follows the desk's stages (`backend/app/agent/stages.py`).
+When a stage finishes (today, a Product Slotting run), the copy is rebuilt in the
+background with that stage's columns as plain, flat columns (`deliverable`, `agency`,
+`down_coupon`, `llb_tier`, `story_ny` and so on), so the one-table SQL guard stays as
+strict as before, and swapped in; a question already running finishes on the old copy.
+The system prompt gains that stage's short section and the tool list its tools
+(`explain_slot`, the same card as the Loan Tape's hover). The copy lives in memory with
+the tape, so after a server restart the agent knows the tape again until the desk
+reruns slotting.
 
 The screen sends the question to `POST /api/ask` and reads the answer as a stream of
 Server-Sent Events: each tool call and its result (with the SQL), any fallback, the

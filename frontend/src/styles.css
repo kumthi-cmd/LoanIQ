@@ -647,3 +647,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
   display: flex; flex-direction: column; gap: 4px; line-height: 1.5;
 }
 .slot-why-not strong { color: var(--stop-text); }
+
+/* ---- Ask the Tape: what the agent knows (Step 5c) ----
+ * BUSINESS: "Knows: Tape ✓ · Slotting ✓ · BestEx –" under the title.
+ * TECH: a wrapping row of small pills; known stages in the accent colour, the rest muted.
+ */
+.scope-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.scope-strip ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.scope-stage { display: inline-flex; gap: 5px; font-size: 11.5px; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+.scope-known { border-color: var(--accent-border); color: var(--accent-soft); }

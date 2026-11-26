@@ -8,12 +8,15 @@ BUSINESS:
     "Who does what" in content/agent.md: the model plans and explains, the tools do
     every calculation. A weighted average, a count or a total always comes from
     DuckDB, never from the model's arithmetic, so the numbers on screen are the
-    tape's numbers. Five tools:
+    tape's numbers. Six tools:
       list_columns    the tape's columns, types and labels
       query_tape      one checked, read-only SELECT (sql_guard.py)
       summarize_tape  the headline numbers: count, UPB, WAC, WA FICO, WA LTV, DQ
       lookup_term     a definition from content/glossary.json
       get_loan        every field of one loan by loan_id
+      explain_slot    one loan's slot card (Step 5c), once Product Slotting has run
+    The tools follow the desk (agent/stages.py): a stage's tools are offered only
+    once the stage has run, and its columns are then on the agent's copy.
 
 TECH:
     - Each tool is defined ONCE, as JSON Schema (TOOL_SPECS); each provider adapter
@@ -27,6 +30,9 @@ TECH:
     - A loan-level result (one row per loan_id) is widened for the screen with the
       default tape columns (api.toml [columns], Step 4c): add_base_columns. The
       model still reads only the columns its SQL selected (agent_view).
+    - The copy can be rebuilt while questions run (tape_db.AgentTape). Each tool
+      call leases the current copy once; self.con and self.columns then mean THAT
+      copy for the whole call (a thread-local), so a call never mixes two copies.
 """
 
 from __future__ import annotations
@@ -35,7 +41,8 @@ import csv
 import io
 import re
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
@@ -43,12 +50,16 @@ from typing import Any
 
 import duckdb
 
+from app.agent import stages as stage_info
 from app.agent.config import Limits
 from app.agent.providers.base import ToolCall, ToolResult, ToolSpec
 from app.agent.query_store import QueryStore, StoredQuery
 from app.agent.loan_tape_link import loan_tape_link
 from app.agent.sql_guard import GuardrailError, check_query
+from app.agent.tape_db import AgentTape, TapeSnapshot
 from app.loan_query import ColumnTypes, column_kind, select_list
+from app.slot_card import CARD_FIELDS, row_from_agent, slot_card
+from app.slotting import SlottingRules, agent_column_names
 
 # BUSINESS: loan ids look like LN00012345 (docs/domain/loan-tape-schema.md).
 LOAN_ID_PATTERN = re.compile(r"^LN\d{8}$")
@@ -82,6 +93,11 @@ TOOL_SPECS: list[ToolSpec] = [
              "Look up a mortgage term (e.g. WAC, LTV, Spec story) in LoanIQ's glossary.",
              schema({"term": {"type": "string"}})),
     ToolSpec("get_loan", "Every field of one loan, by loan_id (LN followed by 8 digits).",
+             schema({"loan_id": {"type": "string"}})),
+    ToolSpec("explain_slot",
+             "Why one loan is or is not slotted into an agency pool, by loan_id: its slot, "
+             "down and up coupons, each spec story with its rule and why it fits, or the "
+             "reason it is not deliverable. Use this for any 'why' about one loan's slot.",
              schema({"loan_id": {"type": "string"}})),
 ]
 TOOL_NAMES = {t.name for t in TOOL_SPECS}
@@ -173,28 +189,94 @@ def run_sql(con: duckdb.DuckDBPyConnection, sql: str, params: list[Any] | dict[s
 
 
 class TapeTools:
-    """Runs the five tools for one tape.
+    """Runs the tools for one tape.
 
     TECH:
-      con        the read-only DuckDB connection (tape_db.py)
-      columns    tape column -> DuckDB type (the allowlist for query_tape)
+      tape       the agent's copy (tape_db.AgentTape), or a fixed connection (tests);
+                 con and columns are the copy leased for the current call
+      columns    for a fixed connection: column -> DuckDB type (the allowlist for
+                 query_tape); an AgentTape gives its own, from the copy
       labels     tape column -> readable label (content/loan-columns.json)
       glossary   content/glossary.json entries: {term, definition, why}
       summarize  returns (summary dict, the SQL behind it); main.py supplies it so
                  the tool's numbers match the Loan Tape screen exactly
       base_columns  the default columns every loan-level result shows on screen
-                 (api.toml [columns]); [] shows only what the SQL selected
+                 (api.toml [columns]); [] shows only what the SQL selected. Kept to
+                 the columns the leased copy has, in its order, so answers show Slot
+                 and Spec Stories once slotting has run, as the Loan Tape does.
+      grid_columns  the Loan Tape's columns right now (main.py); "Open in Loan
+                 Tape" links only to these. None: the copy's own columns.
+      slotting   (rules, words) for explain_slot; None leaves the tool unavailable
     """
 
-    def __init__(self, con: duckdb.DuckDBPyConnection, columns: ColumnTypes,
+    def __init__(self, tape: AgentTape | duckdb.DuckDBPyConnection, columns: ColumnTypes | None,
                  labels: dict[str, str], glossary: list[dict[str, str]],
                  summarize: Callable[[], tuple[dict[str, Any], str]],
-                 store: QueryStore, limits: Limits, base_columns: list[str] | None = None) -> None:
-        self.con, self.columns, self.labels = con, columns, labels
-        self.glossary, self.summarize, self.store, self.limits = glossary, summarize, store, limits
-        # TECH: only real tape columns; they are later quoted into SQL, so a name the
-        #   tape does not have must never get that far.
-        self.base_columns = [c for c in (base_columns or []) if c in columns]
+                 store: QueryStore, limits: Limits, base_columns: list[str] | None = None,
+                 grid_columns: Callable[[], ColumnTypes] | None = None,
+                 slotting: tuple[SlottingRules, dict[str, Any]] | None = None) -> None:
+        self.tape = tape if isinstance(tape, AgentTape) else AgentTape.fixed(tape, columns)
+        self.labels, self.glossary, self.summarize = labels, glossary, summarize
+        self.store, self.limits = store, limits
+        self.wanted_base = list(base_columns or [])
+        self.grid_columns, self.slotting = grid_columns, slotting
+        self._local = threading.local()
+
+    # -- the leased copy -------------------------------------------------------
+
+    @property
+    def snap(self) -> TapeSnapshot:
+        """TECH: the copy leased for the current call (or, outside a call, the current one)."""
+        snap = getattr(self._local, "snap", None)
+        if snap is not None:
+            return snap
+        with self.tape.lease() as current:
+            return current
+
+    @property
+    def con(self) -> duckdb.DuckDBPyConnection:
+        """TECH: the leased copy's read-only connection."""
+        return self.snap.con
+
+    @property
+    def columns(self) -> ColumnTypes:
+        """TECH: the leased copy's columns: the allowlist for every query."""
+        return self.snap.columns
+
+    @property
+    def base_columns(self) -> list[str]:
+        """TECH: only columns this copy really has; they are later quoted into SQL, so a
+        name the copy does not have must never get that far. Copy order."""
+        return [c for c in self.columns if c in self.wanted_base]
+
+    @property
+    def stages(self) -> frozenset[str]:
+        """BUSINESS: the stages the agent knows right now (agent/stages.py)."""
+        return self.tape.stages
+
+    def specs(self, done: frozenset[str] | None = None) -> list[ToolSpec]:
+        """BUSINESS: the tools offered to the model: a stage's tools only once it has run."""
+        done = self.stages if done is None else done
+        return [t for t in TOOL_SPECS if stage_info.tool_allowed(t.name, done)
+                and (t.name != "explain_slot" or self.slotting is not None)]
+
+    @contextmanager
+    def using(self) -> Iterator[TapeSnapshot]:
+        """Lease the current copy for one call, unless this thread already holds one.
+
+        TECH: @contextmanager turns this generator into a `with` block. Nested calls
+          (query_tape -> run_query) share the outer call's lease.
+        """
+        outer = getattr(self._local, "snap", None)
+        if outer is not None:
+            yield outer
+            return
+        with self.tape.lease() as snap:
+            self._local.snap = snap
+            try:
+                yield snap
+            finally:
+                self._local.snap = None
 
     def run(self, call: ToolCall) -> ToolOutcome:
         """Run one call. Never raises: failures become error results.
@@ -204,13 +286,19 @@ class TapeTools:
         """
         handlers = {"list_columns": self.list_columns, "query_tape": self.query_tape,
                     "summarize_tape": self.summarize_tape, "lookup_term": self.lookup_term,
-                    "get_loan": self.get_loan}
+                    "get_loan": self.get_loan, "explain_slot": self.explain_slot}
         event: dict[str, Any] = {"id": call.id, "name": call.name}
         try:
-            if call.name not in handlers:
-                raise ToolFailure(f"Unknown tool {call.name!r}. Tools: {', '.join(sorted(TOOL_NAMES))}.")
-            check_input(call)
-            content, data, extra = handlers[call.name](call.input)
+            with self.using() as snap:
+                offered = {t.name for t in self.specs(snap.stages)}
+                if call.name not in handlers:
+                    raise ToolFailure(f"Unknown tool {call.name!r}. Tools: {', '.join(sorted(offered))}.")
+                if call.name not in offered:
+                    # BUSINESS: a stage's tool before the desk has run that stage.
+                    raise ToolFailure(f"{call.name} is not available yet: the desk has not run that "
+                                      "stage on this tape.", rejected=False)
+                check_input(call)
+                content, data, extra = handlers[call.name](call.input)
         except ToolFailure as exc:
             if call.name == "query_tape" and isinstance(call.input.get("sql"), str):
                 event["sql"] = call.input["sql"]
@@ -260,6 +348,11 @@ class TapeTools:
           Raises ToolFailure. The stored SQL and the Loan Tape link are the agent's
           own query; the added columns are for display only.
         """
+        with self.using():
+            return self._run_query(sql, title)
+
+    def _run_query(self, sql: str, title: str) -> StoredQuery:
+        """run_query on the leased copy. TECH: see run_query."""
         lim = self.limits
         try:
             q = check_query(sql, self.columns, lim.max_rows, lim.max_sql_chars)
@@ -273,10 +366,18 @@ class TapeTools:
         stored = StoredQuery(query_id=QueryStore.new_id(), title=str(title)[:120],
                              sql=q.display_sql, columns=names, rows=rows, row_count=len(rows),
                              total_rows=total, truncated=truncated,
-                             loan_tape=loan_tape_link(q.display_sql, self.columns),
+                             loan_tape=loan_tape_link(q.display_sql, self.link_columns()),
                              added_columns=added)
         self.store.put(stored)
         return stored
+
+    def link_columns(self) -> ColumnTypes:
+        """BUSINESS: "Open in Loan Tape" may filter only on columns the Loan Tape has now.
+
+        TECH: the grid's columns from main.py; a column only the agent has (story_ny)
+          then gives the link a reason ("not a tape column") instead of a broken grid.
+        """
+        return self.grid_columns() if self.grid_columns else self.columns
 
     def add_base_columns(self, names: list[str], rows: list[list[Any]]
                          ) -> tuple[list[str], list[list[Any]], list[str]]:
@@ -302,14 +403,15 @@ class TapeTools:
             by loan ID, not re-sorted by DuckDB.
           Returns (columns, rows, names of the columns added).
         """
-        if (not rows or not self.base_columns or "loan_id" not in names
+        base = self.base_columns
+        if (not rows or not base or "loan_id" not in names
                 or len(set(names)) != len(names)):
             return names, rows, []
         id_at = names.index("loan_id")
         ids = [r[id_at] for r in rows]
         if len(set(ids)) != len(ids):
             return names, rows, []
-        added = [c for c in self.base_columns if c not in names and c != "loan_id"]
+        added = [c for c in base if c not in names and c != "loan_id"]
         if not added:
             return names, rows, []
         # TECH: fetch the missing base columns for exactly these loans.
@@ -320,8 +422,8 @@ class TapeTools:
         by_id = {r[0]: r[1:] for r in extra_rows}
         # BUSINESS: loan ID first, the trader's default fields next, then whatever
         #   the agent computed for this question (rate spread, loan age, ...).
-        order = ["loan_id", *[c for c in self.base_columns if c != "loan_id"],
-                 *[n for n in names if n not in self.base_columns and n != "loan_id"]]
+        order = ["loan_id", *[c for c in base if c != "loan_id"],
+                 *[n for n in names if n not in base and n != "loan_id"]]
         added_at = {c: i for i, c in enumerate(added)}
         own_at = {n: i for i, n in enumerate(names)}
         missing = [None] * len(added)
@@ -365,6 +467,39 @@ class TapeTools:
             raise ToolFailure(f"No loan {loan_id} on this tape.", rejected=False)
         loan = dict(zip(names, rows[0]))
         return "\n".join(f"{k}: {v}" for k, v in loan.items()), {"loan": loan}, {"loan_id": loan_id}
+
+    def explain_slot(self, args: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+        """BUSINESS: why one loan is or is not slotted, from the rules, never a guess.
+
+        TECH: reads the loan's flat slot columns from the copy (bound loan id), turns
+          them back into a slots row (slot_card.row_from_agent) and builds the same
+          card as the Loan Tape's hover (GET /api/loans/{id}/slots). The model gets
+          short lines; data is the whole card, plus reason_text for a loan that is
+          not slotted.
+        """
+        if self.slotting is None:
+            raise ToolFailure("explain_slot is not available on this tape.", rejected=False)
+        rules, words = self.slotting
+        loan_id = str(args["loan_id"]).strip().upper()
+        if not LOAN_ID_PATTERN.match(loan_id):
+            raise ToolFailure("A loan_id is LN followed by 8 digits, e.g. LN00012345.")
+        cols = ["loan_id", *CARD_FIELDS, *agent_column_names(rules)]
+        names, rows = run_sql(self.con, f"SELECT {', '.join(cols)} FROM loans WHERE loan_id = ?",
+                              [loan_id], self.limits.query_timeout_ms)
+        if not rows:
+            raise ToolFailure(f"No loan {loan_id} on this tape.", rejected=False)
+        flat = dict(zip(names, rows[0]))
+        card = slot_card(row_from_agent(flat, rules, words), rules, words, self.snap.built_at)
+        data = card.model_dump(mode="json")
+        lines = [f"{card.loan_id}: {card.slot}"]
+        if card.not_slotted:
+            data["reason_text"] = card.not_slotted.text
+            lines.append(f"Not slotted ({card.not_slotted.short}): {card.not_slotted.text}")
+        else:
+            lines.append(f"{card.agency} {card.term}: down coupon {card.down_coupon}, up coupon {card.up_coupon}")
+            lines += [f"Spec story {s.label}: {s.why} (rule: {s.rule})" for s in card.stories]
+            lines.append(f"{card.generic_tba} ({card.generic_note})")
+        return "\n".join(lines), data, {"loan_id": loan_id}
 
 
 def check_input(call: ToolCall) -> None:

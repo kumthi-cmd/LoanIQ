@@ -65,10 +65,11 @@ def test_every_tool_schema_is_strict() -> None:
     """BUSINESS: the model can only send the arguments a tool expects.
 
     TECH: every property required, nothing extra: the shape Claude's, OpenAI's and
-      Gemini's strict modes all accept.
+      Gemini's strict modes all accept. explain_slot joined in Step 5c (offered only
+      once Product Slotting has run; test_agent_stages.py).
     """
     assert [t.name for t in TOOL_SPECS] == ["list_columns", "query_tape", "summarize_tape",
-                                           "lookup_term", "get_loan"]
+                                           "lookup_term", "get_loan", "explain_slot"]
     for spec in TOOL_SPECS:
         s = spec.input_schema
         assert s["type"] == "object" and s["additionalProperties"] is False

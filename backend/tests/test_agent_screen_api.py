@@ -54,8 +54,10 @@ LTV_SQL = "SELECT loan_id, ltv FROM loans WHERE ltv > 125 ORDER BY ltv DESC"
 # =============================================================================
 
 def test_status_is_model_when_the_model_may_answer(client: TestClient, fake: FakeProvider) -> None:
-    """BUSINESS: no banner while the AI model answers. TECH: asking costs no model call."""
-    assert client.get("/api/ask/status").json() == {"mode": "model", "reason": None, "notice": None}
+    """BUSINESS: no banner while the AI model answers. TECH: asking costs no model call.
+    Since Step 5c the status also lists the desk stages (test_agent_stages.py)."""
+    status = client.get("/api/ask/status").json()
+    assert {k: status[k] for k in ("mode", "reason", "notice")} == {"mode": "model", "reason": None, "notice": None}
     assert fake.calls == []
 
 
@@ -143,8 +145,9 @@ def test_rerun_passes_the_same_guardrails(client: TestClient, sql: str, words: s
 
 
 def test_screen_lists_exactly_the_agents_tools() -> None:
-    """BUSINESS: the "Tools the agent can call" panel tells the truth: the same five
-    tools, no more, no fewer (content/ask-the-tape.json vs tools.py)."""
+    """BUSINESS: the "Tools the agent can call" panel tells the truth: the same six
+    tools, no more, no fewer (content/ask-the-tape.json vs tools.py). explain_slot
+    joined in Step 5c."""
     screen = json.loads((main.gen.REPO_ROOT / "content" / "ask-the-tape.json").read_text(encoding="utf-8"))["screen"]
     assert [t["name"] for t in screen["tools"]] == [t.name for t in TOOL_SPECS]
 

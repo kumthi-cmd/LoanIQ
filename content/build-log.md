@@ -1,6 +1,82 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 5c, Ask the Tape's scope grows with the desk (2026-11-25)
+- Built: Ask the Tape now follows the desk's stages: tape (parsing), slotting, best
+  execution, optimization, pooling, trading (`backend/app/agent/stages.py`).
+  - It knows the tape from the start. After a Product Slotting run, its read-only copy
+    is rebuilt in the background with flat slot columns: `deliverable`,
+    `not_slotted_reason`, `agency`, `slot`, `down_coupon`, `up_coupon`, `spec_stories`,
+    `llb_tier`, and one `story_<family>` column per spec story.
+  - The new copy is swapped in under a lock, and a question already running finishes
+    on the old one.
+  - The system prompt gains a short Slotting section; before a run it carries a
+    "not run yet" line instead.
+  - A new tool, `explain_slot`, gives one loan's slot card, the same as the Loan
+    Tape's hover.
+  - Ask the Tape shows a "Knows: Tape ✓ · Slotting – · BestEx –" strip.
+  - Seven golden questions, each asked at its stage: six on slots, and one checking
+    that the agent says slotting hasn't run.
+- Desk problem it solves: a trader can ask about slots in plain English once the desk
+  has slotted the tape: how many loans are deliverable, the UPB in UMBS, the LLB 85K
+  tier, the New York story, or why one loan is not deliverable. The answer comes from
+  the same result as the Loan Tape, and never from slotting the desk hasn't run.
+- My key decisions:
+  - The agent's scope grows stage by stage, Parsing -> Slotting -> BestEx ->
+    Optimization -> Pooling -> Trading, instead of slotting its copy at start-up.
+  - Include the scope strip.
+  - Keep results in memory for now, with a simple Postgres planned with the paid
+    Render plan, before trading.
+- What Claude Code did:
+  - Planned flat columns so the one-table SQL guard stays as it is, then reworked the
+    plan around stages when I asked for an agent that grows with the desk.
+  - Answered where each stage's results are stored.
+  - Wrote the stage registry and the prompt files, and the agent's copy holder with
+    leases and background rebuilds.
+  - Wrote the slot columns in `slotting.py`, and the shared slot card (moved into
+    `app/slot_card.py`).
+  - Wrote `explain_slot`, the stage-aware prompt and tool list, the status stages,
+    the strip, and the stage-aware golden format and eval script.
+  - Design choices made while building, for review:
+    - Answers' default columns follow the grid (Slot and Spec Stories after a run).
+    - "Open in Loan Tape" links use only the grid's columns, so `story_ny` gives a
+      reason instead of a broken grid.
+    - A stage tool called too early gets a plain "not yet", not counted as a
+      guardrail failure.
+    - The copy is built in memory and written once. The first version took 3.3 s on
+      50,000 loans, over the 3 s budget; this one takes about 2.0 s.
+  - Bugs caught by tests:
+    - `run_golden` reused a variable and dropped every question after the first.
+    - My own concurrency test queried one DuckDB connection from four threads; the
+      tools give each query its own cursor, and the test now does too.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`.
+  - Back end: 555 tests, coverage 99.0%. 18 in the new `test_agent_stages.py`:
+    - the order and states;
+    - the prompt at each stage, and that it names exactly the slot columns;
+    - the copy before and after;
+    - a query in flight during a swap, and four threads querying through five
+      rebuilds with no error;
+    - a failed rebuild keeping the agent working, and a column clash refused;
+    - the guard still refusing joins, other tables and WITH;
+    - `explain_slot`: offered only after a run, "not yet" before, the board's two
+      loans, and bad and unknown IDs;
+    - links using only the grid's columns;
+    - the status stages, and labels for every column.
+  - Also new: the golden questions on the Fake at both stages, and a 50,000-loan
+    rebuild timing test.
+  - Tests updated because their rule changed:
+    - the tool list (adds `explain_slot`);
+    - the status (adds stages);
+    - two slotting tests (the agent now learns slotting after a run);
+    - the golden count, now split by stage.
+  - The 50,000-loan page timing now waits for the agent's rebuild, so it measures the
+    grid alone.
+  - Front end: 225 Vitest tests (3 new, for the strip).
+  - End to end: 32 Playwright tests (2 new: the strip before a run, and slotting
+    known after one).
+- My take:
+
 ## Step 5b, Product Slotting on the Loan Tape (2026-11-25)
 - Built: the "5 · Product Slotting" board in the app.
   - The sidebar's planned "Slotting" link is now a **Product Slotting** button. It

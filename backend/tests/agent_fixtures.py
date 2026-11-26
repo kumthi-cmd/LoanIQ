@@ -25,6 +25,7 @@ from app.agent.orchestrator import Event
 from app.agent.providers.base import LLMProvider
 from app.agent.service import AskService, build_ask_service, close_ask_service
 from app.agent.tape_db import ReadOnlyTape, close_readonly_tape, open_readonly_tape
+from app.slotting import load_slotting_words
 
 
 @pytest.fixture(scope="session")
@@ -69,13 +70,24 @@ def with_budget(cfg: AgentConfig, **changes: Any) -> AgentConfig:
 
 @pytest.fixture()
 def make_service(tape_dir: Path, loan_store: main.LoanStore) -> Iterator[Callable[..., AskService]]:
-    """Factory: make_service(providers={"anthropic": fake}, cfg=...) -> AskService."""
+    """Factory: make_service(providers={"anthropic": fake}, cfg=..., stages=True) -> AskService.
+
+    TECH: stages=True wires the desk's stages as main.py does (Step 5c): Product
+      Slotting's columns and explain_slot become available once the test calls
+      service.tape.add_stage("slotting").
+    """
     built: list[AskService] = []
 
-    def make(providers: dict[str, LLMProvider] | None = None, cfg: AgentConfig | None = None) -> AskService:
-        service = build_ask_service(tape_dir / main.TAPE_FILE, loan_store.columns, main.load_labels(),
+    def make(providers: dict[str, LLMProvider] | None = None, cfg: AgentConfig | None = None,
+             stages: bool = False) -> AskService:
+        words = load_slotting_words()
+        rules = loan_store.slotting
+        service = build_ask_service(tape_dir / main.TAPE_FILE, loan_store.columns,
+                                    main.agent_labels(main.load_labels(), rules, words),
                                     {k: q.where for k, q in loan_store.questions.items()},
-                                    lambda: main.tape_summary(loan_store), cfg, providers)
+                                    lambda: main.tape_summary(loan_store), cfg, providers,
+                                    contributions=main.agent_contributions(rules, words) if stages else None,
+                                    slotting=(rules, words) if stages and rules else None)
         built.append(service)
         return service
     yield make

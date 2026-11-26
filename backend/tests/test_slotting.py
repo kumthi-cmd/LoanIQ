@@ -230,12 +230,17 @@ def test_status_summarises_the_rules_a_run_checks(fresh: TestClient) -> None:
     assert all(f["tiers"] == [] for f in rules["families"][1:])
 
 
-def test_ask_the_tape_default_columns_never_include_the_slot_columns(client: TestClient, events: Any) -> None:
-    """BUSINESS: Ask the Tape reads the seller's tape, so its default answer columns
-      stay the tape's own even though api.toml now lists Slot and Spec Stories."""
-    assert main.default_columns(client.app.state.store.columns) == [
-        c for c in gen.COLUMNS if c in main.DEFAULT_VISIBLE_COLUMNS]
-    assert "slot" not in main.default_columns(client.app.state.store.columns)
+def test_ask_the_tape_answers_follow_the_loan_tapes_default_columns(fresh: TestClient, client: TestClient,
+                                                                    events: Any) -> None:
+    """BUSINESS: an Ask the Tape answer shows the same default fields as the Loan Tape:
+      the tape's 12 before a run, plus Slot and Spec Stories once the desk has run
+      Product Slotting (Steps 4c and 5c). The grid's own store keeps the tape's columns.
+    TECH: the agent keeps only the default columns its leased copy really has."""
+    tape_defaults = [c for c in gen.COLUMNS if c in main.DEFAULT_VISIBLE_COLUMNS]
+    assert main.default_columns(client.app.state.store.columns) == tape_defaults
+    assert fresh.app.state.ask.tools.base_columns == tape_defaults
+    client.app.state.ask.tape.wait()
+    assert client.app.state.ask.tools.base_columns == tape_defaults + ["slot", "spec_stories"]
 
 
 @pytest.mark.parametrize("column, value, expected", [
@@ -390,11 +395,24 @@ def test_a_restart_forgets_the_result(tape_dir: Path) -> None:  # noqa: F811
         assert [col["name"] for col in c.get("/api/loans/columns").json()] == gen.COLUMNS
 
 
-def test_ask_the_tape_copy_has_no_slot_columns(client: TestClient, events: Any) -> None:
-    """BUSINESS: Ask the Tape reads the seller's tape only in Step 5a (a follow-up)."""
-    con = client.app.state.ask.tape.con
-    cols = [r[0] for r in con.execute("DESCRIBE loans").fetchall()]
-    assert cols == gen.COLUMNS
+def test_a_run_teaches_ask_the_tape_the_slotting_stage(fresh: TestClient, client: TestClient,
+                                                      events: Any) -> None:
+    """BUSINESS: Ask the Tape knows slotting once the desk has run it, from the same
+      result as the Loan Tape: before a run its copy is the seller's tape alone; after
+      it, the copy has the flat slot columns, and every loan's slot is the grid's.
+    TECH: the publish rebuilds the agent's copy on a background thread
+      (tape_db.AgentTape.add_stage_async); wait() joins it."""
+    assert list(fresh.app.state.ask.tools.columns) == gen.COLUMNS
+    assert fresh.app.state.ask.tape.stages == {"tape"}
+    ask = client.app.state.ask
+    ask.tape.wait()
+    rules = client.app.state.store.slotting
+    assert ask.tape.stages == {"tape", "slotting"}
+    assert list(ask.tools.columns) == gen.COLUMNS + sl.agent_column_names(rules)
+    agent = dict(ask.tools.con.execute("SELECT loan_id, slot FROM loans").fetchall())
+    grid = dict(client.app.state.store.con.execute("SELECT loan_id, slot FROM slots").fetchall())
+    assert agent == grid
+    assert ask.tools.con.execute("SELECT COUNT(*) FILTER (WHERE deliverable) FROM loans").fetchone()[0] == 1467
 
 
 # =============================================================================
@@ -608,6 +626,10 @@ def test_a_run_is_fast_on_50k_loans(big_client: TestClient) -> None:
     elapsed_ms = (time.perf_counter() - start) * 1000
     assert events[-1][0] == "done" and events[-1][1]["totals"]["loans"] == PERF["timing_tape_loans"]
     assert elapsed_ms < PERF["slotting_run_budget_ms"], f"run took {elapsed_ms:.0f} ms"
+    # TECH: since Step 5c the publish also rebuilds Ask the Tape's copy on a background
+    #   thread; on 50,000 loans that competes with the grid for a moment. The page
+    #   budget is the grid's own speed, so it is measured once that rebuild is done.
+    big_client.app.state.ask.tape.wait()
     params = {"sort": "slot:desc", "filter": json.dumps(
         {"spec_stories": {"filterType": "text", "type": "contains", "filter": "LLB"}})}
     assert big_client.get("/api/loans", params=params).status_code == 200  # warm-up
@@ -616,3 +638,18 @@ def test_a_run_is_fast_on_50k_loans(big_client: TestClient) -> None:
     elapsed_ms = (time.perf_counter() - start) * 1000
     assert resp.status_code == 200 and resp.json()["total"] > 0
     assert elapsed_ms < PERF["page_budget_ms"], f"page took {elapsed_ms:.0f} ms"
+
+
+def test_ask_the_tape_learns_slotting_fast_on_50k_loans(big_client: TestClient) -> None:
+    """BUSINESS: after a run, Ask the Tape knows slotting within moments, even on a
+      large tape: rebuilding its copy with the slot columns stays within
+      slotting_run_budget_ms (api.toml, illustrative), the same budget as the run.
+    TECH: times AgentTape.rebuild directly (it runs on a background thread after a
+      publish); the run made by the test above, or this one, slots the grid first."""
+    tape = big_client.app.state.ask.tape
+    tape.wait()
+    start = time.perf_counter()
+    tape.rebuild(frozenset({"tape", "slotting"}))
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    assert "deliverable" in big_client.app.state.ask.tools.columns
+    assert elapsed_ms < PERF["slotting_run_budget_ms"], f"rebuild took {elapsed_ms:.0f} ms"

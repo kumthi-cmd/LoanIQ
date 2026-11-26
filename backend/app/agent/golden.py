@@ -38,12 +38,14 @@ from typing import Any
 import duckdb
 
 from app.agent.orchestrator import Event
+from app.agent.stages import STAGE_IDS, TAPE
 from app.agent.providers.base import ChatTurn, Message, ToolResults
 from app.agent.providers.fake_provider import Step, text_turn, tool_turn
 from app.agent.providers.offline_provider import fmt_usd
 
 GOLDEN_PATH = Path(__file__).resolve().parents[2] / "evals" / "golden_questions.toml"
 CHECKS = ("count", "usd", "pct", "number", "text")
+TOOLS = ("query_tape", "explain_slot", "none")
 MAX_RELATIVE_ERROR = Decimal("0.05")
 
 # TECH: a number as a desk writes it: optional $, digits with commas, optional
@@ -65,6 +67,14 @@ class GoldenQuestion:
       truth_sql   computes the true answer: the first column of the first row
       sql         the reference query a good agent might write (used by the Fake)
       answer      the Fake's answer template; {value} is the reference result
+      stage       the desk stage the question needs (agent/stages.py, Step 5c):
+                  asked only once that stage has run; "tape" is always run
+      before      a stage that must NOT have run yet: the question checks the agent
+                  says so (e.g. slots before Product Slotting has run)
+      tool        the Fake's tool: query_tape (runs sql), explain_slot (for loan_id)
+                  or none (answers straight away)
+      loan_id     explain_slot's input
+      value_key   which field of explain_slot's result fills {value}
     """
     id: str
     question: str
@@ -72,6 +82,15 @@ class GoldenQuestion:
     truth_sql: str
     sql: str
     answer: str
+    stage: str = TAPE
+    before: str | None = None
+    tool: str = "query_tape"
+    loan_id: str = ""
+    value_key: str = ""
+
+    def applies(self, done: frozenset[str]) -> bool:
+        """BUSINESS: ask it only at the stage of the desk it is about."""
+        return self.stage in done and (self.before is None or self.before not in done)
 
 
 def load_golden(path: Path = GOLDEN_PATH) -> list[GoldenQuestion]:
@@ -82,6 +101,10 @@ def load_golden(path: Path = GOLDEN_PATH) -> list[GoldenQuestion]:
     for q in questions:
         if q.check not in CHECKS:
             raise ValueError(f"Golden question {q.id}: check must be one of {CHECKS}")
+        if q.stage not in STAGE_IDS or (q.before is not None and q.before not in STAGE_IDS):
+            raise ValueError(f"Golden question {q.id}: stage and before must be stages {STAGE_IDS}")
+        if q.tool not in TOOLS:
+            raise ValueError(f"Golden question {q.id}: tool must be one of {TOOLS}")
     if len({q.id for q in questions}) != len(questions):
         raise ValueError("Golden question ids must be unique")
     return questions
@@ -153,17 +176,25 @@ def format_value(value: Any, check: str) -> str:
 
 
 def fake_script(q: GoldenQuestion) -> list[Step]:
-    """The Fake's two turns: run the reference query, then answer from its result.
+    """The Fake's turns: run the reference tool, then answer from its result.
 
     TECH: the second step is a function of the messages, so the answer uses the
-      number the tool really returned, not one written into the test.
+      value the tool really returned, not one written into the test. tool "none"
+      answers at once (a question the agent must decline at this stage).
     """
+    if q.tool == "none":
+        return [text_turn(q.answer)]
+
     def answer(messages: list[Message]) -> ChatTurn:
         result = next(r for m in reversed(messages) if isinstance(m, ToolResults) for r in m.results)
         if result.is_error:
             return text_turn(f"Could not answer: {result.content}")
+        if q.tool == "explain_slot":
+            return text_turn(q.answer.format(value=result.data[q.value_key]))
         first_row = result.data["rows"][0]
         return text_turn(q.answer.format(value=format_value(next(iter(first_row.values())), q.check)))
+    if q.tool == "explain_slot":
+        return [tool_turn(("explain_slot", {"loan_id": q.loan_id})), answer]
     return [tool_turn(("query_tape", {"title": q.id, "sql": q.sql})), answer]
 
 
@@ -183,14 +214,16 @@ class GoldenResult:
 
 
 def run_golden(ask: Callable[[GoldenQuestion], Iterator[Event]], questions: list[GoldenQuestion],
-               con: duckdb.DuckDBPyConnection) -> list[GoldenResult]:
-    """Ask every question, grade every answer.
+               con: duckdb.DuckDBPyConnection, stages: frozenset[str] = frozenset({TAPE})) -> list[GoldenResult]:
+    """Ask every question that fits the desk's stage, grade every answer.
 
     TECH: ask(q) returns the orchestrator's events for q; the caller decides which
-      provider answers (Fake in CI, a live model in the eval script).
+      provider answers (Fake in CI, a live model in the eval script). con is the
+      agent's own copy (it has every finished stage's columns); stages are the ones
+      it holds, so only questions that apply now are asked (GoldenQuestion.applies).
     """
     results = []
-    for q in questions:
+    for q in [q for q in questions if q.applies(stages)]:
         started = time.monotonic()
         events = list(ask(q))
         answer = next(e.data for e in events if e.type == "answer")

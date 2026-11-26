@@ -128,22 +128,33 @@ def test_ask_routes_are_in_the_openapi_spec(client: TestClient) -> None:
 # Golden questions: the release gate
 # =============================================================================
 
-def test_every_golden_question_passes_on_the_fake(make_service: Any, loan_store: main.LoanStore) -> None:  # noqa: F811
-    """BUSINESS: every golden question's answer contains the tape's true number.
+def test_every_golden_question_passes_on_the_fake(make_service: Any) -> None:
+    """BUSINESS: every golden question's answer contains the tape's true number, at
+      the stage of the desk it is about (Step 5c): the tape's questions and "slots
+      before Product Slotting has run" on the bare tape, then the six slotting
+      questions once the desk has run slotting.
 
-    TECH: the Fake runs each question's reference SQL through the real guardrails
-      and tools, then answers from the real result; truth_sql is computed
-      separately on the grid's store. About 20 questions, as in content/agent.md.
+    TECH: the Fake runs each question's reference tool (SQL through the real
+      guardrails, or explain_slot), then answers from the real result; truth_sql is
+      computed separately, on the agent's own copy, which holds every finished
+      stage's columns. About 20 tape questions, as in content/agent.md.
     """
-    service = make_service(providers={"anthropic": FakeProvider()})
+    service = make_service(providers={"anthropic": FakeProvider()}, stages=True)
     questions = load_golden()
 
     def ask(q: GoldenQuestion) -> Any:
         service.orchestrator.providers["anthropic"] = FakeProvider(fake_script(q))
         return service.orchestrator.ask(q.question, "golden")
-    results = run_golden(ask, questions, loan_store.con)
+    bare = run_golden(ask, questions, service.tools.con, service.tape.stages)
+    service.tape.add_stage("slotting")
+    slotted = run_golden(ask, [q for q in questions if q.stage == "slotting"], service.tools.con,
+                         service.tape.stages)
+    results = bare + slotted
     failed = [(r.id, r.expected, r.answer) for r in results if not r.passed]
-    assert 18 <= len(results) <= 25 and failed == []
+    assert failed == []
+    assert 18 <= len(bare) - 1 <= 25 and "slots_before_run" in [r.id for r in bare]
+    assert sorted(r.id for r in slotted) == sorted(
+        ["slotted_count", "umbs_upb", "llb_85k", "ny_story", "not_slotted_delinquent", "why_not_slotted"])
     assert all(r.fallback_reason is None and r.provider == "fake" for r in results)
 
 

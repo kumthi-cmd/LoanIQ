@@ -4,6 +4,7 @@ Where it sits:
     screen (Step 4b) -> [POST /api/ask] -> orchestrator events -> SSE stream
     screen -> [GET /api/ask/queries/{id}] -> QueryStore -> every row of one result
     screen -> [GET /api/ask/status] -> is the model answering, or built-in rules?
+                                      and which desk stages the agent knows (Step 5c)
     loan drawer -> [GET /api/ask/loans/{loan_id}] -> the agent's get_loan tool
     saved query -> [POST /api/ask/rerun] -> the agent's query_tape gate, no model
 
@@ -35,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, Field
 
+from app.agent import stages as stage_info
 from app.agent.budget import visitor_key
 from app.agent.query_store import StoredQuery
 from app.agent.service import AskService
@@ -119,6 +121,18 @@ def query_result(query_id: str, service: Service) -> StoredQuery:
 # Step 4b: status, the loan drawer and saved-query reruns
 # =============================================================================
 
+class AgentStage(BaseModel):
+    """One desk stage and whether Ask the Tape knows it.
+
+    BUSINESS: the screen's scope strip: "Knows: Tape ✓ · Slotting ✓ · BestEx –".
+    TECH: id from agent/stages.py; step is the roadmap step; state is "known" (the
+      desk has run it), "not_run" (built, not run on this tape) or "planned".
+    """
+    id: str
+    step: int
+    state: str
+
+
 class AskStatus(BaseModel):
     """Who answers this visitor's next typed question.
 
@@ -131,15 +145,19 @@ class AskStatus(BaseModel):
     mode: str
     reason: str | None = None
     notice: str | None = None
+    stages: list[AgentStage] = []
 
 
 @router.get("/api/ask/status", response_model=AskStatus)
 def ask_status(request: Request, service: Service) -> AskStatus:
-    """BUSINESS: is the AI model answering right now? TECH: no model call, no cost."""
+    """BUSINESS: is the AI model answering right now, and which stages does it know?
+    TECH: no model call, no cost."""
     reason = service.orchestrator.status(visitor_of(request, service))
+    done = service.tools.stages
+    stages = [AgentStage(id=s.id, step=s.step, state=stage_info.stage_state(s, done)) for s in stage_info.STAGES]
     if reason is None:
-        return AskStatus(mode="model")
-    return AskStatus(mode="offline", reason=reason, notice=service.orchestrator.notice(reason))
+        return AskStatus(mode="model", stages=stages)
+    return AskStatus(mode="offline", reason=reason, notice=service.orchestrator.notice(reason), stages=stages)
 
 
 class LoanRecord(BaseModel):
