@@ -80,7 +80,8 @@ One entry per step, newest first. Copy the template for each new step.
     fallbacks. All seven slot questions passed. The miss, `ltv_over_125` in both runs,
     was right but written in words ("Twenty loans"), which the grader cannot read; I
     added a prompt rule to write every number in digits instead of loosening the
-    grader. The rule is not yet measured live.
+    grader. The rerun with the rule (`docs/evals/2026-11-25-5c-digits.json`): 28 of 28,
+    $0.0075 in all, $0.00027 a question, 3.0 s on average, no fallbacks.
 - My take:
 
 ## Step 5b, Product Slotting on the Loan Tape (2026-11-25)

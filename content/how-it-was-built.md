@@ -59,7 +59,8 @@ $0.00028 a question. Every slot question passed, including "why isn't LN79962194
 slotted?", answered from the loan's slot card. The one miss was right but written in
 words: "Twenty loans have an LTV over 125%", which the grader, reading digits only,
 could not check. The fix was a one-line rule in the agent's prompt (write every number
-in digits), not a looser grader.
+in digits), not a looser grader. The rerun got all 28 right, at $0.00027 a question
+(`docs/evals/2026-11-25-5c-digits.json`).
 
 ## By the numbers
 Every time all the test layers pass on my PC, `test.ps1` counts the tests in each layer,
