@@ -20,12 +20,16 @@ TECH:
     parsing. The SQL kept for later use is sqlglot's re-rendering of the checked
     tree, never the raw text. Tiered stories ({cap} placeholder plus a tiers list)
     expand into one story per cap, named like LLB_85K.
+    Each story may carry its pay-up (payup_32nds, Step 6a): one number, or one per
+    tier for a tiered story. Pricing (app/pricing/) refuses to start if a story has
+    none; the tape generator and slotting ignore it.
 """
 
 from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -47,7 +51,7 @@ PREDICATE_ROOTS: tuple[type[exp.Expression], ...] = (
     exp.And, exp.Or, exp.Not, exp.Paren,
     exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE, exp.In, exp.Between,
 )
-STORY_KEYS = {"name", "products", "where", "tiers"}
+STORY_KEYS = {"name", "products", "where", "tiers", "payup_32nds"}
 CAP = "{cap}"
 
 
@@ -67,6 +71,9 @@ class Story:
     TECH: `where` is sqlglot's rendering of the validated tree (DuckDB dialect),
       safe to place inside a WHERE clause. `family` is the config name (LLB);
       `name` adds the cap for tiered stories (LLB_85K). `cap` is None if untiered.
+      `payup_32nds` is the story's full pay-up over TBA at premium coupons, in
+      32nds of a point (Decimal, exact; None when the config gives none). Pricing
+      scales it down at lower coupons (app/pricing/model.py).
     """
 
     name: str
@@ -74,6 +81,7 @@ class Story:
     products: tuple[str, ...]
     where: str
     cap: float | None = None
+    payup_32nds: Decimal | None = None
 
 
 def validate_where(text: str, columns: Sequence[str], story: str, kind: str = "Story") -> str:
@@ -146,6 +154,38 @@ def check_entry(entry: dict[str, Any], products: Sequence[str] | None) -> None:
     if tiers is not None and (not tiers or any(b <= a for a, b in zip(tiers, tiers[1:]))
                               or tiers[0] <= 0):
         raise ValueError(f"Story {name}: tiers must be positive and strictly increasing")
+    if "payup_32nds" in entry:
+        check_payups(name, entry["payup_32nds"], tiers)
+
+
+def payup_number(name: str, value: Any) -> Decimal:
+    """One pay-up from the config as an exact Decimal, in 32nds; must be >= 0.
+
+    TECH: Decimal(str(x)) keeps 12.5 exactly 12.5 (no binary float residue);
+      bool is refused because TOML `true` would otherwise count as 1.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise ValueError(f"Story {name}: payup_32nds must be numbers of 32nds, 0 or more")
+    return Decimal(str(value))
+
+
+def check_payups(name: str, payups: Any, tiers: list[Any] | None) -> None:
+    """Shape checks on payup_32nds: one number, or one per tier, never rising.
+
+    BUSINESS: a tier's cap is the largest balance allowed, so a higher cap is a
+      looser story (an $85K loan also fits LLB_110K). A looser tier cannot be
+      worth more to an investor than a tighter one, so pay-ups must not rise as
+      the cap rises. A typo like [64, 84, 40] stops the load.
+    TECH: raises ValueError naming the story.
+    """
+    if tiers is None:
+        payup_number(name, payups)
+        return
+    if not isinstance(payups, list) or len(payups) != len(tiers):
+        raise ValueError(f"Story {name}: payup_32nds needs one number per tier ({len(tiers)})")
+    values = [payup_number(name, p) for p in payups]
+    if any(b > a for a, b in zip(values, values[1:])):
+        raise ValueError(f"Story {name}: payup_32nds must not rise as the tier cap rises")
 
 
 def expand_story(entry: dict[str, Any], columns: Sequence[str],
@@ -158,13 +198,20 @@ def expand_story(entry: dict[str, Any], columns: Sequence[str],
     """
     check_entry(entry, products)
     family, prods = entry["name"], tuple(entry["products"])
+    payups = entry.get("payup_32nds")
     if "tiers" not in entry:
-        return [Story(family, family, prods, validate_where(entry["where"], columns, family))]
+        payup = None if payups is None else payup_number(family, payups)
+        return [Story(family, family, prods, validate_where(entry["where"], columns, family),
+                      payup_32nds=payup)]
+    # TECH: one pay-up per tier, matched by position (check_payups made sure the
+    #   lengths agree); None for every tier when the config gives none.
+    tier_payups = [None] * len(entry["tiers"]) if payups is None else         [payup_number(family, p) for p in payups]
     out = []
-    for cap in entry["tiers"]:
+    for cap, payup in zip(entry["tiers"], tier_payups):
         name = f"{family}_{cap_label(cap)}"
         text = entry["where"].replace(CAP, f"{cap:g}")
-        out.append(Story(name, family, prods, validate_where(text, columns, name), float(cap)))
+        out.append(Story(name, family, prods, validate_where(text, columns, name), float(cap),
+                         payup))
     return out
 
 

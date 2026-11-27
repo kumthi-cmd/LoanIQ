@@ -269,6 +269,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/prices/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Price Grid
+         * @description BUSINESS: today's illustrative price file.
+         *
+         *     TECH: the first call of a New York day fetches Treasury's curve (up to the
+         *       timeout); later calls reuse it. 503 if the configured source is a stub.
+         */
+        get: operations["price_grid_api_prices_grid_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/slotting/run": {
         parameters: {
             query?: never;
@@ -548,6 +571,16 @@ export interface components {
             total: number;
         };
         /**
+         * MonthPrices
+         * @description One delivery month's prices for a product. TECH: 6a sends "Current" only.
+         */
+        MonthPrices: {
+            /** Cells */
+            cells: components["schemas"]["PriceCellOut"][];
+            /** Month */
+            month: string;
+        };
+        /**
          * NotSlotted
          * @description Why a loan is not slotted. TECH: reason is the code; short for the grid, text for the card.
          */
@@ -558,6 +591,119 @@ export interface components {
             short: string;
             /** Text */
             text: string;
+        };
+        /**
+         * PayupCell
+         * @description One story's pay-up at one coupon. BUSINESS: in 32nds, and as "0-24+".
+         */
+        PayupCell: {
+            /** Coupon */
+            coupon: string;
+            /** Payup 32Nds */
+            payup_32nds: string;
+            /** Payup Text */
+            payup_text: string;
+        };
+        /**
+         * PayupRowOut
+         * @description One story on one product. BUSINESS: full_32nds is the premium-coupon pay-up.
+         */
+        PayupRowOut: {
+            /** Cells */
+            cells: components["schemas"]["PayupCell"][];
+            /** Family */
+            family: string;
+            /** Full 32Nds */
+            full_32nds: string;
+            /** Product */
+            product: string;
+            /** Story */
+            story: string;
+            /** Story Label */
+            story_label: string;
+        };
+        /**
+         * PriceCellOut
+         * @description One coupon's TBA price. BUSINESS: coupon percent; price points; "101-23+".
+         */
+        PriceCellOut: {
+            /** Coupon */
+            coupon: string;
+            /** Model Only */
+            model_only: boolean;
+            /** Price */
+            price: string;
+            /** Price 32Nds */
+            price_32nds: string;
+        };
+        /**
+         * PriceGrid
+         * @description GET /api/prices/grid.
+         *
+         *     BUSINESS: as_of is the Treasury curve's date; label is the line every price
+         *       screen shows; curve_status says whether the curve was fetched today (live),
+         *       kept from an earlier fetch because Treasury was down (cached), or the
+         *       bundled sample (fixture). illustrative is always true.
+         */
+        PriceGrid: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Coupons */
+            coupons: string[];
+            /** Curve Fetched At */
+            curve_fetched_at: string | null;
+            /**
+             * Curve Status
+             * @enum {string}
+             */
+            curve_status: "live" | "cached" | "fixture";
+            /** Illustrative */
+            illustrative: boolean;
+            /** Label */
+            label: string;
+            /** Months */
+            months: string[];
+            /** Payups */
+            payups: components["schemas"]["PayupRowOut"][];
+            /** Price Source */
+            price_source: string;
+            /** Products */
+            products: components["schemas"]["ProductRow"][];
+            /** Sources */
+            sources: components["schemas"]["SourceOut"][];
+        };
+        /**
+         * ProductRow
+         * @description One price-grid row.
+         *
+         *     BUSINESS: current_coupon_pct = anchor_yield_pct + spread_pct, the coupon that
+         *       trades at par today. traded_low_pct and traded_high_pct bound the actively
+         *       traded coupons; cells outside are model_only.
+         */
+        ProductRow: {
+            /** Agency */
+            agency: string;
+            /** Anchor Tenor */
+            anchor_tenor: string;
+            /** Anchor Yield Pct */
+            anchor_yield_pct: string;
+            /** Current Coupon Pct */
+            current_coupon_pct: string;
+            /** Months */
+            months: components["schemas"]["MonthPrices"][];
+            /** Name */
+            name: string;
+            /** Spread Pct */
+            spread_pct: string;
+            /** Term */
+            term: string;
+            /** Traded High Pct */
+            traded_high_pct: string;
+            /** Traded Low Pct */
+            traded_low_pct: string;
         };
         /**
          * ProgramSlice
@@ -699,6 +845,18 @@ export interface components {
             };
             /** With Story */
             with_story: number;
+        };
+        /**
+         * SourceOut
+         * @description Where a number comes from. TECH: url is None for LoanIQ's own model.
+         */
+        SourceOut: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string | null;
+            /** Used For */
+            used_for: string;
         };
         /**
          * StatusCount
@@ -1153,6 +1311,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    price_grid_api_prices_grid_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceGrid"];
                 };
             };
         };

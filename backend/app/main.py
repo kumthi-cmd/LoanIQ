@@ -46,6 +46,10 @@ TECH:
       (app.state.ask) and its routes (POST /api/ask, GET /api/ask/queries/{id}) are
       added from app/agent/api.py with include_router. Its summarize_tape tool uses
       tape_summary() below, so the agent quotes the same numbers as the screen.
+    - The price file (Step 6a): config/pricing.toml is checked at start-up against
+      the slotting rules, and app/pricing/ builds app.state.prices. Nothing is
+      fetched at start-up: the first GET /api/prices/grid of each New York day
+      fetches Treasury's curve (app/pricing/treasury.py).
     Limits (page sizes), panel settings (note-rate buckets, status order) and the
     default columns both screens show live in app/config/api.toml; column labels in content/loan-columns.json; chip labels in
     content/desk-questions.json; the agent's models and limits in app/config/llm.toml.
@@ -74,8 +78,12 @@ from app.agent.service import build_ask_service, close_ask_service
 from app.desk_questions import DESK_QUESTIONS_PATH, DeskQuestion, load_desk_questions
 from app.loan_query import ColumnTypes, QueryError, column_kind, parse_filter, parse_sort, select_list
 from app import slotting_api
+from app.pricing import api as pricing_api
+from app.pricing.config import load_pricing_config
+from app.pricing.sources import build_price_source
+from app.pricing.treasury import Fetch
 from app.slotting import (GRID_COLUMNS, GRID_VIEW, SlottingRules, add_agent_columns, agent_column_labels,
-                          load_slotting_rules, load_slotting_words)
+                          load_slotting_rules, load_slotting_words, story_labels)
 from app.slotting_api import SlottingService
 from app.tape_panels import (Breakdowns, QuestionCount, TapeInfo, bucket_spec, fetch_breakdowns,
                              fetch_question_counts, fetch_tape_info)
@@ -459,10 +467,25 @@ def spa_file(spa_dir: Path, path: str) -> Path | None:
     return index
 
 
+def build_pricing(rules: SlottingRules | None, slotting_words: dict[str, Any],
+                  fetch: Fetch | None) -> pricing_api.PricingService | None:
+    """The price file service (Step 6a), or None in a hand-built store with no rules.
+
+    BUSINESS: the price grid uses the same story labels as the Loan Tape.
+    TECH: load_pricing_config raises on a bad setting, which stops the app.
+    """
+    if rules is None:
+        return None
+    cfg = load_pricing_config(rules)
+    return pricing_api.PricingService(build_price_source(cfg, fetch), pricing_api.load_pricing_words(),
+                                      story_labels(rules, slotting_words))
+
+
 def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
                questions_path: Path = DESK_QUESTIONS_PATH,
                agent_config: AgentConfig | None = None,
-               ask_providers: dict[str, LLMProvider] | None = None) -> FastAPI:
+               ask_providers: dict[str, LLMProvider] | None = None,
+               price_fetch: Fetch | None = None) -> FastAPI:
     """Build the FastAPI app that serves the tape in data_dir and the SPA in spa_dir.
 
     TECH: the lifespan loads the store before the first request and closes DuckDB
@@ -471,6 +494,8 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
       questions_path lets a test load a deliberately broken desk-question config.
       agent_config and ask_providers let tests run Ask the Tape on their own limits
       and on a FakeProvider; by default llm.toml and the real adapters are used.
+      price_fetch replaces the Treasury download (url -> XML bytes) in tests, so
+      they never touch the network.
     """
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -496,6 +521,7 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
             ask_tape.add_stage_async("slotting")
 
         app.state.slotting = SlottingService(store.con, store.slotting, words, on_publish=published)
+        app.state.prices = build_pricing(store.slotting, words, price_fetch)
         yield
         close_ask_service(app.state.ask)
         store.con.close()
@@ -564,10 +590,12 @@ def create_app(data_dir: Path = gen.DEFAULT_OUT_DIR, spa_dir: Path = SPA_DIR,
         """BUSINESS: "41 fields · 6 fictional sellers" under the screen title."""
         return fetch_tape_info(store.con, len(store.columns))
 
-    # BUSINESS: Ask the Tape (Step 4a) and Product Slotting (Step 5a).
+    # BUSINESS: Ask the Tape (Step 4a), Product Slotting (Step 5a) and the price
+    #   file (Step 6a).
     # TECH: before the catch-all below.
     app.include_router(ask_api.router)
     app.include_router(slotting_api.router)
+    app.include_router(pricing_api.router)
 
     # TECH: registered last, so every /api route above wins first. "{path:path}" is a
     #   FastAPI path parameter that matches the rest of the URL, slashes included.
