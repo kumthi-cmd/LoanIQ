@@ -5,6 +5,10 @@ numpy==2.5.5         # TECH: seeded random numbers and fast array formulas
 pyarrow==26.0.1      # TECH: writes Parquet with exact Decimal money columns
 duckdb==2.0.0        # TECH: in-memory SQL over the Parquet tape (Step 1 API)
 sqlglot==30.33.0     # TECH: parses spec-story rules so only safe SQL is allowed
+tzdata==2026.6       # TECH: time zone data, so "America/New_York" works on Windows
+                     #   and in a slim Linux image; the price file's day is New
+                     #   York's (Step 6a). pandas also pulls it in; pinned here
+                     #   because pricing relies on it directly.
 fastapi==0.165.0     # TECH: the loan API (Step 1 API)
 uvicorn==0.54.0      # TECH: the web server that runs FastAPI
 anthropic==2.13.0    # TECH: Claude, the live Ask the Tape model (Step 4a)

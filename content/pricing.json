@@ -1,0 +1,20 @@
+{
+  "_comment": "Visitor-facing words for the price file (Step 6a), read by backend/app/pricing/api.py. {as_of} is the Treasury curve's date (YYYY-MM-DD). One label per curve status: live = fetched today; cached = Treasury unreachable, last curve kept; fixture = never reached Treasury, bundled sample curve. Settings live in backend/app/config/pricing.toml; sources in docs/public-sources.md.",
+  "label": {
+    "live": "Illustrative, as of {as_of}",
+    "cached": "Illustrative, as of {as_of}. Treasury could not be reached, so this uses the last curve LoanIQ fetched.",
+    "fixture": "Illustrative, as of {as_of}. Treasury could not be reached, so this uses a bundled sample curve, not today's."
+  },
+  "sources": [
+    {
+      "name": "U.S. Treasury, Daily Treasury Par Yield Curve Rates",
+      "url": "https://home.treasury.gov/treasury-daily-interest-rate-xml-feed",
+      "used_for": "The daily anchor: each product's current coupon starts from a Treasury par yield."
+    },
+    {
+      "name": "LoanIQ illustrative pricing model",
+      "url": null,
+      "used_for": "Spreads, durations, the prepayment cap, traded bands and the pay-up S-curve. Illustrative; no public source is recorded for these numbers."
+    }
+  ]
+}

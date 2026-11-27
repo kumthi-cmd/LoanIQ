@@ -12,6 +12,7 @@ TECH: coverage is checked the way Step 5 will use the rules: by running each
 from __future__ import annotations
 
 import copy
+from decimal import Decimal
 from pathlib import Path
 
 import duckdb
@@ -154,8 +155,10 @@ def test_each_llb_band_meets_minimum_in_duckdb(parquet: Path) -> None:
 
 def test_new_tier_is_one_number(tmp_path: Path) -> None:
     """BUSINESS: adding a $300K tier to the config gives LLB_300K its own loans,
-    with no code change."""
+    with no code change. Since Step 6a a tier also carries its pay-up, so the new
+    tier is its cap plus one pay-up number (6/32, added after LLB_275K's 8)."""
     text = SPEC_STORIES_PATH.read_text(encoding="utf-8").replace("275000]", "275000, 300000]")
+    text = text.replace("10, 8]", "10, 8, 6]")
     stories = load_spec_stories(gen.COLUMNS, path=write_stories(tmp_path, text))
     new = [s for s in stories if s.name == "LLB_300K"]
     assert len(new) == 1 and new[0].where == "orig_upb <= 300000"
@@ -181,3 +184,48 @@ def test_low_fico_story_matches_pandas(parquet: Path) -> None:
     df = pd.read_parquet(parquet)
     expected = int((df["product"].isin(story.products) & (df["fico"] < 700)).sum())
     assert count_story(parquet, story) == expected
+
+
+# -----------------------------------------------------------------------------
+# Pay-ups (Step 6a)
+# -----------------------------------------------------------------------------
+
+def test_payups_load_as_exact_32nds() -> None:
+    """BUSINESS: each story carries its full pay-up in 32nds: LLB 85K 64/32 (2
+    points), down to LLB 275K 8/32; NY 12, PR 20, Low FICO 8. Illustrative.
+    TECH: Decimal, so 12.5 would stay exactly 12.5."""
+    payups = {s.name: s.payup_32nds for s in STORIES}
+    assert payups["LLB_85K"] == Decimal(64) and payups["LLB_275K"] == Decimal(8)
+    assert (payups["NY"], payups["PR"], payups["LOW_FICO"]) == (12, 20, 8)
+    assert all(isinstance(v, Decimal) for v in payups.values())
+
+
+@pytest.mark.parametrize("payups, reason", [
+    ("[64, 48]", "one number per tier"),       # two pay-ups for three tiers
+    ("[40, 48, 64]", "must not rise"),        # a looser tier paying more
+    ("[64, -1, 0]", "0 or more"),
+    ("[64, true, 0]", "0 or more"),           # TOML true is not a number of 32nds
+    ("12", "one number per tier"),            # a tiered story needs a list
+])
+def test_bad_tier_payups_are_rejected(tmp_path: Path, payups: str, reason: str) -> None:
+    """BUSINESS: a pay-up typo stops the load instead of mispricing a tier."""
+    body = ('name = "A"\nproducts = ["30Y Fixed"]\nwhere = "orig_upb <= {cap}"\n'
+            f'tiers = [85000, 110000, 150000]\npayup_32nds = {payups}')
+    with pytest.raises(ValueError, match=reason):
+        load_spec_stories(gen.COLUMNS, path=write_stories(tmp_path, f"[[story]]\n{body}\n"))
+
+
+def test_untiered_payup_must_be_one_number(tmp_path: Path) -> None:
+    """TECH: an untiered story gets one number, not a list."""
+    body = 'name = "A"\nproducts = ["30Y Fixed"]\nwhere = "fico < 700"\npayup_32nds = [8]'
+    with pytest.raises(ValueError, match="0 or more"):
+        load_spec_stories(gen.COLUMNS, path=write_stories(tmp_path, f"[[story]]\n{body}\n"))
+
+
+def test_payup_is_optional_for_the_loader(tmp_path: Path) -> None:
+    """TECH: the tape generator and slotting do not need pay-ups, so the loader
+    accepts a story without one (None); pricing is what refuses it
+    (tests/test_pricing_model.py)."""
+    body = 'name = "A"\nproducts = ["30Y Fixed"]\nwhere = "fico < 700"'
+    story = load_spec_stories(gen.COLUMNS, path=write_stories(tmp_path, f"[[story]]\n{body}\n"))[0]
+    assert story.payup_32nds is None

@@ -400,6 +400,28 @@
         "title": "LoansPage",
         "type": "object"
       },
+      "MonthPrices": {
+        "description": "One delivery month's prices for a product. TECH: 6a sends \"Current\" only.",
+        "properties": {
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/PriceCellOut"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "cells"
+        ],
+        "title": "MonthPrices",
+        "type": "object"
+      },
       "NotSlotted": {
         "description": "Why a loan is not slotted. TECH: reason is the code; short for the grid, text for the card.",
         "properties": {
@@ -422,6 +444,256 @@
           "text"
         ],
         "title": "NotSlotted",
+        "type": "object"
+      },
+      "PayupCell": {
+        "description": "One story's pay-up at one coupon. BUSINESS: in 32nds, and as \"0-24+\".",
+        "properties": {
+          "coupon": {
+            "title": "Coupon",
+            "type": "string"
+          },
+          "payup_32nds": {
+            "title": "Payup 32Nds",
+            "type": "string"
+          },
+          "payup_text": {
+            "title": "Payup Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coupon",
+          "payup_32nds",
+          "payup_text"
+        ],
+        "title": "PayupCell",
+        "type": "object"
+      },
+      "PayupRowOut": {
+        "description": "One story on one product. BUSINESS: full_32nds is the premium-coupon pay-up.",
+        "properties": {
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/PayupCell"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "full_32nds": {
+            "title": "Full 32Nds",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "story": {
+            "title": "Story",
+            "type": "string"
+          },
+          "story_label": {
+            "title": "Story Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product",
+          "story",
+          "story_label",
+          "family",
+          "full_32nds",
+          "cells"
+        ],
+        "title": "PayupRowOut",
+        "type": "object"
+      },
+      "PriceCellOut": {
+        "description": "One coupon's TBA price. BUSINESS: coupon percent; price points; \"101-23+\".",
+        "properties": {
+          "coupon": {
+            "title": "Coupon",
+            "type": "string"
+          },
+          "model_only": {
+            "title": "Model Only",
+            "type": "boolean"
+          },
+          "price": {
+            "title": "Price",
+            "type": "string"
+          },
+          "price_32nds": {
+            "title": "Price 32Nds",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coupon",
+          "price",
+          "price_32nds",
+          "model_only"
+        ],
+        "title": "PriceCellOut",
+        "type": "object"
+      },
+      "PriceGrid": {
+        "description": "GET /api/prices/grid.\n\nBUSINESS: as_of is the Treasury curve's date; label is the line every price\n  screen shows; curve_status says whether the curve was fetched today (live),\n  kept from an earlier fetch because Treasury was down (cached), or the\n  bundled sample (fixture). illustrative is always true.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "coupons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Coupons",
+            "type": "array"
+          },
+          "curve_fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curve Fetched At"
+          },
+          "curve_status": {
+            "enum": [
+              "live",
+              "cached",
+              "fixture"
+            ],
+            "title": "Curve Status",
+            "type": "string"
+          },
+          "illustrative": {
+            "title": "Illustrative",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "payups": {
+            "items": {
+              "$ref": "#/components/schemas/PayupRowOut"
+            },
+            "title": "Payups",
+            "type": "array"
+          },
+          "price_source": {
+            "title": "Price Source",
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ProductRow"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "label",
+          "curve_status",
+          "curve_fetched_at",
+          "price_source",
+          "illustrative",
+          "months",
+          "coupons",
+          "products",
+          "payups",
+          "sources"
+        ],
+        "title": "PriceGrid",
+        "type": "object"
+      },
+      "ProductRow": {
+        "description": "One price-grid row.\n\nBUSINESS: current_coupon_pct = anchor_yield_pct + spread_pct, the coupon that\n  trades at par today. traded_low_pct and traded_high_pct bound the actively\n  traded coupons; cells outside are model_only.",
+        "properties": {
+          "agency": {
+            "title": "Agency",
+            "type": "string"
+          },
+          "anchor_tenor": {
+            "title": "Anchor Tenor",
+            "type": "string"
+          },
+          "anchor_yield_pct": {
+            "title": "Anchor Yield Pct",
+            "type": "string"
+          },
+          "current_coupon_pct": {
+            "title": "Current Coupon Pct",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/MonthPrices"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "spread_pct": {
+            "title": "Spread Pct",
+            "type": "string"
+          },
+          "term": {
+            "title": "Term",
+            "type": "string"
+          },
+          "traded_high_pct": {
+            "title": "Traded High Pct",
+            "type": "string"
+          },
+          "traded_low_pct": {
+            "title": "Traded Low Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "agency",
+          "term",
+          "anchor_tenor",
+          "anchor_yield_pct",
+          "spread_pct",
+          "current_coupon_pct",
+          "traded_low_pct",
+          "traded_high_pct",
+          "months"
+        ],
+        "title": "ProductRow",
         "type": "object"
       },
       "ProgramSlice": {
@@ -697,6 +969,37 @@
           "coupons"
         ],
         "title": "SlottingTotals",
+        "type": "object"
+      },
+      "SourceOut": {
+        "description": "Where a number comes from. TECH: url is None for LoanIQ's own model.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "used_for": {
+            "title": "Used For",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "used_for"
+        ],
+        "title": "SourceOut",
         "type": "object"
       },
       "StatusCount": {
@@ -1430,6 +1733,25 @@
           }
         },
         "summary": "Loan Slots"
+      }
+    },
+    "/api/prices/grid": {
+      "get": {
+        "description": "BUSINESS: today's illustrative price file.\n\nTECH: the first call of a New York day fetches Treasury's curve (up to the\n  timeout); later calls reuse it. 503 if the configured source is a stub.",
+        "operationId": "price_grid_api_prices_grid_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceGrid"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Price Grid"
       }
     },
     "/api/slotting/run": {

@@ -1,6 +1,72 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 6a, the price file (back end) (2026-11-27)
+- Built: an illustrative price file at `GET /api/prices/grid`, from free public data
+  (`backend/app/pricing/`, settings in `backend/app/config/pricing.toml`).
+  - The daily anchor is Treasury's Daily Par Yield Curve XML feed, fetched on the
+    first request of each New York day and kept in memory. It uses the latest curve on
+    or before today (on Thanksgiving, Wednesday's), and last month's on the 1st.
+  - If Treasury can't be reached it keeps the last curve; with none, it uses a
+    recorded month (November 2026), and the label says so.
+  - Six rows (UMBS and GNMA II, 30, 20 and 15 years), one "Current" month column, 25
+    coupons from 1.0 to 13.0 on slotting's 0.5 step.
+  - Current coupon = the anchor Treasury yield + a spread. The price is 100 at the
+    current coupon, falls by duration x the gap below it, and flattens above it (the
+    prepayment cap). Exact Decimal, shown in 32nds ("101-23+"); coupons outside each
+    product's traded band are flagged `model_only`.
+  - Spec pay-ups: `payup_32nds` per story and per LLB tier in `spec_stories.toml`,
+    scaled by an S-curve from 0 at discount coupons to the full pay-up at premium
+    coupons.
+  - A `PriceSource` strategy like the LLM provider layer: the model now, a desk's own
+    file and a vendor feed as stubs that answer "not configured".
+- Desk problem it solves: a desk can't run best execution without a price file, and
+  LoanIQ has no paid feed. This gives one that moves with the market every day, says
+  plainly that it is illustrative and as of when, and can be swapped for real prices
+  without changing best execution.
+- My key decisions:
+  - Price from a model anchored to Treasury's free daily curve, with no Freddie Mac
+    sources (FRED's mortgage rate included) and FINRA's TRACE TBA tables only as a
+    manual shape check (free for non-commercial use only).
+  - Six products, one Current month for now (6b adds the rolling calendar), coupons
+    1.0 to 13.0 on slotting's step.
+  - Pay-ups per story and per LLB tier, scaled by an S-curve.
+  - The PriceSource strategy, with file and vendor stubs.
+  - Rebuild the file from the curve plus config, so Render needs no disk.
+- What Claude Code did:
+  - Planned the package, the formulas and the fallbacks; recorded Treasury's
+    November 2026 month, which doubles as the bundled curve and the test fixture.
+  - Wrote the Treasury parser and once-a-day cache (New York day, retry wait after a
+    failure, DOCTYPE and size checks on the XML), the price model, 32nds formatting,
+    the sources and the route, and pinned `tzdata` so the New York time zone works
+    on Windows and in the container.
+  - Added `payup_32nds` to the spec-story loader, with checks: one per tier, never
+    rising as the cap rises.
+  - Could not read the two Fannie Mae LLB papers (HTTP 403), so the pay-up sizes are
+    illustrative and listed under "Rules without a recorded source".
+  - Changed an existing test's setup: `test_new_tier_is_one_number` now adds the new
+    tier's pay-up along with its cap, since each tier needs one; its assertions are
+    unchanged.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`.
+  - Back end: 666 tests (111 new), coverage 99.0%. No test touches the network: a
+    fake feed serves the recorded Treasury month.
+    - `test_pricing_model.py` (67): par at the current coupon, prices rising with
+      coupon and flattening above par, no kink at par, the floor, `model_only` band
+      edges, 32nds both ways, pay-up 0 at a discount coupon and full at a premium,
+      tighter LLB tiers paying more, build time under 50 ms, and bad settings
+      stopping the app.
+    - `test_pricing_treasury.py` (23): parsing, the latest curve on or before today,
+      last month's curve on the 1st, once per New York day, the fallbacks when
+      Treasury is down, the retry wait, and refused XML.
+    - `test_pricing_api.py` (13): the route's shape and label, the labels when
+      Treasury is down, the 503 stubs, and the OpenAPI spec.
+    - `test_spec_stories.py` (8 new): pay-ups load as exact 32nds; bad tier pay-ups
+      are refused.
+  - Front end: 225 Vitest tests (unchanged; API types regenerated). End to end: 32
+    Playwright tests.
+- My take:
+
 ## Step 5c, Ask the Tape's scope grows with the desk (2026-11-25)
 - Built: Ask the Tape now follows the desk's stages: tape (parsing), slotting, best
   execution, optimization, pooling, trading (`backend/app/agent/stages.py`).

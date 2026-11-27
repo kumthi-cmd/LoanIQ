@@ -1,11 +1,11 @@
 # Roadmap
-Current step: Step 5c done (2026-11-25): Ask the Tape's scope grows with the desk.
-The agent knows the tape from the start and each stage once the desk has run it
-(backend/app/agent/stages.py): after a Product Slotting run its read-only copy is rebuilt
-with flat slot columns, it gets a short Slotting prompt section and the explain_slot tool,
-and Ask the Tape shows the stages it knows. Step 5 (5a engine, 5b Loan Tape action, 5c
-agent) is done. Next: Step 6, the price file and best execution on the Loan Tape, which
-plugs into the same stages.
+Current step: Step 6a done (2026-11-27): the price file (back end). An illustrative
+model anchored to Treasury's daily par yield curve gives TBA prices for six products at
+25 coupons and spec pay-ups per story, at `GET /api/prices/grid`
+(`backend/app/pricing/`, `backend/app/config/pricing.toml`). Next: Step 6b, the price
+grid screen with the rolling TBA settlement calendar; then best execution on the Loan
+Tape and its Ask the Tape stage.
+Step 5 (5a engine, 5b Loan Tape action, 5c agent) is done.
 Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
 after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
 1c SPA and loan grid, 1d Loan Tape screen to the design board (panels, desk
@@ -21,7 +21,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns, 4d Agent mark, 4e live eval | 5-7 | 10.5 (4a: 3, 4b: 4, 4c: 1, 4d: 1.5, 4e: 1) |
 | 5 Slotting rules engine on the Loan Tape | Done: 5a engine, 5b Loan Tape action, 5c agent stages | 3-4 | 8 (5a: 3, 5b: 1, 5c: 4) |
-| 6 Price file and best execution on the Loan Tape | Not started | 5-7 | |
+| 6 Price file and best execution on the Loan Tape | In progress: 6a price file (back end) | 5-7 | 6a: to fill in |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
 | 7 Blotter and position monitor | Not started | 6-8 | |
@@ -98,6 +98,17 @@ From Step 5c (Ask the Tape's stages, 2026-11-25):
   prompt file, its tools and golden questions.
 - Results live in memory: a restart forgets slotting and the agent's stages until the
   desk reruns it. A simple Postgres comes with the paid Render plan, before Step 7.
+
+From Step 6a (the price file, 2026-11-27):
+- The Fannie Mae LLB papers (2018, 2023) returned HTTP 403 to automated downloads, so
+  the pay-up sizes in `spec_stories.toml` are illustrative and not read from them.
+  Check them against the papers in a browser and adjust.
+- Glossary entries for current coupon, par, 32nds, pay-up and model-only come with the
+  6b screen, the first place they show.
+- Rolling settlement calendar (more month columns) is 6b; pay-ups are the same for
+  UMBS and GNMA II for now.
+- The first request of a New York day waits for Treasury (up to the 5 s timeout).
+  Warm the cache at start-up in a background thread if that shows on screen.
 
 From Step 5b (Product Slotting on the Loan Tape, 2026-11-25):
 - The board's "NEW" badges on the Slot and Spec Stories headers are not drawn (they

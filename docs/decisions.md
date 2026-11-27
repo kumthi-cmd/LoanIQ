@@ -1,6 +1,41 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-27: Pricing without a paid feed
+Decision (Step 6a): LoanIQ's price file is an illustrative model anchored to free
+public data, not a dealer's or vendor's prices. The anchor is the U.S. Treasury's Daily
+Par Yield Curve (XML feed), fetched on the first request of each New York day and kept
+in memory; the latest curve on or before today is used (weekends and holidays use the
+last business day). If Treasury cannot be reached the last curve fetched is kept, and
+with none a recorded month (`backend/app/pricing/fallback_curve.xml`, November 2026) is
+used; the label says which ("Illustrative, as of <date>", plus a note when Treasury
+was unreachable). A failed fetch is retried after `retry_minutes`, not on every request.
+Each product's current coupon is its anchor tenor's yield plus a spread (30-year pools
+off the 10-year, 20-year off the 7-year, 15-year off the 5-year). The TBA price is 100
+at the current coupon, falls by duration x the gap below it, and above it rises at the
+same slope and flattens toward a premium cap (the prepayment cap). Spec pay-ups are
+each story's full pay-up (`payup_32nds` in `spec_stories.toml`, one per LLB tier) times
+an S-curve (smoothstep) in the gap, exactly 0 at discount coupons and 1 at premium
+coupons. Prices are exact Decimal, rounded to half a 32nd and shown as "101-23+". Cells
+outside each product's traded band are flagged `model_only`. Every setting is in
+`backend/app/config/pricing.toml`; the coupon step is slotting.toml's. Prices come
+through a `PriceSource` strategy like the LLM provider layer: `ModelPriceSource` now,
+`FilePriceSource` (a desk's own file) and `VendorPriceSource` as stubs that answer
+"not configured" (HTTP 503). No Freddie Mac sources are used, including FRED's 30-year
+mortgage rate series. FINRA's TRACE TBA tables are used only as a manual check that the
+grid's shape looks right, never as data in the app, because they are free for
+non-commercial use only.
+Why: LoanIQ is public and has no budget for a market data licence, and every number
+must trace to a public source or be labelled illustrative. Treasury yields are free,
+public domain and published daily, and mortgage rates move with them, so the grid
+moves with the market without claiming to be the market. A price file for any date is
+rebuilt from that date's curve plus the config, so nothing needs a persistent disk on
+Render. The strategy keeps the door open for real prices without changing best
+execution.
+Alternatives considered: a vendor or dealer feed (licensed and paid); FINRA TRACE TBA
+prices as data (non-commercial terms); a static grid in config (would not move with
+the market); FRED's mortgage rate series (a Freddie Mac source, excluded).
+
 ## 2026-11-25: Ask the Tape's scope grows with the desk's stages
 Decision (Step 5c): the agent knows the stages the desk has finished, in its workflow
 order: tape (parsing), slotting, best execution, optimization, pooling, trading

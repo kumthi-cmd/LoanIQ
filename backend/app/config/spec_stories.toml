@@ -17,6 +17,11 @@
 #             docs/domain/loan-tape-schema.md for the column list)
 #   tiers     optional list of caps; `where` must then contain {cap}, and one
 #             story is made per cap. A new tier is one new number here.
+#   payup_32nds  the story's pay-up over TBA at premium coupons, in 32nds of a
+#             point (Step 6a): one number, or one per tier for a tiered story,
+#             never rising as the cap rises. Pricing (app/pricing/model.py) scales
+#             it from 0 at discount coupons up to this full value at premium
+#             coupons. Required by pricing; the S-curve lives in pricing.toml.
 #   Every `where` is treated as code, not trusted text: app/spec_stories.py
 #   parses it with sqlglot when the config loads and allows only tape columns,
 #   comparisons (= <> < <= > >=), AND / OR / NOT, IN, BETWEEN, parentheses and
@@ -33,6 +38,15 @@ name = "LLB"
 products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
 where = "orig_upb <= {cap}"
 tiers = [85000, 110000, 125000, 150000, 175000, 200000, 225000, 250000, 275000]
+# BUSINESS: pay-up per tier, in 32nds at a premium coupon, matched to `tiers` by
+#   position: LLB_85K 64/32 (2 points) down to LLB_275K 8/32. Tighter tiers pay
+#   more because smaller loans prepay more slowly (Fannie Mae, "Specified Pay-ups
+#   in Pricing & Execution - Whole Loan", 2018, and "Low Balance Lending
+#   Economics", 2023; docs/public-sources.md).
+#   ILLUSTRATIVE: the sizes are not read from those papers (their PDFs could not
+#   be retrieved when this was written), so they are listed under "Rules without
+#   a recorded source".
+payup_32nds = [64, 48, 40, 32, 24, 18, 14, 10, 8]
 
 [[story]]
 # BUSINESS: New York is a state spec story; such loans are less likely to pay
@@ -40,12 +54,16 @@ tiers = [85000, 110000, 125000, 150000, 175000, 200000, 225000, 250000, 275000]
 name = "NY"
 products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
 where = "state = 'NY'"
+# BUSINESS: pay-up at a premium coupon, in 32nds. ILLUSTRATIVE, no recorded source.
+payup_32nds = 12
 
 [[story]]
 # BUSINESS: Puerto Rico loans have their own, slower prepayment profile.
 name = "PR"
 products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
 where = "state = 'PR'"
+# BUSINESS: pay-up at a premium coupon, in 32nds. ILLUSTRATIVE, no recorded source.
+payup_32nds = 20
 
 [[story]]
 # BUSINESS: lower-FICO borrowers have fewer refinancing options, so they prepay
@@ -53,3 +71,5 @@ where = "state = 'PR'"
 name = "LOW_FICO"
 products = ["30Y Fixed", "15Y Fixed", "20Y Fixed"]
 where = "fico < 700"
+# BUSINESS: pay-up at a premium coupon, in 32nds. ILLUSTRATIVE, no recorded source.
+payup_32nds = 8
