@@ -1,8 +1,8 @@
 {
   "backendTests": 709,
-  "frontendTests": 225,
-  "e2eTests": 32,
+  "frontendTests": 278,
+  "e2eTests": 35,
   "backendCoverage": 99.1,
-  "commits": 26,
+  "commits": 27,
   "date": "2026-11-27"
 }

@@ -1,0 +1,64 @@
+{
+  "_about": "Short visitor-facing captions for the Price Grid screen (Step 6c), and the glossary terms its Explain panel offers (the first is shown open). The longer Business and Technical explanation is in price-grid.md; every term's definition is in content/glossary.json. The 'Illustrative, as of' line and the source names come from the API (content/pricing.json). {name} placeholders are filled by the screen. [[Term]] or [[Term|shown words]] marks a glossary term, explained on hover (components/GlossaryCaption.tsx).",
+  "eyebrow": "Step 6 · The desk’s price file",
+  "strip": {
+    "tradeDate": "Trade date",
+    "curve": "Treasury curve",
+    "source": "Source",
+    "data": "Data:"
+  },
+  "sourceNames": {
+    "model": "LoanIQ illustrative model",
+    "file": "Dealer price file",
+    "vendor": "Vendor price feed"
+  },
+  "status": {
+    "live": "Live",
+    "cached": "Cached",
+    "fixture": "Sample curve"
+  },
+  "card": {
+    "sifmaClass": "Class {cls}",
+    "currentCoupon": "Current coupon",
+    "anchor": "{tenor} {yield} + {spread} spread",
+    "current": "Current",
+    "notify": "Notify {notification}",
+    "settle": "Settle {settlement}",
+    "roll": "Rolls to {next} · {days} days",
+    "financing": "Financing rate {rate}%"
+  },
+  "view": {
+    "label": "Coupons shown",
+    "traded": "Traded coupons",
+    "all": "All {count}"
+  },
+  "prices": {
+    "title": "TBA prices · Current month",
+    "units": "Price and [[Drop|drop]] in [[32nds]]",
+    "coupon": "Coupon",
+    "price": "Price",
+    "drop": "Drop",
+    "priceTitle": "{product} {coupon}: {decimal} points",
+    "dropTitle": "{product} {coupon} drop: {decimal} points",
+    "modelTag": " (model-only)",
+    "nearestTag": " (nearest the current coupon)",
+    "legendNearest": "Nearest the [[Current coupon|current coupon]]",
+    "legendModel": "Muted: [[Model-only|model-only]], outside the traded band",
+    "legendDrop": "Drop = Current minus next month; a minus sign means next month trades higher",
+    "legendHover": "Hover a price for its decimal (98-08+ = 98.265625)"
+  },
+  "payups": {
+    "title": "Spec [[Pay-up|pay-ups]] over TBA",
+    "units": "in 32nds (18+ = 18.5/32)",
+    "rangeTraded": "{product}, traded coupons {low} to {high}",
+    "rangeAll": "{product}, all {count} coupons",
+    "productLabel": "Product",
+    "story": "Story",
+    "full": "Full",
+    "note": "A story is worth nothing on a discount coupon, where no one can refinance and slow prepayment does not matter, and its full pay-up on a premium coupon. Illustrative sizes."
+  },
+  "loading": "Loading today’s price file…",
+  "error": "Prices are not available: {message}",
+  "terms": ["Current coupon", "Par", "32nds", "Pay-up", "Model-only", "Current month", "SIFMA class",
+    "Notification date", "Settlement date", "Drop", "CPR", "SMM", "Financing rate"]
+}

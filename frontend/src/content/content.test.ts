@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
 import { AGENT_TERM } from "../components/AgentMark";
 import { TILES } from "../components/KpiTiles";
 import {
-  columnTerms, deskQuestionLabels, fillCaption, glossary, lookupTerm, screenExplanations, screenTerms,
-  splitExplanation, termTooltip,
+  columnTerms, deskQuestionLabels, fillCaption, glossary, lookupTerm, priceGridContent, screenExplanations,
+  screenTerms, splitExplanation, termTooltip,
 } from "./content";
 
 describe("glossary", () => {
@@ -49,6 +49,20 @@ describe("glossary", () => {
     // BUSINESS: hovering a program in the Program mix panel explains it.
     for (const p of ["Conventional", "High-Balance", "Jumbo", "Non-QM", "FHA", "VA", "USDA", "Note rate"]) {
       expect(lookupTerm(p), p).toBeDefined();
+    }
+  });
+
+  // BUSINESS: every [[Term]] marked in the Price Grid's captions (Step 6c) has a
+  //   definition, so no hover explains nothing.
+  // TECH: "_about" is the file's own note for editors, which shows the marker syntax
+  //   as an example ("[[Term]]"); it is never drawn, so it is left out of the scan.
+  it("has every term the Price Grid's captions mark", () => {
+    const { _about: _note, ...captions } = priceGridContent;
+    const marked = JSON.stringify(captions).matchAll(/\[\[([^\]|]+)/g);
+    const terms = [...marked].map((m) => m[1]);
+    expect(terms.length).toBeGreaterThan(0);
+    for (const t of [...terms, "SIFMA class", "Current coupon", "Current month"]) {
+      expect(lookupTerm(t), t).toBeDefined();
     }
   });
 

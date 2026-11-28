@@ -1,6 +1,39 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-28: The Price Grid is a plain table, traded coupons first, colour for meaning
+Decision (Step 6c): the Price Grid screen (`/prices`) follows the "6 · Price Grid"
+design (a Claude Design canvas drawn from the plan and reviewed before any code):
+a strip with the trade date, curve date and freshness and the sources; six product
+cards (current coupon and its anchor, SIFMA class, Current month, notification and
+settlement dates, days to the next settlement, financing rate); a TBA price table
+with coupons down the side and a Price and Drop pair per product; and a spec pay-up
+table for one product at a time, picked by chips. Details:
+- Plain HTML tables, not AG Grid.
+- One "Traded coupons / All 25" switch drives both tables; traded is the default.
+  "Traded" comes from the back end's `model_only` flag, never a range worked out in
+  the browser.
+- Colour only for meaning. Blue tint for the coupon nearest each current coupon (the
+  "selected" accent; a tie goes to the lower coupon). Muted text for model-only
+  coupons and zero pay-ups. Green "Live" against amber "Cached" or "Sample curve"
+  for the curve. A negative drop keeps its minus sign but no colour, because a drop
+  is carry, not P&L.
+- Rates show three decimals (current coupon 6.290%, frontend rule). Pay-ups show
+  in 32nds as traders say them ("18+").
+- The Explain panel starts closed, as on the Loan Tape.
+- CPR and SMM are explained in the glossary and the Explain panel, not shown as
+  columns.
+- Captions in `content/` mark glossary terms as `[[Term|shown words]]`, drawn by
+  `components/GlossaryCaption.tsx`.
+Why: about 150 cells with no paging or server sort don't need a grid library, and a
+real table gives screen readers row and column headers. Traded coupons are what a
+desk reads; all 25 are one click away. Defining the band once, in config, keeps
+the screen and the price file from disagreeing. The caption markers keep visitor
+words in `content/` while still explaining the terms in place.
+Alternatives considered: AG Grid; three month columns; all six products' pay-ups at
+once (about 1,800 numbers); red for negative drops; two-decimal rates (as on the
+design).
+
 ## 2026-11-27: SIFMA's calendar sets the Current month; one column plus the drop
 Decision (Step 6b): the price file keeps one "Current" column, which stands for each
 product's next TBA delivery month on SIFMA's published calendar ("MBS Notification

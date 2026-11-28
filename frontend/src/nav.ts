@@ -5,7 +5,7 @@
  *
  * BUSINESS: the sidebar reads like the desk's day, in four groups:
  *   Tape      look at the tape, ask it questions
- *   Price     slot loans into pools, find the best execution
+ *   Price     slot loans into pools, read the price file, find the best execution
  *   Trade     watch the blotter and positions, optimize
  *   Showcase  what LoanIQ is and how it was built AI-first
  *   Screens not built yet are shown but disabled, marked "Planned", so a visitor sees
@@ -62,6 +62,9 @@ export const NAV_GROUPS: NavGroup[] = [
       // BUSINESS: from Step 5b an action on the Loan Tape, not a screen: it opens the
       //   Product Slotting dialog from anywhere (components/SlottingNavButton.tsx).
       { label: "Product Slotting", path: "#product-slotting", step: 5, live: false, action: "product-slotting" },
+      // BUSINESS: live from Step 6c: the desk's illustrative TBA price file (prices,
+      //   drops and pay-ups), the prices Best Execution will use.
+      { label: "Price Grid", path: "/prices", step: 6, live: true },
       { label: "Best Execution", path: "/best-ex", step: 6, live: false },
     ],
   },

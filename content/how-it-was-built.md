@@ -24,6 +24,12 @@ compares it with what the repo already has, and proposes what to reuse, change a
 add. The build then matches the board's layout, colors and fonts, but every number
 on screen comes from the API, never from the design's samples.
 
+From the Price Grid (Step 6c), a board can also start from the plan. When no board
+exists yet, Claude draws one on a Claude Design canvas from the agreed plan, in the
+Loan Tape's colours and with that day's live numbers, and I review it, and change
+it if needed, before any code is written. Clicking through a working design catches
+layout questions a text sketch can't.
+
 One script, `test.ps1`, runs every layer: back-end tests with coverage, front-end
 type checks and component tests, the production build, and browser tests that click
 through the built app the way a visitor would. `start.ps1` runs it first and starts
