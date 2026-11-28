@@ -8,7 +8,8 @@
  *   desk-question counts, the tape line, and one page of loans at a time. For Ask
  *   the Tape (Step 4b): who is answering, every row behind an answer, one loan for
  *   the drawer, and a saved query's rerun. For Product Slotting (Step 5b): the last
- *   run and the rules in force, and one loan's hover card. Streams are read event by
+ *   run and the rules in force, and one loan's hover card. For the Price Grid (Step
+ *   6c): today's price file. Streams are read event by
  *   event in their own modules (ask/askStream.ts, slotting/slottingStream.ts).
  * TECH: plain fetch() with relative URLs, so the same code works through Vite's dev
  *   proxy and against the built app served by FastAPI. A non-2xx answer throws an
@@ -16,8 +17,8 @@
  *   so callers never treat an error body as data.
  */
 import type {
-  AskStatus, Breakdowns, ColumnInfo, LoanRecord, LoanSlots, LoansPage, QuestionCount, RerunRequest, SlottingStatus,
-  StoredQuery, Summary, TapeInfo,
+  AskStatus, Breakdowns, ColumnInfo, LoanRecord, LoanSlots, LoansPage, PriceGrid, QuestionCount, RerunRequest,
+  SlottingStatus, StoredQuery, Summary, TapeInfo,
 } from "./types";
 
 /**
@@ -137,3 +138,15 @@ export const fetchSlottingStatus = (signal?: AbortSignal) =>
  */
 export const fetchLoanSlots = (loanId: string, signal?: AbortSignal) =>
   getJson<LoanSlots>(`/api/loans/${encodeURIComponent(loanId)}/slots`, signal);
+
+// ---------------------------------------------------------------------------
+// The price file (Step 6c's Price Grid screen; built in Steps 6a and 6b).
+// ---------------------------------------------------------------------------
+
+/**
+ * BUSINESS: today's illustrative price file: prices, drops and pay-ups for six products.
+ * TECH: GET /api/prices/grid. The first call of a New York day may wait for Treasury
+ *   (up to the back end's 5 s timeout). A 503 means no price file can be built, for
+ *   example once SIFMA's calendar runs out; its message comes through as the ApiError's.
+ */
+export const fetchPriceGrid = (signal?: AbortSignal) => getJson<PriceGrid>("/api/prices/grid", signal);

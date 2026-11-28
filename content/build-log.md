@@ -1,6 +1,69 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 6c, the Price Grid screen (2026-11-28)
+- Built: the Price Grid at `/prices`, the desk's price file on screen
+  (`frontend/src/screens/PriceGridScreen.tsx`, `components/pricing/`).
+  - A strip with the trade date, the Treasury curve's date and whether it is live,
+    cached or the sample, the source, and links to Treasury and SIFMA.
+  - Six product cards: current coupon and where it comes from (10Y 4.940 + 1.350 =
+    6.290% on UMBS 30), SIFMA class, Current month, notification and settlement
+    dates, days to the next settlement, financing rate.
+  - The TBA price table: a price and a drop in 32nds per product at each coupon,
+    the coupon nearest each current coupon tinted, model-only coupons muted, and the
+    decimal on hover.
+  - The spec pay-up table for one product at a time, showing the S-curve from 0 on
+    discounts to the full pay-up on premiums ("18+" = 18.5/32).
+  - One "Traded coupons / All 25" switch for both tables; the Explain panel with 13
+    new glossary terms.
+- Desk problem it solves: a trader sees today's prices, drops and pay-ups for every
+  product in one place, with where each number comes from, before best execution
+  uses them.
+- My key decisions:
+  - Option 2 of two: Claude drew the design on a Claude Design canvas from the plan,
+    with live numbers, and I reviewed it before any code ("Looks good").
+  - Plain tables, traded coupons by default, colour for meaning only (no red on a
+    negative drop), financing rate as a 13th glossary term, CPR and SMM in the
+    glossary rather than as columns.
+- What Claude Code did:
+  - Drafted the 6c prompt, then the plan, then the "6 · Price Grid" canvas: the Loan
+    Tape's colours and fonts, today's live grid, with working switches, chips and
+    Explain panel.
+  - Built the screen, the view helpers and a small hand-written price file for the
+    tests; wrote the explanation and the glossary entries.
+  - Added `components/GlossaryCaption.tsx`, so captions in `content/` can mark a term
+    as `[[Drop|drop]]` and still explain it on hover, instead of hard-coding the term
+    in a component. A first version split the caption text around fixed words; it was
+    replaced before review as too fragile.
+  - Followed the frontend rule over the design for rates (6.290%, not 6.29%), and
+    recorded the difference in the roadmap.
+  - Caught by a test: the new check that every marked term has a glossary entry
+    failed on "Term", the example in the content file's own note. The check now skips
+    that note, which is never shown.
+- What I changed after review:
+  - Caught on the screenshots: at six cards across, "Notify 08 Dec · Settle 10 Dec"
+    left "Dec" alone on a line. The two halves now never break inside, so the line
+    wraps at the dot.
+- Tests and coverage: every layer passes through `test.ps1`.
+  - Back end: 709 tests, unchanged (no back-end change), coverage 99.1%.
+  - Front end: 278 tests (53 new).
+    - `pricing/priceGridView.test.ts`: traded coupons from `model_only`, the nearest
+      coupon (and its tie rule), table rows matched by coupon, pay-ups as "18+", dates
+      without a time-zone shift, rates to three decimals.
+    - `PriceTable`, `PayupTable` and `ProductCard` tests: the price and drop pairs, the
+      decimal on hover, the nearest tint said out loud, muted model-only cells, a
+      negative drop, the S-curve across a pay-up row, the product chips, the curve's
+      freshness badge and the source links.
+    - `PriceGridScreen.test.tsx`: the whole screen on the real routes, one switch
+      for both tables, the 503 message, and the Explain panel with its 13 terms.
+    - `GlossaryCaption.test.tsx`, plus a content check that every marked term exists.
+    - `App.test.tsx` and `routes.test.tsx`: the sidebar and live routes now include
+      the Price Grid (expected lists extended; nothing removed).
+  - End to end: 35 tests (3 new in `price-grid.spec.ts`): open from the sidebar, six
+    cards and a price in 32nds with its decimal; all 25 coupons in both tables and
+    another product's pay-ups; the Explain panel's tabs.
+- My take:
+
 ## Step 6b, the SIFMA calendar and the rolling Current month (2026-11-27)
 - Built: the price file's Current column now means a real delivery month, and every
   coupon carries its drop (`backend/app/pricing/settlement.py`, `model.py`).

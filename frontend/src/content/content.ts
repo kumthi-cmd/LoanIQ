@@ -3,7 +3,7 @@
  *
  * Where it sits: repo content/ (glossary, screen explanations, column terms, desk
  * question labels, screen captions, the Showcase pages, build facts, the Ask the
- * Tape agent's explainer and diagram, and Product Slotting's words) ->
+ * Tape agent's explainer and diagram, Product Slotting's words and the Price Grid's) ->
  * [content.ts] -> Explain panel, glossary tooltips, grid header tooltips, panel
  * captions, desk-question chips, the About and How it was built pages.
  *
@@ -32,6 +32,8 @@ import glossaryJson from "@content/glossary.json";
 import loanColumnsJson from "@content/loan-columns.json";
 import loanTapeJson from "@content/screens/loan-tape.json";
 import loanTapeMd from "@content/screens/loan-tape.md?raw";
+import priceGridJson from "@content/screens/price-grid.json";
+import priceGridMd from "@content/screens/price-grid.md?raw";
 import productSlottingJson from "@content/screens/product-slotting.json";
 import productSlottingMd from "@content/screens/product-slotting.md?raw";
 import slottingJson from "@content/slotting.json";
@@ -94,6 +96,8 @@ export const screenExplanations = {
   // BUSINESS: Product Slotting is a Loan Tape action, not a screen (Step 5b), but it
   //   explains itself like one; the Loan Tape's Explain panel switches to it.
   "product-slotting": productSlottingMd,
+  // BUSINESS: the Price Grid screen, live from Step 6c.
+  "price-grid": priceGridMd,
 } as const;
 
 export type ScreenId = keyof typeof screenExplanations;
@@ -107,6 +111,7 @@ export const screenTerms: Record<ScreenId, string[]> = {
   "loan-tape": loanTapeJson.terms,
   "ask-the-tape": askTheTapeScreenJson.terms,
   "product-slotting": productSlottingJson.terms,
+  "price-grid": priceGridJson.terms,
 };
 
 /** A screen explanation split for the Explain panel's two tabs. */
@@ -146,6 +151,15 @@ export const loanTapeContent = loanTapeJson;
  *   "offline" and "notices" sections are read by the back end, never here.
  */
 export const askTheTapeContent = askTheTapeJson.screen;
+
+/**
+ * The Price Grid screen's captions, card and table labels, and Explain-panel terms (Step 6c).
+ * BUSINESS: every word the screen shows that the back end does not send. The
+ *   "Illustrative, as of" line and the source names come from the API, which reads
+ *   content/pricing.json, so they are not repeated here.
+ * TECH: from content/screens/price-grid.json; {name} placeholders go through fillCaption.
+ */
+export const priceGridContent = priceGridJson;
 
 // =============================================================================
 // Product Slotting (Step 5b)

@@ -31,10 +31,10 @@ const renderAt = (path: string) =>
 describe("live routes", () => {
   const live = NAV_ITEMS.filter((item) => item.live);
 
-  // BUSINESS: Step 1f made three screens live and Step 4b adds Ask the Tape; fewer
-  //   would mean a page was lost.
-  it("has Loan Tape, Ask the Tape, About and How it was built live", () => {
-    expect(live.map((i) => i.path)).toEqual(["/", "/ask", "/about", "/how-it-was-built"]);
+  // BUSINESS: Step 1f made three screens live, Step 4b added Ask the Tape and Step 6c
+  //   the Price Grid; fewer would mean a page was lost.
+  it("has Loan Tape, Ask the Tape, Price Grid, About and How it was built live", () => {
+    expect(live.map((i) => i.path)).toEqual(["/", "/ask", "/prices", "/about", "/how-it-was-built"]);
   });
 
   // TECH: an agent item's link is named "<label>, agent" (Step 4d, Sidebar.tsx), so a

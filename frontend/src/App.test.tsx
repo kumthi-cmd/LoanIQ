@@ -1,8 +1,8 @@
 /**
  * Tests for App.tsx with its header, sidebar and Loan Tape screen together.
  * BUSINESS: a visitor opening LoanIQ sees the synthetic-data warning, the whole
- *   workflow in the sidebar (Loan Tape, Ask the Tape, About and How it was built
- *   live, the rest marked Planned, with Tape Upload and Explorer last in Trade since
+ *   workflow in the sidebar (Loan Tape, Ask the Tape, Price Grid (Step 6c), About and
+ *   How it was built live, the rest marked Planned, with Tape Upload and Explorer last in Trade since
  *   Step 4d), the Agent mark beside Ask the Tape only (Step 4d), an "Ask the tape" box and Ctrl K that open Ask
  *   the Tape with the question filled in (Step 4b), the
  *   tape's headline numbers and panels from the API, desk-question chips that filter
@@ -112,14 +112,21 @@ describe("App", () => {
     expect(screen.getByText("Synthetic data · demonstration only")).toBeInTheDocument();
   });
 
-  it("lists the workflow in groups, with Loan Tape, Ask the Tape and the Showcase pages live and the rest Planned", () => {
+  it("lists the workflow in groups, with Loan Tape, Ask the Tape, Price Grid and the Showcase pages live and the rest Planned", () => {
     renderApp();
     const nav = within(screen.getByRole("navigation", { name: "Screens" }));
     expect(nav.getByRole("link", { name: "Loan Tape" })).toHaveAttribute("aria-current", "page");
-    // BUSINESS: Loan Tape, Ask the Tape (Step 4b), then About and How it was built
-    //   (Step 1f, no step number); the last link is the repo in the footer, not a screen.
+    // BUSINESS: Loan Tape, Ask the Tape (Step 4b), the Price Grid (Step 6c), then About
+    //   and How it was built (Step 1f, no step number); the last link is the repo in
+    //   the footer, not a screen.
     expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual(
-      ["1Loan Tape", "4Ask the Tape", "About", "How it was built", "kumthi-cmd/LoanIQ"],
+      ["1Loan Tape", "4Ask the Tape", "6Price Grid", "About", "How it was built", "kumthi-cmd/LoanIQ"],
+    );
+    // BUSINESS: in the Price group, the Price Grid sits between Product Slotting and
+    //   Best Execution (still Planned until Step 6d).
+    const price = within(nav.getByRole("list", { name: "Price" }));
+    expect(price.getAllByRole("listitem").map((li) => li.textContent?.replace("Planned", " (Planned)"))).toEqual(
+      ["5Product Slotting", "6Price Grid", "6Best Execution (Planned)"],
     );
     // BUSINESS: since Step 5b Product Slotting is an action on the Loan Tape, not a
     //   screen: a button (not a link, not Planned) that opens its dialog.
