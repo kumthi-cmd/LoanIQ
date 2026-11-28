@@ -7,7 +7,8 @@ Where it sits:
 BUSINESS: one checked set of pricing settings. A product that slotting does not
   know (a typo like "UMBS" "35Y"), a Treasury tenor the feed does not publish, or a
   spec story with no pay-up stops the app at start-up, instead of quietly pricing
-  nothing or pricing the wrong row.
+  nothing or pricing the wrong row. Since Step 6b the same goes for the SIFMA
+  calendar (a product with no class, a missing month) and the drop's settings.
 TECH:
   - tomllib (Python's built-in TOML reader) gives plain dicts and floats. Every
     number becomes Decimal(str(x)), so 1.35 stays exactly 1.35 (a float would be
@@ -26,6 +27,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.pricing.settlement import Calendar, load_calendar
 from app.pricing.treasury import TENOR_FIELDS
 from app.slotting import SlottingRules
 from app.spec_stories import Story
@@ -33,14 +35,15 @@ from app.spec_stories import Story
 PRICING_PATH = Path(__file__).resolve().parent.parent / "config" / "pricing.toml"
 SOURCES = ("model", "file", "vendor")
 
-TOP_KEYS = {"source", "treasury", "grid", "payup_curve", "product"}
+TOP_KEYS = {"source", "treasury", "grid", "payup_curve", "product", "drop", "settlement"}
 TREASURY_KEYS = {"url", "data", "timezone", "timeout_seconds", "max_bytes", "retry_minutes"}
 GRID_KEYS = {"months", "coupon_min_pct", "coupon_max_pct", "price_increment_32nds",
              "floor_price_pts"}
 CURVE_KEYS = {"start_gap_pct", "full_gap_pct"}
 PRODUCT_KEYS = {"name", "agency", "term", "anchor_tenor", "spread_pct",
                 "duration_pts_per_pct", "premium_cap_pts", "traded_below_pct",
-                "traded_above_pct"}
+                "traded_above_pct", "sifma_class"}
+DROP_KEYS = {"financing_tenor", "financing_spread_pct", "cpr_floor_pct", "cpr_ceiling_pct"}
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ class ProductConfig:
       coupon; premium_cap is how far above par (points) the price can climb;
       traded_below / traded_above set the band of actively traded coupons
       (percent either side of the current coupon). All illustrative.
+      sifma_class is the SIFMA settlement class it delivers on ("A").
     """
     name: str
     agency: str
@@ -78,6 +82,21 @@ class ProductConfig:
     premium_cap: Decimal
     traded_below: Decimal
     traded_above: Decimal
+    sifma_class: str
+
+
+@dataclass(frozen=True)
+class DropConfig:
+    """The drop's settings (Step 6b): financing and prepayment speed.
+
+    BUSINESS: financing rate = Treasury yield at financing_tenor + spread
+      (percent); CPR runs from cpr_floor at discount coupons to cpr_ceiling at
+      premium coupons (percent a year) along the pay-up S-curve. Illustrative.
+    """
+    financing_tenor: str
+    financing_spread: Decimal
+    cpr_floor: Decimal
+    cpr_ceiling: Decimal
 
 
 @dataclass(frozen=True)
@@ -90,6 +109,8 @@ class PricingConfig:
     TECH: stories are spec_stories.toml's, tiers expanded, each with a pay-up.
       story_terms maps each story to the terms it applies to ("LLB_85K" ->
       {"30Y", "20Y", "15Y"}), read from its products through slotting's terms.
+      calendar is SIFMA's settlement dates by class (settlement.py);
+      min_months_ahead is how many months must remain before a test complains.
     """
     source: str
     treasury: TreasuryConfig
@@ -102,11 +123,20 @@ class PricingConfig:
     products: tuple[ProductConfig, ...]
     stories: tuple[Story, ...]
     story_terms: dict[str, frozenset[str]]
+    drop: DropConfig
+    calendar: Calendar
+    min_months_ahead: int
 
     @property
     def anchor_tenors(self) -> tuple[str, ...]:
         """BUSINESS: the Treasury tenors the products need (10Y, 7Y, 5Y)."""
         return tuple(dict.fromkeys(p.anchor_tenor for p in self.products))
+
+    @property
+    def curve_tenors(self) -> tuple[str, ...]:
+        """BUSINESS: every tenor a usable curve must have: the anchors plus the
+        drop's financing tenor (1M)."""
+        return tuple(dict.fromkeys((*self.anchor_tenors, self.drop.financing_tenor)))
 
 
 def number(section: str, raw: dict[str, Any], key: str, positive: bool = True) -> Decimal:
@@ -158,7 +188,19 @@ def coupon_ladder(low: Decimal, high: Decimal, step: Decimal) -> tuple[Decimal, 
     return tuple(low + step * i for i in range(count))
 
 
-def load_product(raw: Any, rules: SlottingRules) -> ProductConfig:
+def load_drop(raw: Any) -> DropConfig:
+    """[drop] -> DropConfig. BUSINESS: the CPR ceiling must not be below the floor."""
+    d = exact_keys("drop", raw, DROP_KEYS)
+    if d["financing_tenor"] not in TENOR_FIELDS:
+        raise ValueError(f"Pricing drop: unknown Treasury tenor {d['financing_tenor']!r}")
+    floor, ceiling = number("drop", d, "cpr_floor_pct", False), number("drop", d, "cpr_ceiling_pct", False)
+    if ceiling < floor or ceiling >= 100:
+        raise ValueError("Pricing drop: cpr_ceiling_pct must be at least cpr_floor_pct and below 100")
+    return DropConfig(d["financing_tenor"], number("drop", d, "financing_spread_pct", False),
+                      floor, ceiling)
+
+
+def load_product(raw: Any, rules: SlottingRules, calendar: Calendar) -> ProductConfig:
     """One [[product]] table, checked against slotting's agencies and terms.
 
     BUSINESS: every price row must match a slot a loan can land in.
@@ -172,12 +214,15 @@ def load_product(raw: Any, rules: SlottingRules) -> ProductConfig:
         raise ValueError(f"Pricing {where}: term {p['term']!r} is not in slotting.toml")
     if p["anchor_tenor"] not in TENOR_FIELDS:
         raise ValueError(f"Pricing {where}: unknown Treasury tenor {p['anchor_tenor']!r}")
+    if p["sifma_class"] not in calendar:
+        raise ValueError(f"Pricing {where}: SIFMA class {p['sifma_class']!r} has no dates in [settlement]")
     return ProductConfig(p["name"], p["agency"], p["term"], p["anchor_tenor"],
                          number(where, p, "spread_pct", positive=False),
                          number(where, p, "duration_pts_per_pct"),
                          number(where, p, "premium_cap_pts"),
                          number(where, p, "traded_below_pct", positive=False),
-                         number(where, p, "traded_above_pct", positive=False))
+                         number(where, p, "traded_above_pct", positive=False),
+                         p["sifma_class"])
 
 
 def priced_stories(stories: tuple[Story, ...]) -> tuple[Story, ...]:
@@ -214,7 +259,8 @@ def load_pricing_config(rules: SlottingRules, path: Path = PRICING_PATH) -> Pric
     months = grid["months"]
     if not isinstance(months, list) or not months or len(set(months)) != len(months):
         raise ValueError("Pricing grid: months must be a list of distinct names")
-    products = tuple(load_product(p, rules) for p in raw["product"])
+    calendar, ahead = load_calendar(raw["settlement"])
+    products = tuple(load_product(p, rules, calendar) for p in raw["product"])
     names = [p.name for p in products]
     if len(set(names)) != len(names):
         raise ValueError(f"Pricing: duplicate product names {names}")
@@ -226,4 +272,5 @@ def load_pricing_config(rules: SlottingRules, path: Path = PRICING_PATH) -> Pric
         number("grid", grid, "floor_price_pts", positive=False),
         start, full, products, priced_stories(rules.stories),
         {s.name: frozenset(rules.terms[p] for p in s.products if p in rules.terms)
-         for s in rules.stories})
+         for s in rules.stories},
+        load_drop(raw["drop"]), calendar, ahead)

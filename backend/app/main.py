@@ -59,9 +59,10 @@ from __future__ import annotations
 
 import json
 import tomllib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -468,16 +469,21 @@ def spa_file(spa_dir: Path, path: str) -> Path | None:
 
 
 def build_pricing(rules: SlottingRules | None, slotting_words: dict[str, Any],
-                  fetch: Fetch | None) -> pricing_api.PricingService | None:
+                  fetch: Fetch | None,
+                  clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+                  ) -> pricing_api.PricingService | None:
     """The price file service (Step 6a), or None in a hand-built store with no rules.
 
     BUSINESS: the price grid uses the same story labels as the Loan Tape.
     TECH: load_pricing_config raises on a bad setting, which stops the app.
+      clock (an aware datetime) decides the New York day for the curve and the
+      SIFMA Current month (Step 6b); tests pass a fixed one.
     """
     if rules is None:
         return None
     cfg = load_pricing_config(rules)
-    return pricing_api.PricingService(build_price_source(cfg, fetch), pricing_api.load_pricing_words(),
+    return pricing_api.PricingService(build_price_source(cfg, fetch, clock),
+                                      pricing_api.load_pricing_words(),
                                       story_labels(rules, slotting_words))
 
 

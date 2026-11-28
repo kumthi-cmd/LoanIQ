@@ -1,6 +1,35 @@
 # Decisions
 One entry per design decision, newest first.
 
+## 2026-11-27: SIFMA's calendar sets the Current month; one column plus the drop
+Decision (Step 6b): the price file keeps one "Current" column, which stands for each
+product's next TBA delivery month on SIFMA's published calendar ("MBS Notification
+and Settlement Dates", updated for 2027). Products map to SIFMA classes: Class A
+30-year UMBS, Class B 15-year UMBS and 15-year Ginnie Mae, Class C 30-year Ginnie
+Mae; 20-year pools, which SIFMA's key does not list, settle with Class B. Current is
+the first month whose 48-hour notification date is today or later (New York date),
+so it rolls the day after notification, when the front month's pools are allocated,
+not the day after settlement. The dates (November 2026 to December 2027) are copied
+from SIFMA's spreadsheet into `pricing.toml` `[settlement]`, checked at start-up
+(consecutive months, notification before settlement), and a test fails once fewer
+than 3 months remain, the yearly reminder to copy SIFMA's next year. Past the end the
+API answers 503 rather than invent dates. The next month is shown as the drop (Current
+minus next month, in 32nds) per coupon, not as a second price column:
+drop = coupon/12 - price x financing x days/360 + (100 - price) x SMM, with
+financing = the 1-month Treasury bill yield (same feed) + `financing_spread_pct`,
+days between the two SIFMA settlement dates, and CPR from 6% to 25% along the
+pay-up S-curve (SMM = 1 - (1 - CPR)^(1/12)). Scheduled principal is left out. Pay-ups
+do not change by month.
+Why: a desk quotes TBAs for a delivery month, and the front month changes on SIFMA's
+dates, not on calendar month-ends; rolling after the notification date matches when
+desks move to the next month. One column plus the drop keeps the grid narrow and still
+shows what rolling a position costs. The drop is the textbook carry, built only from
+the curve LoanIQ already fetches and SIFMA's dates, so no new data source. Reusing the
+S-curve keeps one shape for "how much a borrower gains by refinancing".
+Alternatives considered: rolling the day after settlement (the first brief); three
+month columns (front, back, third); computing settlement dates by rule (SIFMA sets
+them, with holiday exceptions); financing at SOFR (another feed).
+
 ## 2026-11-27: Pricing without a paid feed
 Decision (Step 6a): LoanIQ's price file is an illustrative model anchored to free
 public data, not a dealer's or vendor's prices. The anchor is the U.S. Treasury's Daily

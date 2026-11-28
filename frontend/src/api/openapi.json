@@ -401,7 +401,7 @@
         "type": "object"
       },
       "MonthPrices": {
-        "description": "One delivery month's prices for a product. TECH: 6a sends \"Current\" only.",
+        "description": "One delivery month's prices for a product: the Current column.\n\nBUSINESS: label is the SIFMA delivery month Current stands for today (\"Dec\n  2026\") for the product's sifma_class; it rolls the day after\n  notification_date. next_label and next_settlement_date are the month the drop\n  rolls into; days is between the two settlement dates; financing_rate_pct is\n  the drop's financing rate (1-month bill yield + spread).",
         "properties": {
           "cells": {
             "items": {
@@ -410,13 +410,56 @@
             "title": "Cells",
             "type": "array"
           },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "financing_rate_pct": {
+            "title": "Financing Rate Pct",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
           "month": {
             "title": "Month",
+            "type": "string"
+          },
+          "next_label": {
+            "title": "Next Label",
+            "type": "string"
+          },
+          "next_settlement_date": {
+            "format": "date",
+            "title": "Next Settlement Date",
+            "type": "string"
+          },
+          "notification_date": {
+            "format": "date",
+            "title": "Notification Date",
+            "type": "string"
+          },
+          "settlement_date": {
+            "format": "date",
+            "title": "Settlement Date",
+            "type": "string"
+          },
+          "sifma_class": {
+            "title": "Sifma Class",
             "type": "string"
           }
         },
         "required": [
           "month",
+          "label",
+          "sifma_class",
+          "notification_date",
+          "settlement_date",
+          "next_label",
+          "next_settlement_date",
+          "days",
+          "financing_rate_pct",
           "cells"
         ],
         "title": "MonthPrices",
@@ -513,10 +556,22 @@
         "type": "object"
       },
       "PriceCellOut": {
-        "description": "One coupon's TBA price. BUSINESS: coupon percent; price points; \"101-23+\".",
+        "description": "One coupon's TBA price and drop.\n\nBUSINESS: coupon percent; price points and \"101-23+\"; drop = Current minus the\n  next month, in points, in 32nds (3.5) and as text (\"0-03+\", or \"-0-01\" when\n  the next month trades higher).",
         "properties": {
           "coupon": {
             "title": "Coupon",
+            "type": "string"
+          },
+          "drop": {
+            "title": "Drop",
+            "type": "string"
+          },
+          "drop_32nds": {
+            "title": "Drop 32Nds",
+            "type": "string"
+          },
+          "drop_text": {
+            "title": "Drop Text",
             "type": "string"
           },
           "model_only": {
@@ -536,13 +591,16 @@
           "coupon",
           "price",
           "price_32nds",
-          "model_only"
+          "model_only",
+          "drop",
+          "drop_32nds",
+          "drop_text"
         ],
         "title": "PriceCellOut",
         "type": "object"
       },
       "PriceGrid": {
-        "description": "GET /api/prices/grid.\n\nBUSINESS: as_of is the Treasury curve's date; label is the line every price\n  screen shows; curve_status says whether the curve was fetched today (live),\n  kept from an earlier fetch because Treasury was down (cached), or the\n  bundled sample (fixture). illustrative is always true.",
+        "description": "GET /api/prices/grid.\n\nBUSINESS: as_of is the Treasury curve's date; trade_date is the New York date\n  the Current months were picked for; label is the line every price\n  screen shows; curve_status says whether the curve was fetched today (live),\n  kept from an earlier fetch because Treasury was down (cached), or the\n  bundled sample (fixture). illustrative is always true.",
         "properties": {
           "as_of": {
             "format": "date",
@@ -616,10 +674,16 @@
             },
             "title": "Sources",
             "type": "array"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
           }
         },
         "required": [
           "as_of",
+          "trade_date",
           "label",
           "curve_status",
           "curve_fetched_at",
@@ -1737,7 +1801,7 @@
     },
     "/api/prices/grid": {
       "get": {
-        "description": "BUSINESS: today's illustrative price file.\n\nTECH: the first call of a New York day fetches Treasury's curve (up to the\n  timeout); later calls reuse it. 503 if the configured source is a stub.",
+        "description": "BUSINESS: today's illustrative price file.\n\nTECH: the first call of a New York day fetches Treasury's curve (up to the\n  timeout); later calls reuse it. 503 if the configured source is a stub, or\n  the SIFMA calendar has run out.",
         "operationId": "price_grid_api_prices_grid_get",
         "responses": {
           "200": {

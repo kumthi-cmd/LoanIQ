@@ -10,15 +10,18 @@ BUSINESS: TBA prices are quoted in points and 32nds of a point. "101-23" means
 TECH: exact Decimal arithmetic. A price is first rounded to the nearest 1/64
   (half-even, so ties do not drift one way), then split into whole points, whole
   32nds and an optional half. Negative prices do not exist in TBA quoting and are
-  refused.
+  refused. A drop (Step 6b) can be negative, so it has its own signed form,
+  to_signed_32nds ("-0-01+").
 """
 
 from __future__ import annotations
 
 import re
 from decimal import ROUND_HALF_EVEN, Decimal
+from functools import lru_cache
 
 SIXTY_FOURTHS = Decimal(64)
+ONE = Decimal(1)
 PATTERN = re.compile(r"^(\d+)-(\d{2})(\+?)$")
 
 
@@ -30,8 +33,18 @@ def round_to(value: Decimal, increment: Decimal) -> Decimal:
     TECH: the result keeps exactly the increment's decimal places (1/64 = 0.015625
       has six, 0.5 has one), so JSON shows "64.0", not "64.000000".
     """
-    steps = (value / increment).quantize(Decimal(1), rounding=ROUND_HALF_EVEN)
-    return (steps * increment).quantize(Decimal(1).scaleb(increment.as_tuple().exponent))
+    steps = (value / increment).quantize(ONE, rounding=ROUND_HALF_EVEN)
+    return (steps * increment).quantize(places(increment))
+
+
+@lru_cache(maxsize=64)
+def places(increment: Decimal) -> Decimal:
+    """The decimal places an increment has, as a quantize target: 0.015625 -> 0.000001.
+
+    TECH: worked out once per increment (functools.lru_cache) because round_to runs
+      for every price, drop and pay-up cell, about 2,000 times per price file.
+    """
+    return ONE.scaleb(increment.as_tuple().exponent)
 
 
 def to_32nds(points: Decimal) -> str:
@@ -51,3 +64,15 @@ def from_32nds(text: str) -> Decimal:
         raise ValueError(f"Not a price in 32nds: {text!r}")
     whole, ticks, plus = match.groups()
     return Decimal(whole) + (Decimal(ticks) + (Decimal("0.5") if plus else 0)) / 32
+
+
+def to_signed_32nds(points: Decimal) -> str:
+    """A signed amount, such as a drop: 0.109375 -> "0-03+", -0.046875 -> "-0-01+".
+
+    BUSINESS: a negative drop means the next month trades ABOVE Current, which
+      happens on low coupons when financing costs more than the coupon earns.
+    TECH: the sign is decided after rounding, so a tiny negative that rounds to
+      zero shows as "0-00", never "-0-00".
+    """
+    text = to_32nds(abs(points))
+    return f"-{text}" if points < 0 and text != "0-00" else text

@@ -58,9 +58,15 @@ class ModelPriceSource(PriceSource):
         self.curves = curves
 
     def price_file(self) -> PriceFile:
-        """Today's curve -> the price file, with the curve's freshness attached."""
+        """Today's curve -> the price file, with the curve's freshness attached.
+
+        BUSINESS: today is the New York date from the curve cache's own clock, so
+          the Current month and the curve agree on what "today" is.
+        """
         result = self.curves.get()
-        return build_price_file(result.curve, self.cfg, result.status, result.fetched_at, self.name)
+        today = self.curves.clock().astimezone(self.cfg.treasury.tz).date()
+        return build_price_file(result.curve, self.cfg, today, result.status, result.fetched_at,
+                                self.name)
 
 
 class FilePriceSource(PriceSource):
@@ -94,4 +100,4 @@ def build_price_source(cfg: PricingConfig, fetch: Fetch | None = None,
         return FilePriceSource()
     if cfg.source == "vendor":
         return VendorPriceSource()
-    return ModelPriceSource(cfg, CurveCache(cfg.treasury, cfg.anchor_tenors, fetch, clock))
+    return ModelPriceSource(cfg, CurveCache(cfg.treasury, cfg.curve_tenors, fetch, clock))

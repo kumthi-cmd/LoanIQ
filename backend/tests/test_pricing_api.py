@@ -26,6 +26,10 @@ from app.pricing.sources import (FilePriceSource, ModelPriceSource, PriceSourceN
 from app.slotting import load_slotting_words
 from tests.pricing_fixtures import Clock, FakeTreasury, pricing_config, slotting_rules, utc
 
+# BUSINESS: the module prices on Thanksgiving 2026, 10:00 in New York, so the
+#   curve is 2026-11-25's and Current is December 2026 for every class.
+THANKSGIVING = utc(2026, 11, 27, 15, 0)
+
 
 def client_for(service: pricing_api.PricingService | None) -> TestClient:
     """A TestClient on an app with only the pricing route and this service."""
@@ -44,7 +48,7 @@ def fake() -> FakeTreasury:
 @pytest.fixture(scope="module")
 def grid(fake: FakeTreasury) -> dict:
     """GET /api/prices/grid on the real configs and the recorded curve."""
-    service = main.build_pricing(slotting_rules(), load_slotting_words(), fake)
+    service = main.build_pricing(slotting_rules(), load_slotting_words(), fake, Clock(THANKSGIVING))
     response = client_for(service).get("/api/prices/grid")
     assert response.status_code == 200
     return response.json()
@@ -52,7 +56,7 @@ def grid(fake: FakeTreasury) -> dict:
 
 def test_grid_is_labelled_illustrative_with_the_curve_date(grid: dict) -> None:
     """BUSINESS: every price screen says these are illustrative, and as of when."""
-    assert grid["as_of"] == "2026-11-25"
+    assert grid["as_of"] == "2026-11-25" and grid["trade_date"] == "2026-11-27"
     assert grid["label"] == "Illustrative, as of 2026-11-25"
     assert grid["curve_status"] == "live" and grid["illustrative"] is True
     assert grid["price_source"] == "model" and grid["curve_fetched_at"]
@@ -72,13 +76,15 @@ def test_grid_rows_coupons_and_months(grid: dict) -> None:
 def test_umbs30_row(grid: dict) -> None:
     """BUSINESS: UMBS 30 on 2026-11-25: 10-year 4.85 + 1.35 = 6.20 current coupon;
     the 6.0 coupon is 0.20 below it, so 100 - 6 x 0.20 = 98.80, which is 98-25.6
-    32nds, shown on the nearest half 32nd as 98-25+. Decimals arrive as strings."""
+    32nds, shown on the nearest half 32nd as 98-25+. Its drop to January is 0-03+
+    (worked in test_pricing_drop.py). Decimals arrive as strings."""
     umbs = grid["products"][0]
     assert umbs["anchor_tenor"] == "10Y" and umbs["anchor_yield_pct"] == "4.85"
     assert umbs["current_coupon_pct"] == "6.20"
     assert umbs["traded_low_pct"] == "2.20" and umbs["traded_high_pct"] == "8.20"
     cell = next(c for c in umbs["months"][0]["cells"] if c["coupon"] == "6.0")
-    assert cell == {"coupon": "6.0", "price": "98.796875", "price_32nds": "98-25+", "model_only": False}
+    assert cell == {"coupon": "6.0", "price": "98.796875", "price_32nds": "98-25+", "model_only": False,
+                    "drop": "0.109375", "drop_32nds": "3.5", "drop_text": "0-03+"}
     assert Decimal(cell["price"]) == Decimal("98") + Decimal("25.5") / 32
 
 
@@ -108,6 +114,8 @@ def test_sources_are_listed(grid: dict) -> None:
     assert names[0].startswith("U.S. Treasury")
     assert grid["sources"][0]["url"] == "https://home.treasury.gov/treasury-daily-interest-rate-xml-feed"
     assert grid["sources"][1]["url"] is None
+    # BUSINESS: since Step 6b, SIFMA for the delivery months and the drop's days.
+    assert names[2].startswith("SIFMA") and "sifma.org" in grid["sources"][2]["url"]
 
 
 def test_label_says_when_treasury_is_down() -> None:
@@ -115,7 +123,7 @@ def test_label_says_when_treasury_is_down() -> None:
     sample curve, not today's."""
     down = FakeTreasury()
     down.down = True
-    service = main.build_pricing(slotting_rules(), load_slotting_words(), down)
+    service = main.build_pricing(slotting_rules(), load_slotting_words(), down, Clock(THANKSGIVING))
     body = client_for(service).get("/api/prices/grid").json()
     assert body["curve_status"] == "fixture" and body["curve_fetched_at"] is None
     assert body["label"].startswith("Illustrative, as of 2026-11-25. Treasury could not be reached")
@@ -172,3 +180,38 @@ def test_route_is_in_the_openapi_spec() -> None:
     spec = main.app.openapi()
     assert "/api/prices/grid" in spec["paths"]
     assert "PriceGrid" in spec["components"]["schemas"]
+
+
+# -----------------------------------------------------------------------------
+# Step 6b: the SIFMA Current month and the drop
+# -----------------------------------------------------------------------------
+
+def test_current_month_carries_its_sifma_roll(grid: dict) -> None:
+    """BUSINESS: UMBS 30's Current column on Thanksgiving is December 2026
+    (Class A, notification 12-08, settlement 12-10), rolling into January
+    (settles 01-14, 35 days), financed at the 1-month bill's 4.27%."""
+    month = grid["products"][0]["months"][0]
+    assert {k: month[k] for k in month if k != "cells"} == {
+        "month": "Current", "label": "Dec 2026", "sifma_class": "A",
+        "notification_date": "2026-12-08", "settlement_date": "2026-12-10",
+        "next_label": "Jan 2027", "next_settlement_date": "2027-01-14", "days": 35,
+        "financing_rate_pct": "4.27"}
+    assert [p["months"][0]["sifma_class"] for p in grid["products"]] == ["A", "B", "B", "C", "B", "B"]
+
+
+def test_negative_drop_reaches_the_api(grid: dict) -> None:
+    """BUSINESS: low 15-year coupons cost more to finance than they earn, so their
+    drop is negative and the text shows the sign."""
+    umbs15 = next(p for p in grid["products"] if p["name"] == "UMBS 15")
+    low = next(c for c in umbs15["months"][0]["cells"] if c["coupon"] == "2.0")
+    assert Decimal(low["drop"]) < 0 and low["drop_text"].startswith("-")
+    assert Decimal(low["drop_32nds"]) == Decimal(low["drop"]) * 32
+
+
+def test_calendar_run_out_is_503() -> None:
+    """BUSINESS: past SIFMA's last published month LoanIQ says the calendar needs
+    updating instead of quoting a month with no dates."""
+    service = main.build_pricing(slotting_rules(), load_slotting_words(), FakeTreasury(),
+                                 Clock(utc(2028, 1, 10, 15, 0)))
+    response = client_for(service).get("/api/prices/grid")
+    assert response.status_code == 503 and "SIFMA" in response.json()["detail"]
