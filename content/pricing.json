@@ -14,7 +14,12 @@
     {
       "name": "LoanIQ illustrative pricing model",
       "url": null,
-      "used_for": "Spreads, durations, the prepayment cap, traded bands and the pay-up S-curve. Illustrative; no public source is recorded for these numbers."
+      "used_for": "Spreads, durations, the prepayment cap, traded bands, the pay-up S-curve and the drop's prepayment speeds. Illustrative; no public source is recorded for these numbers."
+    },
+    {
+      "name": "SIFMA, MBS Notification and Settlement Dates",
+      "url": "https://www.sifma.org/resources/general/mbs-notification-and-settlement-dates/",
+      "used_for": "Which delivery month Current is for each product, and the days the drop finances between settlement dates."
     }
   ]
 }

@@ -19,6 +19,12 @@ BUSINESS: an illustrative stand-in for a dealer's price file, built from public
       m an S-curve from 0 at discount coupons to 1 at premium coupons.
   Coupons outside the product's traded band are flagged model_only: the model
   prices them, but no one would trade them today.
+  Current is the product's next SIFMA delivery month (settlement.py), and each
+  coupon also carries its drop to the month after (Step 6b), in points:
+    drop = coupon / 12 - price x financing / 100 x days / 360 + (100 - price) x SMM
+      financing = Treasury yield at the financing tenor + spread (percent)
+      days = Current's settlement date to the next month's
+      SMM = 1 - (1 - CPR / 100)^(1/12), CPR from floor to ceiling along the S-curve
 TECH:
   - A pure function: the same curve and config always give the same file, so a
     price file for any date can be rebuilt on demand and nothing is stored.
@@ -32,9 +38,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from functools import lru_cache
 
 from app.pricing.config import PricingConfig, ProductConfig
 from app.pricing.format32 import round_to
+from app.pricing.settlement import Roll, roll_for
 from app.pricing.treasury import Curve, CurveStatus
 
 PAR = Decimal(100)
@@ -42,10 +50,15 @@ PAR = Decimal(100)
 
 @dataclass(frozen=True)
 class PriceCell:
-    """One coupon's TBA price. BUSINESS: coupon in percent, price in points."""
+    """One coupon's TBA price and drop.
+
+    BUSINESS: coupon in percent; price (Current month) and drop (Current minus
+      next month) in points, both rounded to the price increment.
+    """
     coupon: Decimal
     price: Decimal
     model_only: bool
+    drop: Decimal
 
 
 @dataclass(frozen=True)
@@ -53,12 +66,15 @@ class ProductPrices:
     """One grid row: a product's current coupon and its price at every coupon.
 
     TECH: months maps each month name ("Current") to that month's cells, in
-      coupon order. Step 6b adds months.
+      coupon order. roll says which delivery month Current is today, and the
+      month after; financing_rate is the drop's financing rate (percent).
     """
     product: ProductConfig
     anchor_yield: Decimal
     current_coupon: Decimal
     months: dict[str, tuple[PriceCell, ...]]
+    roll: Roll
+    financing_rate: Decimal
 
 
 @dataclass(frozen=True)
@@ -79,8 +95,10 @@ class PriceFile:
     """The whole price file for one curve date.
 
     TECH: curve_status and fetched_at say how fresh the curve is (treasury.py).
+      trade_date is the New York date the Current month was picked for.
     """
     as_of: date
+    trade_date: date
     curve_status: CurveStatus
     fetched_at: datetime | None
     source: str
@@ -131,22 +149,77 @@ def payup_multiplier(gap: Decimal, start: Decimal, full: Decimal) -> Decimal:
     return t * t * (3 - 2 * t)
 
 
-def price_row(curve: Curve, product: ProductConfig, cfg: PricingConfig) -> ProductPrices:
-    """One product's prices at every coupon, rounded, with model_only flags.
+def cpr(gap: Decimal, cfg: PricingConfig) -> Decimal:
+    """Prepayment speed in percent a year (CPR) at a coupon's gap to the current coupon.
+
+    BUSINESS: discount borrowers rarely refinance (cpr_floor, 6%); premium
+      borrowers do (cpr_ceiling, 25%). In between it follows the pay-up S-curve,
+      since both are driven by the refinancing incentive.
+    """
+    d = cfg.drop
+    m = payup_multiplier(gap, cfg.payup_start, cfg.payup_full)
+    return d.cpr_floor + (d.cpr_ceiling - d.cpr_floor) * m
+
+
+@lru_cache(maxsize=1024)
+def smm(cpr_pct: Decimal) -> Decimal:
+    """CPR (percent a year) -> SMM, the share of the balance prepaid in one month (decimal).
+
+    BUSINESS: SMM = 1 - (1 - CPR/100)^(1/12); 12% CPR is about 1.06% a month.
+    TECH: worked as 1 - e^(ln(1 - CPR/100) / 12), the same 28 digits as Decimal's
+      ** with a 1/12 power but about twice as fast. lru_cache (functools) remembers
+      each answer: most coupons sit at the 6% floor or 25% ceiling, so a price file
+      needs only a couple of dozen distinct SMMs, and the file builds well inside
+      its timing budget (tests/test_pricing_model.py). Decimal is immutable and
+      hashable, so it is safe as a cache key.
+    """
+    return 1 - ((1 - cpr_pct / 100).ln() / 12).exp()
+
+
+def drop(coupon: Decimal, price: Decimal, financing_pct: Decimal, days: int,
+         cpr_pct: Decimal) -> Decimal:
+    """Unrounded drop in points: Current price minus next month's.
+
+    BUSINESS: the carry of holding the bonds one more month instead of
+      delivering them now (pricing.toml [drop]):
+        + coupon / 12                            one month of coupon (30/360)
+        - price x financing / 100 x days / 360   financing the purchase (actual/360)
+        + (100 - price) x SMM                    prepaid principal comes back at
+                                                 par: a gain below par, a loss above
+      Negative when financing costs more than the coupon earns.
+    """
+    income = coupon / 12
+    financing = price * financing_pct / 100 * days / 360
+    paydown = (PAR - price) * smm(cpr_pct)
+    return income - financing + paydown
+
+
+def price_cell(c: Decimal, cc: Decimal, product: ProductConfig, cfg: PricingConfig,
+               financing: Decimal, days: int) -> PriceCell:
+    """One coupon: rounded price, model_only flag and rounded drop.
 
     BUSINESS: traded band = cc - traded_below to cc + traded_above (percent).
       Prices below floor_price are raised to it (deep-discount coupons only).
+    TECH: the drop is worked from the unrounded price, so rounding happens once.
+    """
+    price = max(tba_price(c, cc, product), cfg.floor_price)
+    traded = cc - product.traded_below <= c <= cc + product.traded_above
+    carry = drop(c, price, financing, days, cpr(c - cc, cfg))
+    return PriceCell(c, round_to(price, cfg.increment), not traded, round_to(carry, cfg.increment))
+
+
+def price_row(curve: Curve, product: ProductConfig, cfg: PricingConfig, today: date) -> ProductPrices:
+    """One product's Current prices and drops at every coupon.
+
+    BUSINESS: Current is today's SIFMA delivery month for the product's class.
+    TECH: raises CalendarExhausted past the end of the calendar.
     """
     cc = current_coupon(curve, product)
-    low, high = cc - product.traded_below, cc + product.traded_above
-    cells = tuple(
-        PriceCell(c, round_to(max(tba_price(c, cc, product), cfg.floor_price), cfg.increment),
-                  not low <= c <= high)
-        for c in cfg.coupons)
-    # TECH: 6a has one month column; every month shares the same cells until 6b
-    #   adds the settlement calendar's drop between months.
+    roll = roll_for(cfg.calendar, product.sifma_class, today)
+    financing = curve.yields[cfg.drop.financing_tenor] + cfg.drop.financing_spread
+    cells = tuple(price_cell(c, cc, product, cfg, financing, roll.days) for c in cfg.coupons)
     return ProductPrices(product, curve.yields[product.anchor_tenor], cc,
-                         {m: cells for m in cfg.months})
+                         {m: cells for m in cfg.months}, roll, financing)
 
 
 def payup_rows(row: ProductPrices, cfg: PricingConfig) -> list[PayupRow]:
@@ -154,32 +227,37 @@ def payup_rows(row: ProductPrices, cfg: PricingConfig) -> list[PayupRow]:
 
     BUSINESS: only stories that apply to the product's term (a story listed
       for 30Y Fixed only would not price on UMBS 15).
-    TECH: pay-ups in 32nds, rounded to the config's increment in 32nds.
+    TECH: pay-ups in 32nds, rounded to the config's increment in 32nds. The
+      S-curve depends only on the coupon's gap, so it is worked once per coupon
+      and shared by every story (12 stories x 25 coupons would otherwise repeat
+      it 300 times per product).
     """
     # TECH: the increment in 32nds (1/64 point -> 0.5). normalize() drops the
     #   trailing zeros the multiplication leaves (0.500000 -> 0.5).
     tick = (cfg.increment * 32).normalize()
+    curve = [payup_multiplier(c - row.current_coupon, cfg.payup_start, cfg.payup_full)
+             for c in cfg.coupons]
     out = []
     for story in cfg.stories:
         if row.product.term not in cfg.story_terms[story.name]:
             continue
         full = story.payup_32nds or Decimal(0)
-        values = tuple(round_to(full * payup_multiplier(c - row.current_coupon, cfg.payup_start,
-                                                        cfg.payup_full), tick)
-                       for c in cfg.coupons)
+        values = tuple(round_to(full * m, tick) for m in curve)
         out.append(PayupRow(row.product.name, story.name, story.family, full, values))
     return out
 
 
-def build_price_file(curve: Curve, cfg: PricingConfig, status: CurveStatus = "live",
+def build_price_file(curve: Curve, cfg: PricingConfig, today: date, status: CurveStatus = "live",
                      fetched_at: datetime | None = None, source: str = "model") -> PriceFile:
-    """The price file for one curve: every product's prices and pay-ups.
+    """The price file for one curve and trade date: prices, drops and pay-ups.
 
-    BUSINESS: the same curve and config always give the same file.
+    BUSINESS: the same curve, date and config always give the same file. today
+      (New York) picks each class's Current month; the curve may be older (a
+      holiday), which is normal.
     TECH: about 1,950 Decimal formulas on the default config (6 products x 25
       coupons, plus pay-ups); a timing test keeps it well under a second.
     """
-    rows = tuple(price_row(curve, p, cfg) for p in cfg.products)
+    rows = tuple(price_row(curve, p, cfg, today) for p in cfg.products)
     payups = tuple(r for row in rows for r in payup_rows(row, cfg))
-    return PriceFile(curve.curve_date, status, fetched_at, source, cfg.months, cfg.coupons,
+    return PriceFile(curve.curve_date, today, status, fetched_at, source, cfg.months, cfg.coupons,
                      rows, payups)

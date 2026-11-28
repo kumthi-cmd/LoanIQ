@@ -1,6 +1,64 @@
 # Build log
 One entry per step, newest first. Copy the template for each new step.
 
+## Step 6b, the SIFMA calendar and the rolling Current month (2026-11-27)
+- Built: the price file's Current column now means a real delivery month, and every
+  coupon carries its drop (`backend/app/pricing/settlement.py`, `model.py`).
+  - SIFMA's notification and settlement dates by class, November 2026 to December
+    2027, in `pricing.toml` `[settlement]`: Class A 30-year UMBS, Class B 15-year
+    UMBS and Ginnie Mae (and the 20-years), Class C 30-year Ginnie Mae.
+  - Current is the first month whose 48-hour notification date is today or later, in
+    New York: it rolls the day after notification. On 2026-12-09 UMBS 30 quotes
+    January while the others still quote December.
+  - The drop, Current minus the next month, in 32nds: one month of coupon, minus
+    financing at the 1-month bill yield over the days between SIFMA settlement
+    dates, plus prepaid principal back at par (CPR 6% to 25% on the pay-up S-curve).
+    UMBS 30 6.0 on Thanksgiving: 0-03+. Low 15-year coupons go negative.
+  - The API's Current column gives the month, class, dates, days and financing rate,
+    and each cell its drop ("0-03+", "-0-01"). Past SIFMA's last month it answers
+    503 rather than guess.
+- Desk problem it solves: a TBA price is for a delivery month, and the desk needs to
+  know which month "Current" is today and what rolling into the next one is worth.
+  Both now follow SIFMA's published dates.
+- My key decisions:
+  - Scope 6b to the back end: the calendar and the rolling Current month, with the
+    screen in 6c and best execution in 6d.
+  - One Current column plus the drop, not three month columns.
+  - Roll the day after the 48-hour notification date, not after settlement.
+  - Add SIFMA's calendar as a source; settle 20-year pools with Class B.
+  - CPR 6% to 25% and a 0 financing spread to start.
+- What Claude Code did:
+  - Drafted the 6b brief, then a narrower one when I asked whether 6b was only the
+    calendar, and explained what one Current column means.
+  - Read SIFMA's page and spreadsheet: the dates and the KEY of classes, and found
+    that 20-year pools are not in it.
+  - Copied the dates from the spreadsheet's own date values, spot-checked against the
+    page, into `pricing.toml`.
+  - Wrote the calendar module, the drop and the signed 32nds, and the new API fields;
+    added SIFMA to the API's sources.
+  - Design choice for review: the drop's prepayment speed reuses the pay-up S-curve,
+    so one shape describes the refinancing incentive.
+  - Caught by a test: the timing test failed at about 120 ms per price file (budget
+    50 ms). Profiling found the 1/12 power in SMM and the rounding target worked out
+    for every cell; both are now computed once and cached, and the pay-up S-curve is
+    shared across stories. About 20 ms now, budget unchanged.
+- What I changed after review:
+- Tests and coverage: every layer passes through `test.ps1`.
+  - Back end: 709 tests (43 new), coverage 99.1%. No test touches the network.
+    - `test_pricing_settlement.py`: SIFMA's class for each product, December 2026's
+      published dates, the roll the day after notification, classes rolling on
+      different days, the year-end roll, a 503 past the end of the calendar, a check
+      that fails about three months before the dates run out, and bad calendar config.
+    - `test_pricing_drop.py`: the worked example (UMBS 30 6.0 = 0-03+), SMM and CPR,
+      financing and the spread, a negative drop, prepayment helping discounts and
+      hurting premiums, 28 against 35 days, signed 32nds, and bad drop settings.
+    - `test_pricing_model.py` and `test_pricing_api.py`: updated for the trade date,
+      the drop fields and the roll fields. The price file still builds in about
+      20 ms (the 50 ms budget is unchanged).
+  - Front end: 225 tests, unchanged (no new screen in this step).
+  - End to end: 32 tests, unchanged.
+- My take:
+
 ## Step 6a, the price file (back end) (2026-11-27)
 - Built: an illustrative price file at `GET /api/prices/grid`, from free public data
   (`backend/app/pricing/`, settings in `backend/app/config/pricing.toml`).

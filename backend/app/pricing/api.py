@@ -8,6 +8,9 @@ BUSINESS: one call gives the whole illustrative price file: the curve date and
   its label ("Illustrative, as of 2026-11-25"), every product's current coupon
   and TBA price at every coupon (in points and in 32nds, with model_only flags),
   every spec story's pay-up at every coupon, and where the numbers come from.
+  Since Step 6b each product's Current column says which SIFMA delivery month it
+  is ("Dec 2026", notification and settlement dates), and each coupon carries
+  its drop to the month after.
 TECH:
   - Pydantic models describe the response; FastAPI turns them into the OpenAPI
     spec, from which the front end's TypeScript types are generated.
@@ -30,8 +33,9 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from app.pricing.format32 import to_32nds
-from app.pricing.model import PayupRow, PriceFile, ProductPrices
+from app.pricing.format32 import to_32nds, to_signed_32nds
+from app.pricing.settlement import CalendarExhausted
+from app.pricing.model import PayupRow, PriceCell, PriceFile, ProductPrices
 from app.pricing.sources import PriceSource, PriceSourceNotConfigured
 
 router = APIRouter()
@@ -43,16 +47,39 @@ WORDS_PATH = Path(__file__).resolve().parents[3] / "content" / "pricing.json"
 # =============================================================================
 
 class PriceCellOut(BaseModel):
-    """One coupon's TBA price. BUSINESS: coupon percent; price points; "101-23+"."""
+    """One coupon's TBA price and drop.
+
+    BUSINESS: coupon percent; price points and "101-23+"; drop = Current minus the
+      next month, in points, in 32nds (3.5) and as text ("0-03+", or "-0-01" when
+      the next month trades higher).
+    """
     coupon: Decimal
     price: Decimal
     price_32nds: str
     model_only: bool
+    drop: Decimal
+    drop_32nds: Decimal
+    drop_text: str
 
 
 class MonthPrices(BaseModel):
-    """One delivery month's prices for a product. TECH: 6a sends "Current" only."""
+    """One delivery month's prices for a product: the Current column.
+
+    BUSINESS: label is the SIFMA delivery month Current stands for today ("Dec
+      2026") for the product's sifma_class; it rolls the day after
+      notification_date. next_label and next_settlement_date are the month the drop
+      rolls into; days is between the two settlement dates; financing_rate_pct is
+      the drop's financing rate (1-month bill yield + spread).
+    """
     month: str
+    label: str
+    sifma_class: str
+    notification_date: date
+    settlement_date: date
+    next_label: str
+    next_settlement_date: date
+    days: int
+    financing_rate_pct: Decimal
     cells: list[PriceCellOut]
 
 
@@ -102,12 +129,14 @@ class SourceOut(BaseModel):
 class PriceGrid(BaseModel):
     """GET /api/prices/grid.
 
-    BUSINESS: as_of is the Treasury curve's date; label is the line every price
+    BUSINESS: as_of is the Treasury curve's date; trade_date is the New York date
+      the Current months were picked for; label is the line every price
       screen shows; curve_status says whether the curve was fetched today (live),
       kept from an earlier fetch because Treasury was down (cached), or the
       bundled sample (fixture). illustrative is always true.
     """
     as_of: date
+    trade_date: date
     label: str
     curve_status: Literal["live", "cached", "fixture"]
     curve_fetched_at: datetime | None
@@ -141,8 +170,37 @@ class PricingService:
     story_labels: dict[str, str]
 
     def grid(self) -> PriceGrid:
-        """Today's price file as the API response."""
-        return to_grid(self.source.price_file(), self.words, self.story_labels)
+        """Today's price file as the API response.
+
+        TECH: CalendarExhausted (no SIFMA dates left) becomes "not configured",
+          so the API answers 503 instead of quoting a month it has no dates for.
+        """
+        try:
+            pf = self.source.price_file()
+        except CalendarExhausted as err:
+            raise PriceSourceNotConfigured(str(err)) from err
+        return to_grid(pf, self.words, self.story_labels)
+
+
+def cell_out(c: PriceCell) -> PriceCellOut:
+    """One coupon -> its response cell. BUSINESS: drop 0.109375 points = 3.5 32nds.
+
+    TECH: drops sit on the half-32nd grid, so one decimal of 32nds is exact;
+      quantize (not normalize) keeps 10 32nds as "10.0", not "1E+1".
+    """
+    return PriceCellOut(coupon=c.coupon, price=c.price, price_32nds=to_32nds(c.price),
+                        model_only=c.model_only, drop=c.drop, drop_32nds=(c.drop * 32).quantize(Decimal("0.1")),
+                        drop_text=to_signed_32nds(c.drop))
+
+
+def month_out(row: ProductPrices, month: str, cells: tuple[PriceCell, ...]) -> MonthPrices:
+    """One month column -> its response, with the SIFMA roll it stands for."""
+    roll = row.roll
+    return MonthPrices(month=month, label=roll.current.label, sifma_class=roll.sifma_class,
+                       notification_date=roll.current.notification,
+                       settlement_date=roll.current.settlement, next_label=roll.next.label,
+                       next_settlement_date=roll.next.settlement, days=roll.days,
+                       financing_rate_pct=row.financing_rate, cells=[cell_out(c) for c in cells])
 
 
 def product_row(row: ProductPrices) -> ProductRow:
@@ -154,11 +212,7 @@ def product_row(row: ProductPrices) -> ProductRow:
         current_coupon_pct=row.current_coupon,
         traded_low_pct=row.current_coupon - p.traded_below,
         traded_high_pct=row.current_coupon + p.traded_above,
-        months=[MonthPrices(month=m, cells=[PriceCellOut(coupon=c.coupon, price=c.price,
-                                                         price_32nds=to_32nds(c.price),
-                                                         model_only=c.model_only)
-                                            for c in cells])
-                for m, cells in row.months.items()])
+        months=[month_out(row, m, cells) for m, cells in row.months.items()])
 
 
 def payup_row(row: PayupRow, coupons: tuple[Decimal, ...], labels: dict[str, str]) -> PayupRowOut:
@@ -173,7 +227,7 @@ def payup_row(row: PayupRow, coupons: tuple[Decimal, ...], labels: dict[str, str
 def to_grid(pf: PriceFile, words: dict[str, Any], labels: dict[str, str]) -> PriceGrid:
     """A PriceFile -> the API response, with its label filled in."""
     return PriceGrid(
-        as_of=pf.as_of, label=words["label"][pf.curve_status].format(as_of=pf.as_of.isoformat()),
+        as_of=pf.as_of, trade_date=pf.trade_date, label=words["label"][pf.curve_status].format(as_of=pf.as_of.isoformat()),
         curve_status=pf.curve_status, curve_fetched_at=pf.fetched_at, price_source=pf.source,
         illustrative=True, months=list(pf.months), coupons=list(pf.coupons),
         products=[product_row(r) for r in pf.products],
@@ -202,7 +256,8 @@ def price_grid(service: Annotated[PricingService, Depends(get_pricing)]) -> Pric
     """BUSINESS: today's illustrative price file.
 
     TECH: the first call of a New York day fetches Treasury's curve (up to the
-      timeout); later calls reuse it. 503 if the configured source is a stub.
+      timeout); later calls reuse it. 503 if the configured source is a stub, or
+      the SIFMA calendar has run out.
     """
     try:
         return service.grid()

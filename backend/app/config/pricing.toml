@@ -10,6 +10,8 @@
 #     3. a price for every coupon from its gap to that current coupon    [[product]]
 #     4. a pay-up for every spec story, scaled by an S-curve in the gap  [payup_curve]
 #        (each story's full pay-up lives in spec_stories.toml)
+#     5. the Current delivery month from SIFMA's settlement calendar     [settlement]
+#        and the drop to the next month (Step 6b)                         [drop]
 #   The coupon ladder uses slotting.toml's coupon_step_pct, so slots and prices
 #   share one step. A price file for any date is rebuilt from that date's curve
 #   plus this file, so nothing is stored on disk.
@@ -50,8 +52,9 @@ max_bytes = 2000000
 retry_minutes = 30
 
 [grid]
-# BUSINESS: the delivery months shown. Step 6a has one "Current" column; Step 6b
-#   adds the rolling TBA settlement calendar.
+# BUSINESS: the delivery months shown: one "Current" column. Which month Current
+#   is rolls with SIFMA's calendar ([settlement]); the next month is shown as the
+#   drop ([drop]), not as a second price column.
 months = ["Current"]
 # BUSINESS: the coupon ladder, in percent: 1.0 to 13.0 in slotting.toml's
 #   coupon_step_pct (0.5) gives 25 coupons, wide enough for every note rate on
@@ -78,6 +81,8 @@ floor_price_pts = 40.0
 #     m = 3t^2 - 2t^3, t = (gap - start) / (full - start)   in between
 #     m = 1                                  when gap >= full_gap_pct
 #     pay-up at a coupon (32nds) = story's payup_32nds x m
+#   The drop's prepayment speed ([drop]) uses the same m: both follow how much a
+#   borrower gains by refinancing, so the shape is defined once, here.
 #   ILLUSTRATIVE: the shape is industry practice; no public source is recorded.
 start_gap_pct = -1.0
 full_gap_pct = 1.0
@@ -100,12 +105,19 @@ full_gap_pct = 1.0
 #   final maturity. GNMA II spreads are a little tighter (government-backed).
 #   ALL SPREADS, DURATIONS, CAPS AND BANDS ARE ILLUSTRATIVE; no public source is
 #   recorded (docs/public-sources.md, "Rules without a recorded source").
+#   sifma_class: the SIFMA settlement class whose calendar the product delivers
+#   on ([settlement] below). SIFMA's key: Class A = 30-year UMBS; Class B = 15-year
+#   UMBS and 15-year Ginnie Mae; Class C = 30-year Ginnie Mae. SIFMA does not list
+#   20-year pools; LoanIQ settles them with the 15-years in Class B, which has no
+#   recorded source (docs/public-sources.md, "Rules without a recorded source").
 # TECH: agency must be in slotting.toml [agencies] and term in [products];
-#   anchor_tenor one of the feed's tenors (1M ... 30Y, see app/pricing/treasury.py).
+#   anchor_tenor one of the feed's tenors (1M ... 30Y, see app/pricing/treasury.py);
+#   sifma_class one of the classes under [settlement].
 # -----------------------------------------------------------------------------
 
 [[product]]
 name = "UMBS 30"
+sifma_class = "A"
 agency = "UMBS"
 term = "30Y"
 anchor_tenor = "10Y"
@@ -117,6 +129,7 @@ traded_above_pct = 2.0
 
 [[product]]
 name = "UMBS 20"
+sifma_class = "B"
 agency = "UMBS"
 term = "20Y"
 anchor_tenor = "7Y"
@@ -128,6 +141,7 @@ traded_above_pct = 1.5
 
 [[product]]
 name = "UMBS 15"
+sifma_class = "B"
 agency = "UMBS"
 term = "15Y"
 anchor_tenor = "5Y"
@@ -139,6 +153,7 @@ traded_above_pct = 1.5
 
 [[product]]
 name = "GNMA II 30"
+sifma_class = "C"
 agency = "GNMA II"
 term = "30Y"
 anchor_tenor = "10Y"
@@ -150,6 +165,7 @@ traded_above_pct = 2.0
 
 [[product]]
 name = "GNMA II 20"
+sifma_class = "B"
 agency = "GNMA II"
 term = "20Y"
 anchor_tenor = "7Y"
@@ -161,6 +177,7 @@ traded_above_pct = 1.5
 
 [[product]]
 name = "GNMA II 15"
+sifma_class = "B"
 agency = "GNMA II"
 term = "15Y"
 anchor_tenor = "5Y"
@@ -169,3 +186,100 @@ duration_pts_per_pct = 4.0
 premium_cap_pts = 3.0
 traded_below_pct = 3.0
 traded_above_pct = 1.5
+
+# -----------------------------------------------------------------------------
+# The drop (Step 6b)
+# BUSINESS: the drop is how much cheaper the next delivery month trades than
+#   Current: what a holder earns or pays by keeping the bonds one month longer
+#   instead of delivering them now (the carry). In points per $100 face:
+#     drop = coupon / 12                                  one month of coupon (30/360)
+#          - price x financing / 100 x days / 360         financing the price (actual/360)
+#          + (100 - price) x SMM                          principal repaid at par
+#     financing (percent) = the Treasury yield at financing_tenor + financing_spread_pct
+#     days = Current's settlement date to the next month's (SIFMA calendar)
+#     CPR (percent a year) = cpr_floor_pct + (cpr_ceiling_pct - cpr_floor_pct) x m(gap),
+#       m the S-curve in [payup_curve]: slow at discount coupons, fast at premiums
+#     SMM (monthly prepayment, decimal) = 1 - (1 - CPR / 100) ^ (1/12)
+#   e.g. UMBS 30 6.0 on 2026-11-25: price 98.80, 35 days, financing 4.27%, CPR about
+#   12.7%: 0.500 - 0.410 + 0.014 = 0.104 points, "0-03+". A drop can be negative on
+#   low coupons when financing costs more than the coupon earns.
+#   KNOWN SIMPLIFICATION: scheduled principal (about 0.1% a month) is left out;
+#   only prepayments repay at par. Pay-ups do not change by month.
+#   ALL NUMBERS ILLUSTRATIVE; the CPR range and financing spread have no recorded
+#   source. The 1-month bill yield comes from the same Treasury feed.
+# -----------------------------------------------------------------------------
+
+[drop]
+financing_tenor = "1M"
+financing_spread_pct = 0.0
+cpr_floor_pct = 6.0
+cpr_ceiling_pct = 25.0
+
+# -----------------------------------------------------------------------------
+# SIFMA settlement calendar (Step 6b)
+# BUSINESS: TBAs settle once a month on dates SIFMA publishes for each class, two
+#   business days after the 48-hour notification date, when the seller tells the
+#   buyer which pools it will deliver. Current is the first month whose
+#   notification date is today or later (New York date): the day after a class's
+#   notification date its pools are allocated, so the desk quotes the next month.
+#   Source: SIFMA, "MBS Notification and Settlement Dates" (updated for 2027),
+#   https://www.sifma.org/resources/general/mbs-notification-and-settlement-dates/
+#   (docs/public-sources.md). Copied from SIFMA's spreadsheet; Class D (ARMs,
+#   balloons, multifamily) is not used.
+#   min_months_ahead: a test fails when fewer months than this remain, the
+#   reminder to copy in SIFMA's next year (from about October 2027).
+# TECH: "YYYY-MM" = { notification = date, settlement = date } with TOML's
+#   native dates. app/pricing/settlement.py checks months are consecutive and each
+#   notification comes before its settlement.
+# -----------------------------------------------------------------------------
+
+[settlement]
+min_months_ahead = 3
+
+[settlement.A]
+"2026-11" = { notification = 2026-11-09, settlement = 2026-11-12 }
+"2026-12" = { notification = 2026-12-08, settlement = 2026-12-10 }
+"2027-01" = { notification = 2027-01-12, settlement = 2027-01-14 }
+"2027-02" = { notification = 2027-02-09, settlement = 2027-02-11 }
+"2027-03" = { notification = 2027-03-09, settlement = 2027-03-11 }
+"2027-04" = { notification = 2027-04-09, settlement = 2027-04-13 }
+"2027-05" = { notification = 2027-05-11, settlement = 2027-05-13 }
+"2027-06" = { notification = 2027-06-10, settlement = 2027-06-14 }
+"2027-07" = { notification = 2027-07-12, settlement = 2027-07-14 }
+"2027-08" = { notification = 2027-08-10, settlement = 2027-08-12 }
+"2027-09" = { notification = 2027-09-10, settlement = 2027-09-14 }
+"2027-10" = { notification = 2027-10-12, settlement = 2027-10-14 }
+"2027-11" = { notification = 2027-11-10, settlement = 2027-11-15 }
+"2027-12" = { notification = 2027-12-09, settlement = 2027-12-13 }
+
+[settlement.B]
+"2026-11" = { notification = 2026-11-13, settlement = 2026-11-17 }
+"2026-12" = { notification = 2026-12-11, settlement = 2026-12-15 }
+"2027-01" = { notification = 2027-01-14, settlement = 2027-01-19 }
+"2027-02" = { notification = 2027-02-11, settlement = 2027-02-16 }
+"2027-03" = { notification = 2027-03-11, settlement = 2027-03-15 }
+"2027-04" = { notification = 2027-04-13, settlement = 2027-04-15 }
+"2027-05" = { notification = 2027-05-13, settlement = 2027-05-17 }
+"2027-06" = { notification = 2027-06-14, settlement = 2027-06-16 }
+"2027-07" = { notification = 2027-07-15, settlement = 2027-07-19 }
+"2027-08" = { notification = 2027-08-13, settlement = 2027-08-17 }
+"2027-09" = { notification = 2027-09-14, settlement = 2027-09-16 }
+"2027-10" = { notification = 2027-10-14, settlement = 2027-10-18 }
+"2027-11" = { notification = 2027-11-15, settlement = 2027-11-17 }
+"2027-12" = { notification = 2027-12-14, settlement = 2027-12-16 }
+
+[settlement.C]
+"2026-11" = { notification = 2026-11-17, settlement = 2026-11-19 }
+"2026-12" = { notification = 2026-12-15, settlement = 2026-12-17 }
+"2027-01" = { notification = 2027-01-19, settlement = 2027-01-21 }
+"2027-02" = { notification = 2027-02-16, settlement = 2027-02-18 }
+"2027-03" = { notification = 2027-03-16, settlement = 2027-03-18 }
+"2027-04" = { notification = 2027-04-16, settlement = 2027-04-20 }
+"2027-05" = { notification = 2027-05-17, settlement = 2027-05-19 }
+"2027-06" = { notification = 2027-06-16, settlement = 2027-06-21 }
+"2027-07" = { notification = 2027-07-19, settlement = 2027-07-21 }
+"2027-08" = { notification = 2027-08-17, settlement = 2027-08-19 }
+"2027-09" = { notification = 2027-09-17, settlement = 2027-09-21 }
+"2027-10" = { notification = 2027-10-19, settlement = 2027-10-21 }
+"2027-11" = { notification = 2027-11-18, settlement = 2027-11-22 }
+"2027-12" = { notification = 2027-12-16, settlement = 2027-12-20 }

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -30,8 +31,11 @@ from app.spec_stories import SPEC_STORIES_PATH
 from tests.pricing_fixtures import pricing_config, slotting_rules
 
 CFG = pricing_config()
-CURVE = fallback_curve(CFG.anchor_tenors)
-FILE = build_price_file(CURVE, CFG)
+CURVE = fallback_curve(CFG.curve_tenors)
+# BUSINESS: priced on Thanksgiving 2026 (the curve is Wednesday's): Current is
+#   December 2026 for every SIFMA class.
+TODAY = date(2026, 11, 27)
+FILE = build_price_file(CURVE, CFG, TODAY)
 D = Decimal
 
 
@@ -168,7 +172,7 @@ def test_deep_discount_floor() -> None:
     trades; a very high curve would otherwise give silly prices."""
     p = product("UMBS 30")
     high = replace(CURVE, yields={**CURVE.yields, "10Y": D("15.00")})
-    cells = build_price_file(high, CFG).products[0].months["Current"]
+    cells = build_price_file(high, CFG, TODAY).products[0].months["Current"]
     assert cells[0].price == CFG.floor_price
     assert tba_price(D("1.0"), current_coupon(high, p), p) < CFG.floor_price
 
@@ -203,17 +207,19 @@ def test_six_product_rows_in_order() -> None:
 
 
 def test_same_curve_same_file() -> None:
-    """BUSINESS: a price file for any date is rebuilt from that date's curve plus
-    the config, so nothing needs a disk."""
-    assert build_price_file(CURVE, CFG) == FILE
+    """BUSINESS: a price file for any date is rebuilt from that date's curve, the
+    trade date and the config, so nothing needs a disk."""
+    assert build_price_file(CURVE, CFG, TODAY) == FILE
 
 
 def test_price_file_builds_fast() -> None:
     """TECH: the file is rebuilt on every request, so it must be cheap: well under
-    50 ms for 6 products x 25 coupons plus 72 pay-up rows (about 8 ms measured)."""
+    50 ms for 6 products x 25 coupons with their drops, plus 72 pay-up rows (about
+    20 ms measured in Step 6b, once the drop's SMM and the rounding target were
+    cached)."""
     start = time.perf_counter()
     for _ in range(5):
-        build_price_file(CURVE, CFG)
+        build_price_file(CURVE, CFG, TODAY)
     assert (time.perf_counter() - start) / 5 < 0.05
 
 
@@ -275,7 +281,7 @@ def test_story_outside_a_products_term_is_not_priced(tmp_path: Path) -> None:
     path = tmp_path / "spec_stories.toml"
     path.write_text(text, encoding="utf-8")
     cfg = load_pricing_config(slotting_rules(path))
-    ny = {p.product for p in build_price_file(CURVE, cfg).payups if p.story == "NY"}
+    ny = {p.product for p in build_price_file(CURVE, cfg, TODAY).payups if p.story == "NY"}
     assert ny == {"UMBS 30", "GNMA II 30"}
 
 

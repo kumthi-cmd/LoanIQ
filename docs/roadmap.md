@@ -1,10 +1,12 @@
 # Roadmap
-Current step: Step 6a done (2026-11-27): the price file (back end). An illustrative
-model anchored to Treasury's daily par yield curve gives TBA prices for six products at
-25 coupons and spec pay-ups per story, at `GET /api/prices/grid`
-(`backend/app/pricing/`, `backend/app/config/pricing.toml`). Next: Step 6b, the price
-grid screen with the rolling TBA settlement calendar; then best execution on the Loan
-Tape and its Ask the Tape stage.
+Current step: Step 6b done (2026-11-27): the SIFMA calendar and the rolling Current
+month (back end). Current is each product's next SIFMA delivery month, rolling the day
+after the 48-hour notification date, and every coupon carries its drop to the month
+after. Step 6a (2026-11-27) built the price file: an illustrative model anchored to
+Treasury's daily par yield curve, TBA prices for six products at 25 coupons and spec
+pay-ups, at `GET /api/prices/grid` (`backend/app/pricing/`,
+`backend/app/config/pricing.toml`). Next: Step 6c, the Price Grid screen; then 6d, best
+execution on the Loan Tape and its Ask the Tape stage.
 Step 5 (5a engine, 5b Loan Tape action, 5c agent) is done.
 Hosting is done: LoanIQ is live at https://www.loaniqlabs.com, deployed from `main`
 after CI passes. Step 1 delivered: 1a synthetic loan tape generator, 1b loan API,
@@ -21,7 +23,7 @@ content/build-facts.json), 1g the Loan Tape layout at 1440 px (the 1d follow-ups
 | 1 Loan tape, fast grid, About page | Done | 10-11 | 11 |
 | 4 Ask the Tape agent | Done: 4a engine, 4b screen, 4c answer columns, 4d Agent mark, 4e live eval | 5-7 | 10.5 (4a: 3, 4b: 4, 4c: 1, 4d: 1.5, 4e: 1) |
 | 5 Slotting rules engine on the Loan Tape | Done: 5a engine, 5b Loan Tape action, 5c agent stages | 3-4 | 8 (5a: 3, 5b: 1, 5c: 4) |
-| 6 Price file and best execution on the Loan Tape | In progress: 6a price file (back end) | 5-7 | 6a: to fill in |
+| 6 Price file and best execution on the Loan Tape | In progress: 6a price file, 6b SIFMA calendar and drop (back end); 6c screen and 6d best execution to come | 5-7 | 6a: to fill in; 6b: to fill in |
 | 2 Tape upload and parser | Not started | 3-4 | |
 | 3 Explorer | Not started | 2-3 | |
 | 7 Blotter and position monitor | Not started | 6-8 | |
@@ -99,13 +101,20 @@ From Step 5c (Ask the Tape's stages, 2026-11-25):
 - Results live in memory: a restart forgets slotting and the agent's stages until the
   desk reruns it. A simple Postgres comes with the paid Render plan, before Step 7.
 
+From Step 6b (SIFMA calendar and the drop, 2026-11-27):
+- SIFMA's dates run to December 2027. `test_sifma_calendar_has_months_left` fails from
+  about October 2027: copy SIFMA's next year into `pricing.toml` `[settlement]`.
+- Glossary entries for Current month, notification date, settlement date, drop, CPR
+  and SMM come with the 6c screen, with the 6a terms.
+- The drop leaves out scheduled principal (about 0.1% a month).
+
 From Step 6a (the price file, 2026-11-27):
 - The Fannie Mae LLB papers (2018, 2023) returned HTTP 403 to automated downloads, so
   the pay-up sizes in `spec_stories.toml` are illustrative and not read from them.
   Check them against the papers in a browser and adjust.
 - Glossary entries for current coupon, par, 32nds, pay-up and model-only come with the
   6b screen, the first place they show.
-- Rolling settlement calendar (more month columns) is 6b; pay-ups are the same for
+- Done (Step 6b): the rolling Current month and the drop. Pay-ups are the same for
   UMBS and GNMA II for now.
 - The first request of a New York day waits for Treasury (up to the 5 s timeout).
   Warm the cache at start-up in a background thread if that shows on screen.

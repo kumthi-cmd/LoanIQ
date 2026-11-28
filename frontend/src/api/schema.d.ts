@@ -281,7 +281,8 @@ export interface paths {
          * @description BUSINESS: today's illustrative price file.
          *
          *     TECH: the first call of a New York day fetches Treasury's curve (up to the
-         *       timeout); later calls reuse it. 503 if the configured source is a stub.
+         *       timeout); later calls reuse it. 503 if the configured source is a stub, or
+         *       the SIFMA calendar has run out.
          */
         get: operations["price_grid_api_prices_grid_get"];
         put?: never;
@@ -572,13 +573,44 @@ export interface components {
         };
         /**
          * MonthPrices
-         * @description One delivery month's prices for a product. TECH: 6a sends "Current" only.
+         * @description One delivery month's prices for a product: the Current column.
+         *
+         *     BUSINESS: label is the SIFMA delivery month Current stands for today ("Dec
+         *       2026") for the product's sifma_class; it rolls the day after
+         *       notification_date. next_label and next_settlement_date are the month the drop
+         *       rolls into; days is between the two settlement dates; financing_rate_pct is
+         *       the drop's financing rate (1-month bill yield + spread).
          */
         MonthPrices: {
             /** Cells */
             cells: components["schemas"]["PriceCellOut"][];
+            /** Days */
+            days: number;
+            /** Financing Rate Pct */
+            financing_rate_pct: string;
+            /** Label */
+            label: string;
             /** Month */
             month: string;
+            /** Next Label */
+            next_label: string;
+            /**
+             * Next Settlement Date
+             * Format: date
+             */
+            next_settlement_date: string;
+            /**
+             * Notification Date
+             * Format: date
+             */
+            notification_date: string;
+            /**
+             * Settlement Date
+             * Format: date
+             */
+            settlement_date: string;
+            /** Sifma Class */
+            sifma_class: string;
         };
         /**
          * NotSlotted
@@ -624,11 +656,21 @@ export interface components {
         };
         /**
          * PriceCellOut
-         * @description One coupon's TBA price. BUSINESS: coupon percent; price points; "101-23+".
+         * @description One coupon's TBA price and drop.
+         *
+         *     BUSINESS: coupon percent; price points and "101-23+"; drop = Current minus the
+         *       next month, in points, in 32nds (3.5) and as text ("0-03+", or "-0-01" when
+         *       the next month trades higher).
          */
         PriceCellOut: {
             /** Coupon */
             coupon: string;
+            /** Drop */
+            drop: string;
+            /** Drop 32Nds */
+            drop_32nds: string;
+            /** Drop Text */
+            drop_text: string;
             /** Model Only */
             model_only: boolean;
             /** Price */
@@ -640,7 +682,8 @@ export interface components {
          * PriceGrid
          * @description GET /api/prices/grid.
          *
-         *     BUSINESS: as_of is the Treasury curve's date; label is the line every price
+         *     BUSINESS: as_of is the Treasury curve's date; trade_date is the New York date
+         *       the Current months were picked for; label is the line every price
          *       screen shows; curve_status says whether the curve was fetched today (live),
          *       kept from an earlier fetch because Treasury was down (cached), or the
          *       bundled sample (fixture). illustrative is always true.
@@ -674,6 +717,11 @@ export interface components {
             products: components["schemas"]["ProductRow"][];
             /** Sources */
             sources: components["schemas"]["SourceOut"][];
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
         };
         /**
          * ProductRow
